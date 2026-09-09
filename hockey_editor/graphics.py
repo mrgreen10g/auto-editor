@@ -91,9 +91,10 @@ def card_image(card, path, logos=None):
     if card.title=='РАЗБОР МАТЧА': return match_card(card,path,logos)
     context=card.title in ('АРХИВНЫЕ КАДРЫ','КАДРЫ МАТЧА')
     forecast=card.title in ('ПРОГНОЗ','УСЛОВИЯ ПРОГНОЗА','ОЖИДАЕМЫЙ СЧЁТ')
-    width=1080 if forecast else 700 if context else 500
-    maxheight=210 if forecast else 110 if context else 320
-    size=36 if forecast else 19 if context else 28
+    wide=forecast or card.title=='СОСТАВ КОМАНДЫ'
+    width=1080 if wide else 700 if context else 430
+    maxheight=230 if wide else 110 if context else 320
+    size=36 if forecast else 30 if wide else 19 if context else 28
     body=card.text
     if context:
         body=body.removeprefix('Архивные кадры · ')
@@ -111,4 +112,4 @@ def card_image(card, path, logos=None):
     d.text((42,29),card.title,font=font(15,True),fill=accent)
     for i,line in enumerate(lines): d.text((42,65+i*(size+8)),line,font=ft,fill='#f5faff')
     im.save(path)
-    return (30,22) if context else (88,720-height-48) if forecast else (28,28)
+    return (30,22) if context else (88,720-height-48) if wide else (28,720-height-48)
