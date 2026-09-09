@@ -260,7 +260,7 @@ class MatchMixin:
         for label, var in zip(('Начало, с', 'Конец, с', 'Гол, с'), values):
             ttk.Label(row, text=label).pack(side='left', padx=(0, 4)); ttk.Entry(row, textvariable=var, width=9).pack(side='left', padx=(0, 12))
         note = ttk.Label(dialog, text=event.note or 'Выберите подходящий эпизод и посмотрите его. При необходимости поправьте границы.', wraplength=710); note.pack(fill='x', padx=20, pady=6)
-        state = {'data': None, 'candidates': []}
+        state = {'data': None, 'candidates': [], 'last_choice': None}
         def load_candidates(_=None):
             source = sources[combo.current()]; signature = source_signature(source)
             data = self.scans.get(source.id)
@@ -268,6 +268,7 @@ class MatchMixin:
                 file = scan_root()/signature[:24]/'goals.json'
                 data = json.loads(file.read_text(encoding='utf-8')) if file.exists() else None
             state['data'] = data; state['candidates'] = [Candidate(**c) for c in data['candidates']] if data else []
+            state['last_choice'] = None
             tree.delete(*tree.get_children())
             for i, c in enumerate(state['candidates']):
                 tree.insert('', 'end', iid=str(i), values=(c.label, c.note or 'Смена счёта и игрового времени'))
@@ -275,11 +276,16 @@ class MatchMixin:
             if event.selection and source.id == event.source_id and event.selection.source_signature == signature:
                 for var, n in zip(values, (event.selection.source_start, event.selection.source_end, event.selection.event_time)): var.set(f'{n:.2f}')
                 idx = next((i for i, c in enumerate(state['candidates']) if c.id == event.selection.candidate_id), None)
-                if idx is not None: tree.selection_set(str(idx)); tree.see(str(idx))
+                if idx is not None:
+                    state['last_choice'] = str(idx)
+                    tree.selection_set(str(idx)); tree.see(str(idx))
             if not data: note.configure(text='Сначала выполните поиск в этой записи. Можно также задать границы вручную в секундах.')
         def selected(_=None):
             if not tree.selection(): return
-            c = state['candidates'][int(tree.selection()[0])]
+            choice = tree.selection()[0]
+            if choice == state['last_choice']: return
+            state['last_choice'] = choice
+            c = state['candidates'][int(choice)]
             for var, n in zip(values, (c.start, c.end, c.time)): var.set(f'{n:.2f}')
             note.configure(text=c.note or 'Посмотрите эпизод перед использованием.')
         def selection():
