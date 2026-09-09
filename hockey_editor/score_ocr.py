@@ -53,6 +53,17 @@ class ScoreReader:
         result, _ = self.ocr(image, use_det=False, use_cls=False)
         return (str(result[0][0]), float(result[0][1])) if result else ('', 0.)
 
+    def read_score(self, crop):
+        text, confidence = self.text(crop)
+        score = score_text(text) if confidence >= .32 else None
+        if score is None and confidence >= .6 and crop.size:
+            width = crop.shape[1]
+            a, ac = self.text(crop[:, :int(.46*width)])
+            b, bc = self.text(crop[:, int(.54*width):])
+            if a.isdigit() and b.isdigit() and min(ac, bc) >= .75 and max(int(a), int(b)) <= 15:
+                score, confidence = (int(a), int(b)), min(ac, bc)
+        return score, confidence
+
     def tokens(self, image, top, bottom):
         h, w = image.shape[:2]
         band = image[int(top*h):int(bottom*h)]
@@ -88,8 +99,8 @@ class ScoreReader:
         boxes.sort(key=lambda b: b[3]-b[1], reverse=True)
         result = []
         for box in boxes[:16]:
-            text, conf = self.text(self.crop(image, box))
-            if score_text(text) is not None and conf >= .32:
+            score, conf = self.read_score(self.crop(image, box))
+            if score is not None and conf >= .32:
                 result.append((box, conf))
         return result
 
@@ -106,14 +117,22 @@ class ScoreReader:
                           if conf >= .65 and score_text(text) is not None
                           and not re.fullmatch(r'\d{2}:\d{2}', text.strip()) and box[3]-box[1] >= .022]
             candidates += self.visual_candidates(image) if manual is None else []
+            # Two minute digits are not a score. Reject subcrops of a recognized timer.
+            clocks = [box for box, text, conf in tokens if conf >= .6 and re.search(r'(?<!\d)\d{1,2}[:.]\d{2}(?!\d)', text)]
+            candidates = [(box, conf) for box, conf in candidates if not any(overlap(box, clock) > .45 for clock in clocks)]
+            voted = set()
             for box, conf in candidates:
                 existing = next((c for c in clusters if overlap(c[0], box) > .6), None)
                 if existing:
-                    existing[1] += 1
+                    ident = id(existing)
+                    if ident not in voted:
+                        existing[1] += 1
+                    voted.add(ident)
                 else:
-                    clusters.append([box, 1, conf])
-            if manual or any(c[1] >= 4 for c in clusters):
+                    clusters.append([box, 1, conf]); voted.add(id(clusters[-1]))
+            if manual or any(c[1] >= 3 for c in clusters):
                 break
+        self.location_debug = clusters
         if manual:
             self.box = manual
         elif clusters:
@@ -142,14 +161,7 @@ class ScoreReader:
 
     def read(self, image, time):
         from .goals import Observation
-        text, conf = self.text(self.crop(image, self.box))
-        score = score_text(text) if conf >= .32 else None
-        if score is None and conf >= .6:
-            crop = self.crop(image, self.box); w = crop.shape[1]
-            a, ac = self.text(crop[:, :int(.46*w)])
-            b, bc = self.text(crop[:, int(.54*w):])
-            if a.isdigit() and b.isdigit() and min(ac, bc) >= .75 and max(int(a), int(b)) <= 15:
-                score = (int(a), int(b)); conf = min(ac, bc)
+        score, conf = self.read_score(self.crop(image, self.box))
         clock = clock_text(self.text(self.crop(image, self.clock_box))[0]) if self.clock_box else None
         period = self.text(self.crop(image, self.period_box))[0] if self.period_box else ''
         banner = False; side = None
