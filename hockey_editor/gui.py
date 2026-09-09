@@ -34,7 +34,7 @@ def open_file(path):
 class App(MatchMixin):
     def __init__(self, root):
         self.root = root
-        root.title(f'Hockey Auto Editor {__version__}')
+        root.title(f'Auto Editor {__version__}')
         w, h = min(1220, root.winfo_screenwidth() - 60), min(860, root.winfo_screenheight() - 100)
         root.geometry(f'{w}x{h}')
         root.minsize(min(960, w), min(640, h))
@@ -73,7 +73,7 @@ class App(MatchMixin):
         self.build_footer()
         self.refresh()
         for var in [self.host, self.music, self.title, self.rotate, self.noise,
-                    self.level, self.resolution, *self.effect_vars.values()]:
+                    self.level, self.resolution, self.allow_other, self.use_manual, *self.effect_vars.values()]:
             var.trace_add('write', self.changed)
         self.script.bind('<<Modified>>', self.script_changed)
         self.root.bind_all('<MouseWheel>', self.scroll_page, add='+')
@@ -95,7 +95,7 @@ class App(MatchMixin):
         logo.pack(anchor='w', pady=(0, 14))
         logo.create_oval(1, 1, 35, 35, fill='#4CD8B1', outline='')
         logo.create_polygon(14, 9, 26, 18, 14, 27, fill=ui.NAV)
-        tk.Label(brand, text='HOCKEY\nAUTO EDITOR', bg=ui.NAV, fg='white',
+        tk.Label(brand, text='AUTO\nEDITOR', bg=ui.NAV, fg='white',
                  font=('Segoe UI', 15, 'bold'), justify='left').pack(anchor='w')
         tk.Label(brand, text=f'Версия {__version__}  /  Windows', bg=ui.NAV, fg=ui.NAV_MUTED,
                  font=('Segoe UI', 9)).pack(anchor='w', pady=(8, 0))
@@ -181,7 +181,8 @@ class App(MatchMixin):
         sb.pack(side='right', fill='y')
         self.controls.append(self.script)
         self.build_match_materials(page)
-        clips = ui.card(page, 'Готовые вставки · необязательно', 'Уже вырезанные фрагменты можно добавить вручную. Их фразы не участвуют в поиске голов.', '04')
+        self.manual_panel = ttk.Frame(page)
+        clips = ui.card(self.manual_panel, 'Готовые вставки · необязательно', 'Уже вырезанные фрагменты можно добавить вручную. Их фразы не участвуют в поиске голов.', '04')
         self.clip_hint = ttk.Label(clips, style='CardMuted.TLabel')
         self.clip_hint.pack(anchor='w', pady=(0, 8))
         self.cliptable = ui.table(clips, [('file', 'Фрагмент', 280), ('phrase', 'Привязка к словам ведущего', 350)], 4)
@@ -211,7 +212,7 @@ class App(MatchMixin):
         self.reviewtabs.add(timing_page, text='Речь и плашки')
         self.build_event_review(self.events_page)
         page = timing_page
-        self.linetable = ui.table(page, [('time', 'Время', 125), ('text', 'Фраза сценария', 480), ('check', 'Проверка', 115)], 8)
+        self.linetable = ui.table(page, [('time', 'Время', 125), ('text', 'Фраза сценария · двойной щелчок редактирует плашку', 570)], 8)
         self.linetable.bind('<Double-1>', lambda _: self.edit_card() if not self.busy else None)
         row = ttk.Frame(page)
         row.pack(side='bottom', fill='x', pady=(12, 6), before=self.linetable.master)
@@ -243,8 +244,8 @@ class App(MatchMixin):
     def build_settings(self):
         page = self.scrollable('settings')
         look = ui.card(page, 'Изображение и динамика', 'Проверенные настройки уже включены. Их можно менять для конкретного выпуска.')
-        self.rotate = tk.StringVar(value='Без поворота')
-        self.option(look, 'Поворот ведущего', self.rotate, ['Без поворота', '90°', '180°', '270°'])
+        self.rotate = tk.StringVar(value='Автоматически')
+        self.option(look, 'Поворот ведущего', self.rotate, ['Автоматически', 'Без поворота', '90°', '180°', '270°'])
         self.effect_vars = {}
         for key, label in [('zoom', 'Плавные наезды 100% → 120% с промежутками'),
                            ('transitions', 'Мягкие переходы к игре и обратно'),
@@ -268,6 +269,18 @@ class App(MatchMixin):
         row.pack(fill='x', pady=(6, 12))
         self.button(row, 'Убрать музыку', lambda: self.music.set('')).pack(side='right')
         self.option(sound, 'Громкость музыки', self.level, ['Очень тихо', 'Тихо', 'Заметнее'])
+        logos = ui.card(page, 'Карточка матча', 'Логотипы команд выбираются отдельно. PNG, JPEG или WebP автоматически вписываются в карточку; детали размытого оригинала не восстанавливаются.')
+        self.logo_labels = []
+        for i in range(2):
+            row = ttk.Frame(logos, style='Card.TFrame'); row.pack(fill='x', pady=5)
+            label = ttk.Label(row, style='CardMuted.TLabel', width=30); label.pack(side='left'); self.logo_labels.append(label)
+            self.button(row, 'Выбрать логотип', lambda i=i: self.choose_logo(i)).pack(side='left', padx=6)
+            self.button(row, 'Убрать', lambda i=i: self.clear_logo(i)).pack(side='left')
+        options = ui.card(page, 'Подбор игровых сцен', 'Точный гол → игра из этой встречи → другая загруженная встреча. Архивная замена обозначается в видео.')
+        self.allow_other = tk.BooleanVar(value=True)
+        self.use_manual = tk.BooleanVar(value=False)
+        for label, var in [('Разрешить архивные кадры из других матчей', self.allow_other), ('Показывать и использовать готовые вставки (старые проекты)', self.use_manual)]:
+            widget=ttk.Checkbutton(options,text=label,variable=var);widget.pack(anchor='w',pady=3);self.controls.append(widget)
         quality = ui.card(page, 'Качество экспорта')
         self.option(quality, 'Размер видео', self.resolution, ['720p', '1080p'])
         ttk.Label(quality, text='MP4 · 30 кадров/с. Для быстрой первой проверки подойдёт 720p.',
@@ -298,6 +311,8 @@ class App(MatchMixin):
     def button(self, parent, label, command, style='TButton'):
         widget = ttk.Button(parent, text=label, command=command, style=style)
         self.controls.append(widget)
+        help_text=ui.BUTTON_HELP.get(getattr(command,'__name__',''))
+        if help_text: ui.Tooltip(widget,help_text)
         return widget
 
     def pathrow(self, parent, var, choose, label):
@@ -349,7 +364,7 @@ class App(MatchMixin):
             return
         if self.page == 'settings':
             self.show_page('export' if self.plan else 'materials')
-        elif self.project.blocks[self.index].match_ids and not self.project.blocks[self.index].events and not self.project.blocks[self.index].clips:
+        elif self.project.blocks[self.index].match_ids and not self.project.blocks[self.index].events and not (self.use_manual.get() and self.project.blocks[self.index].clips):
             self.search_matches()
         elif unresolved(self.project.blocks[self.index]):
             self.show_page('review')
@@ -383,6 +398,7 @@ class App(MatchMixin):
     def changed(self, *_):
         if self.refreshing or self.busy:
             return
+        self.sync_manual_panel()
         self.invalidate()
         self.update_summary()
 
@@ -406,7 +422,10 @@ class App(MatchMixin):
         block.script = self.script.get('1.0', 'end').strip()
         for key, var in self.effect_vars.items():
             setattr(p.settings, key, var.get())
-        p.settings.rotate = {'Без поворота': 0, '90°': 90, '180°': 180, '270°': 270}[self.rotate.get()]
+        p.settings.auto_rotate = self.rotate.get() == 'Автоматически'
+        p.settings.use_manual_clips = self.use_manual.get()
+        p.settings.allow_other_matches = self.allow_other.get()
+        p.settings.rotate = {'Автоматически': 0, 'Без поворота': 0, '90°': 90, '180°': 180, '270°': 270}[self.rotate.get()]
         p.settings.zoom_max = 1.20
         p.settings.denoise = self.noise.get() != 'Выключено'
         p.settings.noise_reduction = {'Выключено': 10, 'Мягко': 6, 'Обычно': 10, 'Сильнее': 14}[self.noise.get()]
@@ -428,7 +447,10 @@ class App(MatchMixin):
         self.cliptable.delete(*self.cliptable.get_children())
         for i, clip in enumerate(block.clips):
             self.cliptable.insert('', 'end', iid=str(i), values=(Path(clip.path).name, clip.phrase), tags=('stripe',) if i % 2 else ())
-        self.rotate.set({0: 'Без поворота', 90: '90°', 180: '180°', 270: '270°'}[p.settings.rotate])
+        self.rotate.set('Автоматически' if p.settings.auto_rotate else {0: 'Без поворота', 90: '90°', 180: '180°', 270: '270°'}[p.settings.rotate])
+        self.use_manual.set(p.settings.use_manual_clips)
+        self.allow_other.set(p.settings.allow_other_matches)
+        self.sync_manual_panel()
         for key, var in self.effect_vars.items():
             var.set(getattr(p.settings, key))
         self.noise.set('Выключено' if not p.settings.denoise else 'Мягко' if p.settings.noise_reduction < 8 else 'Сильнее' if p.settings.noise_reduction > 12 else 'Обычно')
@@ -442,7 +464,7 @@ class App(MatchMixin):
     def update_summary(self):
         script = self.script.get('1.0', 'end').strip()
         host = self.host.get().strip()
-        clips = self.project.blocks[self.index].clips
+        clips = self.project.blocks[self.index].clips if self.use_manual.get() else []
         self.host_hint.configure(text=Path(host).name if host and Path(host).is_file() else 'Выберите файл с компьютера.' if not host else 'Файл не найден. Выберите запись заново.')
         self.clip_hint.configure(text=f'Добавлено фрагментов: {len(clips)}. Двойной щелчок — изменить привязку.' if clips else 'Пока нет вставок. Без них в кадре останется ведущий.')
         missing = []
@@ -455,6 +477,10 @@ class App(MatchMixin):
         if self.music.get().strip() and not Path(self.music.get().strip()).is_file():
             missing.append('файл музыки')
         self.readiness.set('Нужно добавить: ' + ', '.join(missing) if missing else 'Материалы готовы  ·  ' + str(len(clips)) + ' вставки')
+        from .graphics import block_teams
+        for i,name in enumerate(block_teams(self.title.get())):
+            path=self.project.team_logos.get(name,'')
+            self.logo_labels[i].configure(text=(name or 'Команда')+(' · выбран' if path else ' · без логотипа'))
         duration = ui.timecode(self.plan.duration) if self.plan else 'определится после анализа'
         effects = []
         if self.effect_vars['zoom'].get():
@@ -469,7 +495,7 @@ class App(MatchMixin):
         block = self.project.blocks[self.index]
         if block.match_ids:
             self.readiness.set(f'Записей: {len(block.match_ids)} · Эпизодов для проверки: {len(unresolved(block))}' if not missing else self.readiness.get())
-            if self.page != 'settings' and not block.events and not block.clips:
+            if self.page != 'settings' and not block.events and not (self.use_manual.get() and block.clips):
                 labels[self.page] = 'Найти голы →'
             elif self.page != 'settings' and unresolved(block):
                 labels[self.page] = 'Проверить эпизоды →'
@@ -574,6 +600,28 @@ class App(MatchMixin):
             self.output_label.set('Текст плашки изменён. Соберите MP4, чтобы увидеть обновление.')
             self.status.set('Плашка сохранена в проекте. Изменение применится при экспорте.')
 
+    def sync_manual_panel(self):
+        if self.use_manual.get(): self.manual_panel.pack(fill='x', pady=(8,0))
+        else: self.manual_panel.pack_forget()
+
+    def choose_logo(self, index):
+        from .graphics import block_teams
+        from PIL import Image
+        self.collect(); name=block_teams(self.title.get())[index]
+        if not name: return messagebox.showinfo('Команды','Укажите название разбора в виде «Команда — Команда».')
+        path=filedialog.askopenfilename(title='Логотип: '+name,filetypes=[('Логотип','*.png *.jpg *.jpeg *.webp')])
+        if not path: return
+        try:
+            with Image.open(path) as image: image.verify()
+            self.project.team_logos[name]=path
+            self.invalidate();self.update_summary()
+        except Exception as e: messagebox.showerror('Логотип',str(e))
+
+    def clear_logo(self, index):
+        from .graphics import block_teams
+        self.project.team_logos.pop(block_teams(self.title.get())[index],None)
+        self.invalidate();self.update_summary()
+
     def new(self):
         if not messagebox.askyesno('Новый проект', 'Создать новый проект? Несохранённые изменения текущего проекта будут потеряны.'):
             return
@@ -590,7 +638,7 @@ class App(MatchMixin):
             return
         try:
             self.project = Project.load(path)
-            self.legacy_project = json.loads(Path(path).read_text(encoding='utf-8')).get('version') == 1
+            self.legacy_project = json.loads(Path(path).read_text(encoding='utf-8')).get('version',1) < 3
             self.scans = {}
             self.index = 0
             self.project_path = path
@@ -603,7 +651,7 @@ class App(MatchMixin):
 
     def save(self):
         self.collect()
-        path = filedialog.asksaveasfilename(defaultextension='.hockeyproj', initialfile=(Path(self.project_path).stem+'-0.2.hockeyproj' if self.legacy_project else Path(self.project_path).name) if self.project_path else 'Мой выпуск.hockeyproj', filetypes=[('Проект монтажа', '*.hockeyproj')])
+        path = filedialog.asksaveasfilename(defaultextension='.hockeyproj', initialfile=(Path(self.project_path).stem+'-0.3.hockeyproj' if self.legacy_project else Path(self.project_path).name) if self.project_path else 'Мой выпуск.hockeyproj', filetypes=[('Проект монтажа', '*.hockeyproj')])
         if path:
             try:
                 self.project.save(path)
@@ -711,14 +759,14 @@ class App(MatchMixin):
         self.linetable.delete(*self.linetable.get_children())
         for i, line in enumerate(plan.lines):
             check = line.agreement > .8
-            self.linetable.insert('', 'end', iid=str(i), values=(f'{ui.timecode(line.start)}–{ui.timecode(line.end)}', line.text, 'Проверить' if check else 'Совпало'),
-                                  tags=('check',) if check else ('stripe',) if i % 2 else ())
+            self.linetable.insert('', 'end', iid=str(i), values=(f'{ui.timecode(line.start)}–{ui.timecode(line.end)}', line.text),
+                                  tags=('stripe',) if i % 2 else ())
         uncertain = sum(line.agreement > .8 for line in plan.lines)
         self.review_summary.set(f'{ui.timecode(plan.duration)}  ·  {len(plan.lines)} фраз  ·  {len(plan.inserts)} вставки')
         if plan.warnings:
             self.review_note.set('Обратите внимание: ' + plan.warnings[0] + (f' Ещё замечаний: {len(plan.warnings) - 1}. Откройте «Подробности».' if len(plan.warnings) > 1 else ''))
         elif uncertain:
-            self.review_note.set(f'Фраз для проверки: {uncertain}. Они выделены цветом. Оцените совпадение речи и изображения в готовом ролике.')
+            self.review_note.set(f'Автоматические тайминги: замечаний {uncertain}. Подробности — в журнале. Двойной щелчок редактирует текст плашки.')
         else:
             self.review_note.set('Неустойчивых совпадений не обнаружено. После экспорта проверьте речь и игровые моменты в ролике.')
         self.update_summary()

@@ -82,6 +82,10 @@ def card(parent, title, subtitle='', number=None):
     if number:
         tk.Label(header, text=number, bg=PALE, fg=TEAL, padx=8, pady=4,
                  font=('Segoe UI', 10, 'bold')).pack(side='left', padx=(0, 10))
+    if subtitle:
+        help_label=tk.Label(header,text='?',bg=PALE,fg=TEAL,font=('Segoe UI',10,'bold'),padx=6,cursor='hand2')
+        help_label.pack(side='right',anchor='n',padx=(8,0))
+        Tooltip(help_label,subtitle)
     captions = ttk.Frame(header, style='Card.TFrame')
     captions.pack(side='left', fill='x', expand=True)
     ttk.Label(captions, text=title, style='CardTitle.TLabel').pack(anchor='w')
@@ -115,3 +119,50 @@ def table(parent, columns, height=5):
 def timecode(seconds):
     seconds = max(0, round(seconds))
     return f'{seconds // 60:02}:{seconds % 60:02}'
+
+
+class Tooltip:
+    def __init__(self, widget, text):
+        self.widget=widget;self.text=text;self.pending=None;self.popup=None
+        widget.bind('<Enter>',self.schedule,add='+')
+        widget.bind('<Leave>',self.hide,add='+')
+        widget.bind('<ButtonPress>',self.hide,add='+')
+        widget.bind('<Destroy>',self.hide,add='+')
+        widget._tooltip=self
+
+    def schedule(self, _=None):
+        self.hide();self.pending=self.widget.after(550,self.show)
+
+    def show(self):
+        self.pending=None
+        if not self.widget.winfo_exists(): return
+        self.popup=tk.Toplevel(self.widget);self.popup.overrideredirect(True)
+        label=tk.Label(self.popup,text=self.text,bg='#173345',fg='white',font=('Segoe UI',10),
+                       wraplength=340,justify='left',padx=12,pady=9)
+        label.pack();self.popup.update_idletasks()
+        x=min(self.widget.winfo_rootx(),self.widget.winfo_screenwidth()-self.popup.winfo_width()-12)
+        y=min(self.widget.winfo_rooty()+self.widget.winfo_height()+6,self.widget.winfo_screenheight()-self.popup.winfo_height()-12)
+        self.popup.geometry(f'+{max(0,x)}+{max(0,y)}')
+
+    def hide(self, _=None):
+        if self.pending:
+            try: self.widget.after_cancel(self.pending)
+            except tk.TclError: pass
+            self.pending=None
+        if self.popup:
+            try: self.popup.destroy()
+            except tk.TclError: pass
+            self.popup=None
+
+
+BUTTON_HELP={
+    'search_matches':'Ищет голы и обычную игру. Если точный гол не найден, подбирает резервную игровую сцену.',
+    'add_matches':'Добавьте одну или несколько записей. Названия команд обязательны, дата — нет.',
+    'reuse_match':'Используйте запись из другого разбора без повторной загрузки.',
+    'score_region':'Необязательная настройка: выделите две цифры счёта, если они не распознаются.',
+    'edit_event':'Посмотрите выбранный фрагмент, замените запись или поправьте границы.',
+    'skip_event':'Явно отключает вставку для этой фразы и оставляет ведущего.',
+    'edit_card':'Изменяет краткий текст плашки. Пустой текст отключает плашку.',
+    'save':'Сохраняет настройки, ссылки на исходники и выбранные эпизоды. Сами видео остаются на диске.',
+    'primary_action':'Следующий шаг: подбор игры, тайминги речи или экспорт выбранного разбора.',
+}

@@ -72,11 +72,13 @@ class GoalTests(unittest.TestCase):
         self.assertEqual([e.source_id for e in events], [a.id]*4+[b.id, c.id])
         self.assertIsNone(team_position('СКА', 'ЦСКА выиграл'))
 
-    def test_missing_source_keeps_presenter(self):
+    def test_missing_source_requests_archive(self):
         source = MatchSource('a.mp4', 'СКА', 'Лада')
         block = Block(title='СКА — Лада', match_ids=[source.id], script='СКА обыграл московское «Динамо» 5:3. Атака действительно работает.')
         events = requests_for(block, [source])
-        self.assertTrue(all(e.skipped and not e.source_id for e in events))
+        self.assertTrue(events)
+        self.assertTrue(all(not e.skipped and not e.source_id for e in events))
+        self.assertEqual(events[0].requested_teams, ['СКА', 'Динамо'])
 
     def test_candidate_cannot_cross_sources(self):
         event = EventRequest('one', 'Сравнял счёт', score=[3, 3])
@@ -109,4 +111,4 @@ class GoalTests(unittest.TestCase):
             path = Path(tmp)/'v1.hockeyproj'
             path.write_text(json.dumps({'version': 1, 'host': '', 'blocks': [{'title': 'Test', 'script': ''}]}))
             project = Project.load(path)
-            self.assertEqual(project.version, 2); self.assertEqual(project.matches, [])
+            self.assertEqual(project.version, 3); self.assertEqual(project.matches, [])

@@ -37,7 +37,7 @@ def check():
             app.load()
         root.update()
         app.collect()
-        assert app.project.version == 2 and app.project.settings.zoom_max == 1.2
+        assert app.project.version == 3 and app.project.settings.zoom_max == 1.2
         assert app.project.settings.denoise and app.project.blocks[0].clips[0].phrase == '2:1'
         assert app.page == 'materials' and 'Материалы готовы' in app.readiness.get()
         initial_script = app.project.blocks[0].script

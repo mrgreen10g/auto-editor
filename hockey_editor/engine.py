@@ -51,7 +51,9 @@ class Engine:
         meta={c.path:probe(c.path) for c in block.clips}
         if any(not x['video'] for x in meta.values()):raise ValueError('Игровая вставка должна содержать видео.')
         inserts,cards,extra=placements(block,lines,meta,duration)
-        plan=Plan(start,end,keep,lines,inserts,cards,list(warnings)+extra,duration)
+        from .orientation import detect_rotation
+        rotation=detect_rotation(p.host,self.cache,self.cancel,self.log) if p.settings.auto_rotate else p.settings.rotate
+        plan=Plan(start,end,keep,lines,inserts,cards,list(warnings)+extra,duration,rotation)
         self.save_plan(plan)
         self.log(f'Разметка готова: {len(lines)} фраз, {len(inserts)} вставок, {duration:.1f} с.')
         return plan
@@ -65,7 +67,7 @@ class Engine:
     def render(self,plan,target):
         self.check();self.project.validate(self.index)
         target=Path(target).resolve();p=self.project;s=p.settings
-        protected=[p.host,p.music]+[c.path for b in p.blocks for c in b.clips]+[m.path for m in p.matches]
+        protected=[p.host,p.music]+[c.path for b in p.blocks for c in b.clips]+[m.path for m in p.matches]+list(p.team_logos.values())
         if any(target==Path(f).resolve() for f in protected if f):raise ValueError('Нельзя записывать результат поверх исходного файла.')
         if target.exists():raise ValueError('Файл результата уже существует. Выберите новое имя.')
         target.parent.mkdir(parents=True,exist_ok=True)
@@ -74,9 +76,11 @@ class Engine:
         video="select='"+'+'.join(f'between(n,{round(a*30)},{round(b*30)-1})' for a,b in plan.keep)+"',setpts=N/(30*TB)"
         # Normalize VFR sources before frame-index selection.
         video='fps=30,'+video
-        if s.rotate==180:video+=',hflip,vflip'
-        elif s.rotate==90:video+=',transpose=clock'
-        elif s.rotate==270:video+=',transpose=cclock'
+        from .orientation import detect_rotation
+        rotation=(plan.rotation if plan.rotation is not None else detect_rotation(p.host,self.cache,self.cancel,self.log)) if s.auto_rotate else s.rotate
+        if rotation==180:video+=',hflip,vflip'
+        elif rotation==90:video+=',transpose=clock'
+        elif rotation==270:video+=',transpose=cclock'
         video+=',scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1'
         if s.color:video+=',eq=contrast=1.045:saturation=1.035:brightness=-0.004'
         fl=[f'[0:v]{video}[video]','[0:a]asplit='+str(n)+''.join(f'[s{i}]' for i in range(n))]
@@ -122,7 +126,7 @@ class Engine:
         for i,card in enumerate(plan.cards):
             length=card.end-card.start
             if length<.15:continue
-            image=self.cache/f'card-{i}.png';x,y=card_image(card,image)
+            image=self.cache/f'card-{i}.png';x,y=card_image(card,image,p.team_logos)
             args+=['-loop','1','-framerate','30','-i',image]
             filt=f'trim=duration={length:.6f},setpts=PTS-STARTPTS,format=rgba'
             edge=min(.25,length/3)

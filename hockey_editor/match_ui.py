@@ -21,7 +21,7 @@ class SourceDialog(simpledialog.Dialog):
         ttk.Label(parent, text=Path(self.source.path).name, wraplength=440).grid(row=0, column=0, columnspan=2, pady=10)
         ttk.Label(parent, text='Названия в порядке табло: слева → справа.', wraplength=440).grid(row=1, column=0, columnspan=2, pady=6)
         self.values = []
-        for i, (label, value) in enumerate((('Команда слева', self.source.home), ('Команда справа', self.source.away), ('Дата встречи', self.source.date))):
+        for i, (label, value) in enumerate((('Команда слева', self.source.home), ('Команда справа', self.source.away), ('Дата · необязательно', self.source.date))):
             ttk.Label(parent, text=label).grid(row=i+2, column=0, sticky='w', padx=8, pady=6)
             entry = ttk.Entry(parent, width=30); entry.insert(0, value); entry.grid(row=i+2, column=1, padx=8, pady=6)
             self.values.append(entry)
@@ -69,7 +69,7 @@ class MatchMixin:
         self.eventtable.delete(*self.eventtable.get_children())
         sources = {m.id: m for m in self.project.matches}
         for i, e in enumerate(self.project.blocks[self.index].events):
-            state = 'Ведущий' if e.skipped else 'Готово' if e.selection and e.selection.accepted else 'Проверить' if e.selection else 'Не найден'
+            state = 'Ведущий' if e.skipped else ('Архив' if e.selection.context_label.startswith('Архив') else 'Игра' if e.selection.candidate_id.startswith('broll') else 'Готово') if e.selection and e.selection.accepted else 'Проверить' if e.selection else 'Не найден'
             goal = ':'.join(map(str, e.score)) if e.score else 'Овертайм' if e.kind == 'overtime' else 'Игра'
             self.eventtable.insert('', 'end', iid=str(i), values=(sources[e.source_id].title if e.source_id in sources else 'Нет записи', e.phrase, goal, state),
                                    tags=('check',) if state in ('Проверить', 'Не найден') else ('stripe',) if i%2 else ())
@@ -150,10 +150,11 @@ class MatchMixin:
         if block.events and any(e.selection and e.selection.accepted for e in block.events):
             if not messagebox.askyesno('Повторить поиск', 'Заново подобрать эпизоды? Ваш выбор эпизодов будет заменён; сохранённое видео останется.'):
                 return
-        events = requests_for(block, self.project.matches)
+        events = requests_for(block, self.project.matches, self.project.settings.use_manual_clips)
         if not events:
             return messagebox.showinfo('Сценарий', 'Не найдены фразы о голах или игре. Проверьте сценарий. Уже привязанные готовые вставки повторно не ищутся.')
         sources = copy.deepcopy([m for m in self.project.matches if m.id in block.match_ids])
+        allow_other = self.project.settings.allow_other_matches
         self.invalidate(); self.show_page('review'); self.reviewtabs.select(self.events_page)
         self.review_summary.set('Ищем голы в исходных матчах…')
         def work():
@@ -165,7 +166,7 @@ class MatchMixin:
                     scans[source.id] = GoalScanner(cancel=self.cancel, log=lambda m: self.jobs.put(('log', m))).scan(source)
                 except Cancelled: raise
                 except Exception as e: errors.append(source.title+': '+str(e))
-            self.jobs.put(('goals', (propose_events(events, scans), scans, errors)))
+            self.jobs.put(('goals', (propose_events(events, scans, sources, allow_other), scans, errors)))
         self.match_job('goals', work)
 
     def handle_match_job(self, kind, value):
@@ -175,7 +176,7 @@ class MatchMixin:
             self.refresh_events(); self.update_summary()
             count = sum(not e.skipped and (not e.selection or not e.selection.accepted) for e in events)
             self.review_summary.set(f'Найдено привязок: {sum(e.selection is not None for e in events)} · Для проверки: {count}')
-            self.review_note.set(errors[0] if errors else 'Посмотрите выделенные строки, затем определите тайминги речи.')
+            self.review_note.set(errors[0] if errors else 'Игровые и архивные замены уже включены. Их можно посмотреть и заменить перед монтажом.')
             self.log_lines.extend(errors); self.status.set('Поиск завершён. Проверьте эпизоды в таблице.')
             return True
         if kind == 'roi':
@@ -294,7 +295,8 @@ class MatchMixin:
             if not 0 <= start <= when <= end or not .5 <= end-start <= 60 or end > probe(source.path)['duration']+.05:
                 raise ValueError('Проверьте границы: начало ≤ гол ≤ конец; длина от 0,5 до 60 секунд.')
             ident = state['candidates'][int(tree.selection()[0])].id if tree.selection() else 'manual'
-            return source, EventSelection(ident, start, end, when, source_signature(source), True)
+            label = event.selection.context_label if event.selection and source.id == event.source_id else ('Архивные кадры · '+source.title if source.id != event.source_id else '')
+            return source, EventSelection(ident, start, end, when, source_signature(source), True, label)
         def use():
             try:
                 source, chosen = selection()
@@ -322,6 +324,6 @@ class MatchMixin:
         load_candidates()
 
 
-def propose_events(events, scans):
+def propose_events(events, scans, sources=(), allow_other=False):
     from .goals import propose
-    return propose(events, scans)
+    return propose(events, scans, sources, allow_other)

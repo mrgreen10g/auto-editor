@@ -8,6 +8,7 @@ class Clip:
     path: str
     phrase: str
     goal_time: float | None = None
+    context_label: str = ''
 
 @dataclass
 class MatchSource:
@@ -30,6 +31,7 @@ class EventSelection:
     event_time: float
     source_signature: str
     accepted: bool = False
+    context_label: str = ''
 
 @dataclass
 class EventRequest:
@@ -40,10 +42,14 @@ class EventRequest:
     selection: EventSelection | None = None
     skipped: bool = False
     note: str = ''
+    requested_teams: list[str] = field(default_factory=list)
 
 @dataclass
 class Settings:
     rotate: int = 0
+    auto_rotate: bool = True
+    use_manual_clips: bool = False
+    allow_other_matches: bool = True
     zoom_max: float = 1.20
     zoom: bool = True
     transitions: bool = True
@@ -69,12 +75,13 @@ class Block:
 
 @dataclass
 class Project:
-    version: int = 2
+    version: int = 3
     host: str = ''
     music: str = ''
     blocks: list[Block] = field(default_factory=lambda: [Block()])
     settings: Settings = field(default_factory=Settings)
     matches: list[MatchSource] = field(default_factory=list)
+    team_logos: dict[str, str] = field(default_factory=dict)
 
     def validate(self, index=0):
         if not self.host or not Path(self.host).is_file():
@@ -86,7 +93,7 @@ class Project:
             raise ValueError('Вставьте сценарий выбранного разбора.')
         if self.music and not Path(self.music).is_file():
             raise ValueError('Музыка не найдена. Выберите файл заново или очистите поле.')
-        for c in block.clips:
+        for c in block.clips if self.settings.use_manual_clips else []:
             if not Path(c.path).is_file():
                 raise ValueError(f'Не найден игровой фрагмент: {c.path}')
             if not c.phrase.strip():
@@ -96,18 +103,19 @@ class Project:
         ids = {m.id: m for m in self.matches}
         if len(ids) != len(self.matches):
             raise ValueError('Повторяющиеся идентификаторы записей матча.')
+        used_sources={e.source_id for e in block.events if e.selection and not e.skipped}
         for ident in block.match_ids:
             if ident not in ids:
                 raise ValueError('Не найдена запись матча в проекте.')
             m = ids[ident]
-            if not Path(m.path).is_file() or not m.home.strip() or not m.away.strip():
+            if (ident in used_sources and not Path(m.path).is_file()) or not m.home.strip() or not m.away.strip():
                 raise ValueError('Проверьте файл и названия команд: ' + m.title)
             box = m.score_box
             if box is not None and (len(box) != 4 or not all(math.isfinite(v) for v in box)
                     or not 0 <= box[0] < box[2] <= 1 or not 0 <= box[1] < box[3] <= 1):
                 raise ValueError('Некорректная область табло.')
         for event in block.events:
-            if event.source_id not in block.match_ids and not (not event.source_id and event.skipped):
+            if event.source_id not in block.match_ids and not (not event.source_id and (event.skipped or event.selection is None)):
                 raise ValueError('Событие относится к записи вне этого разбора.')
             if event.kind not in ('score', 'equalizer', 'overtime', 'play'):
                 raise ValueError('Неизвестный тип события.')
@@ -135,6 +143,7 @@ class Project:
             try: return os.path.relpath(Path(s).resolve(), target.parent)
             except ValueError: return str(Path(s).resolve())
         for key in ('host','music'): data[key] = relative(data[key])
+        data['team_logos'] = {name: relative(path) for name, path in self.team_logos.items()}
         for match in data['matches']: match['path'] = relative(match['path'])
         for block in data['blocks']:
             for c in block['clips']: c['path'] = relative(c['path'])
@@ -147,15 +156,20 @@ class Project:
     def load(cls, filename):
         p = Path(filename).resolve()
         data = json.loads(p.read_text(encoding='utf-8'))
-        if data.get('version') not in (1, 2): raise ValueError('Версия проекта не поддерживается.')
+        if data.get('version') not in (1, 2, 3): raise ValueError('Версия проекта не поддерживается.')
         def resolve(s):
             if not s: return ''
             return str((p.parent / s).resolve())
         blocks = [Block(title=b['title'],script=b['script'],
-                  clips=[Clip(path=resolve(c['path']),phrase=c['phrase'],goal_time=c.get('goal_time')) for c in b.get('clips',[])],
+                  clips=[Clip(path=resolve(c['path']),phrase=c['phrase'],goal_time=c.get('goal_time'), context_label=c.get('context_label', '')) for c in b.get('clips',[])],
                   card_overrides=b.get('card_overrides',{}), match_ids=b.get('match_ids', []),
                   events=[EventRequest(**{**e, 'selection': EventSelection(**e['selection']) if e.get('selection') else None}) for e in b.get('events', [])]) for b in data['blocks']]
         if not blocks: raise ValueError('В проекте нет разборов.')
+        settings = data.get('settings', {}).copy()
+        if data.get('version', 1) < 3:
+            settings.setdefault('auto_rotate', settings.get('rotate', 0) == 0)
+            settings.setdefault('use_manual_clips', any(b.clips for b in blocks))
         return cls(host=resolve(data['host']),music=resolve(data.get('music','')),
-                   blocks=blocks,settings=Settings(**data.get('settings',{})),
-                   matches=[MatchSource(**{**m, 'path': resolve(m['path'])}) for m in data.get('matches', [])])
+                   blocks=blocks,settings=Settings(**settings),
+                   matches=[MatchSource(**{**m, 'path': resolve(m['path'])}) for m in data.get('matches', [])],
+                   team_logos={name: resolve(path) for name, path in data.get('team_logos', {}).items()})

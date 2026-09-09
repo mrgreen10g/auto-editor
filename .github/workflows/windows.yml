@@ -1,7 +1,7 @@
 name: Windows build
 on:
   push:
-    branches: [main, version-0.2]
+    branches: [main, version-0.2, version-0.3]
   workflow_dispatch:
 permissions:
   contents: read
@@ -34,8 +34,8 @@ jobs:
         run: python scripts/build_windows.py
       - uses: actions/upload-artifact@v4
         with:
-          name: HockeyAutoEditor-Windows
-          path: dist/HockeyAutoEditor-*-Windows.zip
+          name: AutoEditor-Windows
+          path: dist/AutoEditor-*-Windows.zip
           if-no-files-found: error
           retention-days: 30
       - uses: actions/upload-artifact@v4
@@ -45,7 +45,7 @@ jobs:
           path: |
             source-check.json
             build/bundle-check.json
-            build/HockeyAutoEditor/warn-HockeyAutoEditor.txt
+            build/AutoEditor/warn-AutoEditor.txt
             build/gui-*.jpg
             build/gui-check.json
             build/ocr-check.json

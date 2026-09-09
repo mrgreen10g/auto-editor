@@ -9,7 +9,7 @@ import shutil
 from .model import EventSelection, Clip
 from .media import probe, run, Cancelled
 
-SCAN_VERSION = 'score-v1'
+SCAN_VERSION = 'score-v2-gameplay'
 
 @dataclass
 class Observation:
@@ -168,47 +168,63 @@ class GoalScanner:
             ready.touch()
         files = sorted(frames.glob('*.jpg'))
         if not files: raise ValueError('Не удалось прочитать кадры матча.')
-        if self.reader is None:
-            from .score_ocr import ScoreReader
-            self.reader = ScoreReader()
-        sample = sorted(set(min(len(files)-1, n) for n in [0, 1, 3, 5, int(len(files)*.15), int(len(files)*.35), int(len(files)*.6), int(len(files)*.8)]))
-        self.reader.locate([read_image(files[i]) for i in sample], self.cancel, self.log, source.score_box)
-        observations = []
-        for i, file in enumerate(files):
-            self.check()
-            observations.append(self.reader.read(read_image(file), i*2.))
-            if i % 10 == 0:
-                self.log(f'Поиск голов: {int((i+1)/len(files)*100)}%')
-        if sum(o.score is not None for o in observations) < 2:
-            raise ValueError('Счёт прочитан слишком редко. Уточните область двух цифр кнопкой «Область счёта».')
-        candidates = detect_candidates(observations, duration)
+        from .gameplay import gameplay_candidates
+        self.log('Подбираю игровые сцены независимо от табло…')
+        gameplay = gameplay_candidates(files, duration, self.cancel)
+        observations = []; scan_note = ''
+        try:
+            if self.reader is None:
+                from .score_ocr import ScoreReader
+                self.reader = ScoreReader()
+            sample = sorted(set(min(len(files)-1, n) for n in [0, 1, 3, 5, int(len(files)*.15), int(len(files)*.35), int(len(files)*.6), int(len(files)*.8)]))
+            self.reader.locate([read_image(files[i]) for i in sample], self.cancel, self.log, source.score_box)
+            observations = []
+            for i, file in enumerate(files):
+                self.check()
+                observations.append(self.reader.read(read_image(file), i*2.))
+                if i % 10 == 0:
+                    self.log(f'Поиск голов: {int((i+1)/len(files)*100)}%')
+        except Cancelled:
+            raise
+        except Exception as error:
+            scan_note = 'Табло прочитано не полностью: ' + str(error)
+            self.log(scan_note + ' Использую игровые сцены.')
+        candidates = detect_candidates(observations, duration) if observations else []
+        candidates = [c for c in candidates if c.kind == 'goal'] + gameplay
         for candidate in candidates:
             if candidate.kind != 'goal': continue
-            self.check(); self.log('Уточняю момент: '+candidate.label)
-            detail = folder/'detail'; detail.mkdir(exist_ok=True)
-            start = max(0, candidate.time-8)
-            run(['-y', '-ss', start, '-t', min(16, duration-start), '-i', source.path, '-an', '-vf',
-                 'fps=2,scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2',
-                 '-q:v', '3', '-start_number', '0', detail/'%04d.jpg'], self.cancel)
-            dense = []
-            for i, file in enumerate(sorted(detail.glob('*.jpg'))):
-                self.check(); dense.append(self.reader.read(read_image(file), start+i*.5))
-            runs = []
-            for o in dense:
-                if o.clock is None or o.score is None: continue
-                if runs and runs[-1][-1].clock == o.clock and o.time-runs[-1][-1].time <= .6:
-                    runs[-1].append(o)
-                else: runs.append([o])
-            plateaus = [g for g in runs if len(g) >= 3 and abs(g[0].time-candidate.time) <= 6
-                        and list(g[0].score) in (candidate.before, candidate.score)]
-            if plateaus:
-                candidate.time = min(plateaus, key=lambda g: abs(g[0].time-candidate.time))[0].time
-            else:
-                candidate.confidence = min(candidate.confidence, .72)
-                candidate.note += ' Момент гола приблизительный.'
-            candidate.start = max(0, candidate.time-7); candidate.end = min(duration, candidate.time+5)
-            shutil.rmtree(detail)
-        data = {'signature': signature, 'duration': duration, 'box': self.reader.box,
+            try:
+                self.check(); self.log('Уточняю момент: '+candidate.label)
+                detail = folder/'detail'; detail.mkdir(exist_ok=True)
+                start = max(0, candidate.time-8)
+                run(['-y', '-ss', start, '-t', min(16, duration-start), '-i', source.path, '-an', '-vf',
+                     'fps=2,scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2',
+                     '-q:v', '3', '-start_number', '0', detail/'%04d.jpg'], self.cancel)
+                dense = []
+                for i, file in enumerate(sorted(detail.glob('*.jpg'))):
+                    self.check(); dense.append(self.reader.read(read_image(file), start+i*.5))
+                runs = []
+                for o in dense:
+                    if o.clock is None or o.score is None: continue
+                    if runs and runs[-1][-1].clock == o.clock and o.time-runs[-1][-1].time <= .6:
+                        runs[-1].append(o)
+                    else: runs.append([o])
+                plateaus = [g for g in runs if len(g) >= 3 and abs(g[0].time-candidate.time) <= 6
+                            and list(g[0].score) in (candidate.before, candidate.score)]
+                if plateaus:
+                    candidate.time = min(plateaus, key=lambda g: abs(g[0].time-candidate.time))[0].time
+                else:
+                    candidate.confidence = min(candidate.confidence, .72)
+                    candidate.note += ' Момент гола приблизительный.'
+                candidate.start = max(0, candidate.time-7); candidate.end = min(duration, candidate.time+5)
+                shutil.rmtree(detail)
+            except Cancelled:
+                raise
+            except Exception as error:
+                candidate.confidence=min(candidate.confidence,.5)
+                candidate.note+=' Не удалось уточнить момент; доступна игровая замена.'
+                self.log('Уточнение эпизода пропущено: '+str(error))
+        data = {'signature': signature, 'duration': duration, 'box': getattr(self.reader, 'box', None), 'note': scan_note,
                 'candidates': [asdict(c) for c in candidates], 'observations': [asdict(o) for o in observations]}
         payload = json.dumps(data, ensure_ascii=False)
         temp = saved.with_suffix('.tmp'); temp.write_text(payload, encoding='utf-8'); temp.replace(saved)
@@ -216,32 +232,62 @@ class GoalScanner:
         return json.loads(payload)
 
 
-def propose(requests, scans):
+def propose(requests, scans, sources=(), allow_other=False):
+    from .event_rules import clean, team_position
+    source_map = {m.id: m for m in sources}
     usage = {}
+    def next_play(source_id):
+        data = scans.get(source_id, {})
+        choices = [Candidate(**c) for c in data.get('candidates', []) if c['kind'] == 'play']
+        choices.sort(key=lambda c: (-c.confidence, c.time))
+        if not choices: return None
+        used = usage.setdefault(source_id, set())
+        candidate = next((c for c in choices if c.id not in used), choices[0])
+        used.add(candidate.id)
+        return candidate
     for event in requests:
         if event.skipped: continue
-        data = scans.get(event.source_id)
-        if not data:
-            event.note = 'Запись не обработана. Проверьте журнал.'; continue
-        candidates = [Candidate(**c) for c in data['candidates']]
-        candidates = [c for c in candidates if (c.kind == 'play') == (event.kind == 'play')]
+        data = scans.get(event.source_id, {})
+        candidates = [Candidate(**c) for c in data.get('candidates', []) if c['kind'] == 'goal']
         if event.score is not None:
             candidates = [c for c in candidates if c.score == event.score]
         elif event.kind == 'equalizer':
             candidates = [c for c in candidates if c.score and c.score[0] == c.score[1]]
+        elif event.kind not in ('overtime',):
+            candidates = []
         if event.kind == 'overtime':
-            ot = [c for c in candidates if 'OT' in c.period.upper() or 'ОТ' in c.period.upper()]
-            if ot: candidates = ot
-        if not candidates:
-            event.note = 'Подходящий эпизод не найден. Выберите вручную или оставьте ведущего.'; continue
+            ot = [c for c in candidates if any(x in c.period.upper() for x in ('OT', 'ОТ'))]
+            candidates = ot or candidates
         candidates.sort(key=lambda c: (-c.confidence, c.time))
-        index = usage.get(event.source_id, 0) % len(candidates) if event.kind == 'play' else 0
-        c = candidates[index]; usage[event.source_id] = usage.get(event.source_id, 0)+1
-        confidence = c.confidence
-        if event.kind == 'overtime' and not any(x in c.period.upper() for x in ('OT', 'ОТ')):
-            confidence = min(confidence, .72)
-        event.selection = EventSelection(c.id, c.start, c.end, c.time, data['signature'], confidence >= .85 and not event.note)
-        event.note = ' '.join(s for s in (event.note, c.note) if s)
+        exact = candidates[0] if candidates and event.kind != 'play' else None
+        # Low-confidence exact matches stay available in the picker. Default to game footage.
+        c = exact if exact and exact.confidence >= .85 else next_play(event.source_id)
+        original_id = event.source_id
+        if c is None and allow_other:
+            alternatives = [m for m in sources if m.id != original_id and m.id in scans]
+            alternatives.sort(key=lambda m: -sum(any(team_position(team, name) is not None for name in (m.home, m.away)) for team in event.requested_teams))
+            for source in alternatives:
+                c = next_play(source.id)
+                if c:
+                    event.source_id = source.id; data = scans[source.id]; break
+        if c is None and exact:
+            c = exact
+        if c is None:
+            event.note = 'Нет пригодного видео в загруженных записях. Добавьте запись или оставьте ведущего.'
+            continue
+        fallback = c.kind == 'play'
+        source = source_map.get(event.source_id)
+        archive = event.source_id != original_id
+        title = source.title if source else 'другой матч'
+        label = ('Архивные кадры · '+title) if archive else ('Кадры матча' if fallback and event.kind != 'play' else '')
+        event.selection = EventSelection(c.id, c.start, c.end, c.time, data['signature'],
+                                         fallback or c.confidence >= .85, label)
+        if archive:
+            event.note = 'Резерв из другой встречи: '+title+'. '+c.note
+        elif fallback and event.kind != 'play':
+            event.note = 'Точный гол не подтверждён — игровая вставка из этой встречи. '+c.note
+        else:
+            event.note = c.note
     return requests
 
 
@@ -274,6 +320,7 @@ def cut_candidate(source, selection, directory, cancel):
 
 def montage_block(project, index, cache, cancel):
     block = copy.deepcopy(project.blocks[index])
+    if not project.settings.use_manual_clips: block.clips = []
     if block.match_ids and not block.events and not block.clips:
         raise ValueError('Сначала выполните поиск голов в исходных матчах.')
     if unresolved(block):
@@ -283,5 +330,5 @@ def montage_block(project, index, cache, cancel):
         if event.skipped: continue
         selection = event.selection
         path = cut_candidate(sources[event.source_id], selection, Path(cache)/'inserts', cancel)
-        block.clips.append(Clip(str(path), event.phrase, selection.event_time-selection.source_start))
+        block.clips.append(Clip(str(path), event.phrase, selection.event_time-selection.source_start, selection.context_label))
     return block

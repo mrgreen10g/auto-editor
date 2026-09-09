@@ -16,6 +16,7 @@ class Insert:
     end: float
     source_in: float
     label: str
+    context_label: str = ''
 
 @dataclass
 class Card:
@@ -35,6 +36,7 @@ class Plan:
     cards: list[Card]
     warnings: list[str]
     duration: float
+    rotation: int | None = None
 
     def to_dict(self): return asdict(self)
     @classmethod
@@ -93,8 +95,10 @@ def placements(block,lines,clip_meta,duration):
         goal=clip.goal_time if clip.goal_time is not None else length*.58
         if goal>=length:raise ValueError(f'Положение события за пределами клипа: {clip.path}')
         source_in=max(0,min(goal-((l.start+l.end)/2-start),length-(end-start)))
-        inserts.append(Insert(clip.path,frame(start),frame(end),source_in,clip.phrase))
+        inserts.append(Insert(clip.path,frame(start),frame(end),source_in,clip.phrase,clip.context_label))
+    from .card_text import summarize_card
     cards=[Card(0,min(5,duration),'РАЗБОР МАТЧА',block.title)]
+    cards += [Card(c.start,c.end,'АРХИВНЫЕ КАДРЫ' if c.context_label.startswith('Архив') else 'КАДРЫ МАТЧА',c.context_label) for c in inserts if c.context_label]
     for i,l in enumerate(lines):
         if any(c.start<l.end and c.end>l.start for c in inserts):continue
         t=norm(l.text);title='';body=l.text
@@ -106,6 +110,7 @@ def placements(block,lines,clip_meta,duration):
         elif 'мой выбор' in t or 'форой плюс' in t:title='ПРОГНОЗ'
         elif 'возврат' in t or 'ставка выигрывает' in t:title='УСЛОВИЯ ПРОГНОЗА'
         elif 'по счёту жду' in l.text.lower() or 'по счету жду' in t:title='ОЖИДАЕМЫЙ СЧЁТ'
+        if title: body=summarize_card(title,l.text)
         if str(i) in block.card_overrides:
             body=block.card_overrides[str(i)];title=title or 'ИНФОРМАЦИЯ'
         if title and body.strip():cards.append(Card(l.start,l.end,title,body,i))

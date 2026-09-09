@@ -22,3 +22,7 @@ No user recordings, scripts, media files or local project files are included in 
 - Shapely (BSD-3-Clause) and its GEOS components (LGPL-2.1); pyclipper (MIT / Clipper notices); PyYAML (MIT), protobuf (BSD-3-Clause).
 
 Dependency license files are copied into the Windows bundle's licenses directory. Models are included in the package; user media is not sent to a recognition service.
+
+## Added in 0.3
+
+OpenCV's packaged Haar cascade data is included for local presenter orientation checks. The original notices embedded in the cascade XML files remain intact. Team logos are supplied by the user; the application fits and resizes them without generating brand details.

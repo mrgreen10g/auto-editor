@@ -26,6 +26,9 @@ def self_test(report):
         ImageDraw.Draw(image).text((12, 8), '3 | 2', font=font(40, True), fill='black')
         value, confidence = ScoreReader().text(np.asarray(image)[:, :, ::-1].copy())
         assert score_text(value) == (3, 2), (value, confidence)
+        import cv2
+        for name in ('haarcascade_frontalface_default.xml','haarcascade_eye_tree_eyeglasses.xml'):
+            assert not cv2.CascadeClassifier(str(Path(cv2.data.haarcascades)/name)).empty(), name
     Path(report).write_text(json.dumps({'status':'ok','checks':['espeak-ru','audio-alignment','ffmpeg-h264-aac','pillow']+(['bundled-score-ocr'] if sys.platform == 'win32' else [])},indent=2),encoding='utf-8')
 
 if __name__=='__main__':
@@ -50,5 +53,5 @@ if __name__=='__main__':
         if sys.stdout:print(repr(e))
         else:
             import tkinter.messagebox
-            tkinter.messagebox.showerror('Hockey Auto Editor',str(e))
+            tkinter.messagebox.showerror('Auto Editor',str(e))
         sys.exit(1)
