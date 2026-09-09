@@ -1,0 +1,44 @@
+name: Windows build
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      OPENBLAS_NUM_THREADS: '2'
+      OMP_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt pyinstaller==6.16.0
+      - name: Core tests
+        run: python -m unittest discover -s tests -v
+      - name: Source integration check
+        run: python main.py --self-test source-check.json
+      - name: Build and verify Windows application
+        run: python scripts/build_windows.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HockeyAutoEditor-Windows
+          path: dist/HockeyAutoEditor-0.1.0-Windows.zip
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-diagnostics
+          path: |
+            source-check.json
+            build/bundle-check.json
+            build/HockeyAutoEditor/warn-HockeyAutoEditor.txt
+          if-no-files-found: ignore
+          retention-days: 14

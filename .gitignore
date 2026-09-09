@@ -1,0 +1,13 @@
+__pycache__/
+.venv/
+.pytest_cache/
+build/
+dist/
+*.spec
+*.pyc
+*.mp4
+*.mov
+*.wav
+*.mp3
+*.hockeyproj
+.hockey-cache/
