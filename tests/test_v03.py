@@ -81,7 +81,7 @@ class AutomationTests(unittest.TestCase):
             Image.new('RGBA',(24,16),'#ee3355').save(logo)
             project=Project(team_logos={'Лада':str(logo)})
             project.save(folder/'project.hockeyproj')
-            self.assertEqual(Project.load(folder/'project.hockeyproj').team_logos['Лада'],str(logo))
+            self.assertTrue(Path(Project.load(folder/'project.hockeyproj').team_logos['Лада']).samefile(logo))
             card_image(Card(0,5,'РАЗБОР МАТЧА','СКА — Лада'),folder/'match.png',project.team_logos)
             card_image(Card(5,10,'СТАТИСТИКА','Броски: 36 — 32'),folder/'stats.png')
             with Image.open(folder/'match.png') as m, Image.open(folder/'stats.png') as s:
