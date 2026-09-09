@@ -214,7 +214,7 @@ class App(MatchMixin):
         self.linetable = ui.table(page, [('time', 'Время', 125), ('text', 'Фраза сценария', 480), ('check', 'Проверка', 115)], 8)
         self.linetable.bind('<Double-1>', lambda _: self.edit_card() if not self.busy else None)
         row = ttk.Frame(page)
-        row.pack(fill='x', pady=(12, 6))
+        row.pack(side='bottom', fill='x', pady=(12, 6), before=self.linetable.master)
         self.button(row, 'Изменить плашку', self.edit_card).pack(side='left')
         self.button(row, 'Повторить анализ', lambda: self.start(False)).pack(side='left', padx=8)
         self.button(row, 'Подробности', self.details).pack(side='right')

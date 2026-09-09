@@ -9,8 +9,8 @@ sys.path.insert(0, str(ROOT))
 from PIL import Image, ImageDraw
 from hockey_editor.graphics import font
 from hockey_editor.media import run, probe
-from hockey_editor.model import MatchSource, EventSelection
-from hockey_editor.goals import GoalScanner, cut_candidate
+from hockey_editor.model import MatchSource, EventSelection, Project, Block, EventRequest
+from hockey_editor.goals import GoalScanner, cut_candidate, montage_block
 
 
 def check():
@@ -27,7 +27,7 @@ def check():
             draw.rectangle((200+t*15, 300, 230+t*15, 340), fill='#152736')
             image.save(folder/f'{t:03}.png')
         video = folder/'match.mp4'
-        run(['-y', '-framerate', '1', '-i', folder/'%03d.png', '-r', '30', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video])
+        run(['-y', '-framerate', '1', '-i', folder/'%03d.png', '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=mono', '-t', '18', '-r', '30', '-c:v', 'libx264', '-c:a', 'aac', '-pix_fmt', 'yuv420p', video])
         source = MatchSource(str(video), 'HOME', 'AWAY')
         scanner = GoalScanner(folder/'cache', log=print)
         data = scanner.scan(source)
@@ -40,7 +40,23 @@ def check():
         cut = cut_candidate(source, selected, folder/'cuts', threading.Event())
         assert abs(probe(cut)['duration']-(goal['end']-goal['start'])) < .1
         assert scanner.scan(source) == data
-        report = {'status':'ok', 'checks':['native-local-ocr', 'automatic-score-region', 'clock-stop-timing', 'real-video-cut', 'scan-cache']}
+        # Feed the accepted detection through the same cut/placement/render path as the app.
+        from hockey_editor.engine import Engine
+        from hockey_editor.timeline import Plan, Line, placements
+        phrase = 'Команда HOME выходит вперёд после точного броска.'
+        block = Block(title='HOME — AWAY', script=phrase, match_ids=[source.id],
+                      events=[EventRequest(source.id, phrase, score=[1, 0], selection=selected)])
+        project = Project(host=str(video), blocks=[block], matches=[source])
+        prepared = montage_block(project, 0, folder/'montage', threading.Event())
+        lines = [Line(phrase, 0, 18)]
+        inserts, cards, warnings = placements(prepared, lines, {c.path:probe(c.path) for c in prepared.clips}, 18)
+        assert len(inserts) == 1
+        plan = Plan(0, 18, [(0,18)], lines, inserts, cards, warnings, 18)
+        Engine(project, 0, folder/'montage', threading.Event()).render(plan, folder/'result.mp4')
+        assert probe(folder/'result.mp4')['audio']
+        assert abs(probe(folder/'result.mp4')['duration']-18) < .1
+
+        report = {'status':'ok', 'checks':['native-local-ocr', 'automatic-score-region', 'clock-stop-timing', 'real-video-cut', 'scan-cache', 'detected-event-montage-export']}
         (ROOT/'build').mkdir(exist_ok=True)
         (ROOT/'build'/'ocr-check.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
 

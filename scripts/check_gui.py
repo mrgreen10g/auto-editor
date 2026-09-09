@@ -12,7 +12,7 @@ import tkinter as tk
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from hockey_editor.gui import App
-from hockey_editor.model import Project, Block, Clip
+from hockey_editor.model import Project, Block, Clip, MatchSource, EventRequest, EventSelection
 from hockey_editor.timeline import Plan, Line, Card
 
 
@@ -105,6 +105,27 @@ def check():
         root.update()
         assert app.plan is None and app.result is None
         assert str(app.previewbutton.cget('state')) == 'disabled'
+        # Multiple sources and the scan-result queue must preserve source identity.
+        first = MatchSource(str(clip), 'СКА', 'Лада', 'Тест 1')
+        second = MatchSource(str(host), 'СКА', 'Динамо', 'Тест 2')
+        app.project.matches = [first, second]
+        app.project.blocks[0].match_ids = [first.id, second.id]
+        event = EventRequest(first.id, 'Команда выходит вперёд 2:1.', score=[2, 1],
+                             selection=EventSelection('test', 1, 9, 6, 'test-signature'))
+        app.refresh()
+        assert len(app.matchtable.get_children()) == 2
+        app.handle_match_job('goals', ([event], {}, []))
+        assert 'Проверить' in app.primary.cget('text')
+        assert len(app.eventtable.get_children()) == 1
+        app.eventtable.selection_set('0')
+        app.skip_event()
+        assert event.skipped
+        app.project.blocks[1].match_ids = [first.id]
+        assert app.project.blocks[1].match_ids[0] == app.project.blocks[0].match_ids[0]
+        saved = tmp / 'v2.hockeyproj'
+        app.project.save(saved)
+        restored = Project.load(saved)
+        assert len(restored.matches) == 2 and restored.blocks[0].events[0].skipped
         # Screenshots contain synthetic data only, never user files or scripts.
         root.geometry(f'{min(1220, root.winfo_screenwidth()-60)}x{min(860, root.winfo_screenheight()-100)}+20+20')
         app.show_page('materials')
@@ -129,7 +150,7 @@ def check():
                 assert widget.winfo_rooty() + widget.winfo_height() <= root.winfo_rooty() + root.winfo_height() + 1
         assert not errors, errors
         app.close()
-    (out / 'gui-check.json').write_text(json.dumps({'status': 'ok', 'checks': ['v1-project-compatibility', 'block-switching', 'card-editing', 'stale-plan-invalidation', 'busy-control-restoration', 'worker-queue-flow', 'compact-window-layout']}, indent=2), encoding='utf-8')
+    (out / 'gui-check.json').write_text(json.dumps({'status': 'ok', 'checks': ['v1-project-compatibility', 'block-switching', 'card-editing', 'stale-plan-invalidation', 'busy-control-restoration', 'worker-queue-flow', 'compact-window-layout', 'multiple-source-review-flow', 'v2-project-roundtrip']}, indent=2), encoding='utf-8')
     # A compact visual record also allows review through text-only CI log access.
     data = base64.b64encode((out / 'gui-materials.jpg').read_bytes()).decode()
     print('GUI_PREVIEW_START')

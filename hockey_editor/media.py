@@ -37,6 +37,12 @@ def run(args, cancel=None, log_path=None, progress=None):
                 if match: progress(int(match[1])*3600+int(match[2])*60+float(match[3]))
         code=proc.wait()
     finally:
+        # A progress/log callback can fail too. Reap FFmpeg before releasing its files.
+        if proc.poll() is None:
+            proc.terminate()
+            try: proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                proc.kill(); proc.wait()
         done.set();proc.stderr.close()
     output=''.join(lines)
     if log_path: Path(log_path).write_text(output,encoding='utf-8')

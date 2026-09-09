@@ -53,7 +53,7 @@ class MatchMixin:
         ttk.Label(parent, text='Проверьте спорные эпизоды. Двойной щелчок — посмотреть и выбрать.', style='Muted.TLabel', wraplength=660).pack(anchor='w', pady=8)
         self.eventtable = ui.table(parent, [('source', 'Матч', 160), ('phrase', 'Фраза ведущего', 250), ('goal', 'Эпизод', 90), ('state', 'Статус', 100)], 6)
         self.eventtable.bind('<Double-1>', lambda _: self.edit_event() if not self.busy else None)
-        row = ttk.Frame(parent); row.pack(fill='x', pady=8)
+        row = ttk.Frame(parent); row.pack(side='bottom', fill='x', pady=8, before=self.eventtable.master)
         for label, command in [('Посмотреть / выбрать', self.edit_event), ('Оставить ведущего', self.skip_event), ('+ Фраза', self.add_event)]:
             self.button(row, label, command).pack(side='left', padx=(0, 8))
 
@@ -301,6 +301,9 @@ class MatchMixin:
         def preview():
             try: source, chosen = selection()
             except Exception as e: return messagebox.showerror('Границы эпизода', str(e), parent=dialog)
+            chosen.accepted = False
+            event.source_id = source.id; event.selection = chosen; event.skipped = False
+            self.invalidate(); self.refresh_events(); self.update_summary()
             dialog.destroy()
             def work():
                 path = cut_candidate(copy.deepcopy(source), chosen, scan_root()/'previews', self.cancel)

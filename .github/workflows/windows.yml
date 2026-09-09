@@ -12,6 +12,7 @@ jobs:
     env:
       OPENBLAS_NUM_THREADS: '2'
       OMP_NUM_THREADS: '2'
+      PYTHONUTF8: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
