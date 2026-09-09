@@ -139,7 +139,7 @@ class App(MatchMixin):
         self.deck.columnconfigure(0, weight=1)
         self.pages = {}
         self.footer = ttk.Frame(main)
-        self.footer.pack(fill='x', pady=(12, 0))
+        self.footer.pack(side='bottom', fill='x', pady=(12, 0), before=self.deck)
 
     def scrollable(self, key):
         page = ui.ScrollPage(self.deck)

@@ -140,23 +140,21 @@ def check():
             time.sleep(.15)
             bounds = (root.winfo_rootx(), root.winfo_rooty(), root.winfo_rootx() + root.winfo_width(), root.winfo_rooty() + root.winfo_height())
             ImageGrab.grab(bbox=bounds).convert('RGB').save(out / f'gui-{key}.jpg', quality=80)
+        data = base64.b64encode((out / 'gui-materials.jpg').read_bytes()).decode()
+        print('GUI_PREVIEW_START')
+        for i in range(0, len(data), 4000): print(data[i:i+4000])
+        print('GUI_PREVIEW_END')
         root.geometry('960x640')
         for key in ('materials', 'review', 'export', 'settings'):
             app.show_page(key)
             root.update()
             for widget in (app.primary, app.cancelbutton, app.heading):
-                assert widget.winfo_ismapped()
+                assert widget.winfo_ismapped(), (key, str(widget), root.geometry())
                 assert widget.winfo_rootx() + widget.winfo_width() <= root.winfo_rootx() + root.winfo_width() + 1
                 assert widget.winfo_rooty() + widget.winfo_height() <= root.winfo_rooty() + root.winfo_height() + 1
         assert not errors, errors
         app.close()
     (out / 'gui-check.json').write_text(json.dumps({'status': 'ok', 'checks': ['v1-project-compatibility', 'block-switching', 'card-editing', 'stale-plan-invalidation', 'busy-control-restoration', 'worker-queue-flow', 'compact-window-layout', 'multiple-source-review-flow', 'v2-project-roundtrip']}, indent=2), encoding='utf-8')
-    # A compact visual record also allows review through text-only CI log access.
-    data = base64.b64encode((out / 'gui-materials.jpg').read_bytes()).decode()
-    print('GUI_PREVIEW_START')
-    for i in range(0, len(data), 4000):
-        print(data[i:i + 4000])
-    print('GUI_PREVIEW_END')
     print('Desktop workflow and layout checks passed.')
 
 
