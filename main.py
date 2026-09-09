@@ -18,7 +18,15 @@ def self_test(report):
         run(['-y','-f','lavfi','-i','color=c=blue:s=320x180:r=30:d=0.4','-f','lavfi','-i','anullsrc=r=48000:cl=mono','-t','0.4','-c:v','libx264','-c:a','aac',video])
         assert probe(video)['video']
         Image.new('RGB',(10,10)).save(d/'image.png')
-    Path(report).write_text(json.dumps({'status':'ok','checks':['espeak-ru','audio-alignment','ffmpeg-h264-aac','pillow']},indent=2),encoding='utf-8')
+    if sys.platform == 'win32':
+        from hockey_editor.score_ocr import ScoreReader, score_text
+        from hockey_editor.graphics import font
+        from PIL import ImageDraw
+        image = Image.new('RGB', (240, 75), 'white')
+        ImageDraw.Draw(image).text((12, 8), '3 | 2', font=font(40, True), fill='black')
+        value, confidence = ScoreReader().text(np.asarray(image)[:, :, ::-1].copy())
+        assert score_text(value) == (3, 2), (value, confidence)
+    Path(report).write_text(json.dumps({'status':'ok','checks':['espeak-ru','audio-alignment','ffmpeg-h264-aac','pillow']+(['bundled-score-ocr'] if sys.platform == 'win32' else [])},indent=2),encoding='utf-8')
 
 if __name__=='__main__':
     try:

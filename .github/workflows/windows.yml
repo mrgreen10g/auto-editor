@@ -1,7 +1,7 @@
 name: Windows build
 on:
   push:
-    branches: [main]
+    branches: [main, version-0.2]
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,12 +24,16 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Source integration check
         run: python main.py --self-test source-check.json
+      - name: Scoreboard OCR integration
+        run: python scripts/check_ocr.py
+      - name: Desktop workflow and layout check
+        run: python scripts/check_gui.py
       - name: Build and verify Windows application
         run: python scripts/build_windows.py
       - uses: actions/upload-artifact@v4
         with:
           name: HockeyAutoEditor-Windows
-          path: dist/HockeyAutoEditor-0.1.0-Windows.zip
+          path: dist/HockeyAutoEditor-*-Windows.zip
           if-no-files-found: error
           retention-days: 30
       - uses: actions/upload-artifact@v4
@@ -40,5 +44,8 @@ jobs:
             source-check.json
             build/bundle-check.json
             build/HockeyAutoEditor/warn-HockeyAutoEditor.txt
+            build/gui-*.jpg
+            build/gui-check.json
+            build/ocr-check.json
           if-no-files-found: ignore
           retention-days: 14

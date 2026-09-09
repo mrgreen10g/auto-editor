@@ -23,6 +23,8 @@ class Engine:
 
     def analyze(self):
         p=self.project;p.validate(self.index);self.check()
+        from .goals import montage_block
+        block=montage_block(p,self.index,self.cache,self.cancel)
         info=probe(p.host)
         if not info['audio'] or not info['video']:raise ValueError('У записи ведущего должны быть и видео, и звук.')
         if info['duration']>900:raise ValueError('Первая версия поддерживает записи ведущего длительностью до 15 минут.')
@@ -46,9 +48,9 @@ class Engine:
         keep=keep_ranges(end-start,spans,enabled=p.settings.cut_pauses)
         duration=sum(b-a for a,b in keep)
         lines=[Line(l.text,frame(map_time(l.start-start,keep)),frame(map_time(l.end-start,keep)),l.agreement) for l in source]
-        meta={c.path:probe(c.path) for c in p.blocks[self.index].clips}
+        meta={c.path:probe(c.path) for c in block.clips}
         if any(not x['video'] for x in meta.values()):raise ValueError('Игровая вставка должна содержать видео.')
-        inserts,cards,extra=placements(p.blocks[self.index],lines,meta,duration)
+        inserts,cards,extra=placements(block,lines,meta,duration)
         plan=Plan(start,end,keep,lines,inserts,cards,list(warnings)+extra,duration)
         self.save_plan(plan)
         self.log(f'Разметка готова: {len(lines)} фраз, {len(inserts)} вставок, {duration:.1f} с.')
@@ -63,7 +65,7 @@ class Engine:
     def render(self,plan,target):
         self.check();self.project.validate(self.index)
         target=Path(target).resolve();p=self.project;s=p.settings
-        protected=[p.host,p.music]+[c.path for b in p.blocks for c in b.clips]
+        protected=[p.host,p.music]+[c.path for b in p.blocks for c in b.clips]+[m.path for m in p.matches]
         if any(target==Path(f).resolve() for f in protected if f):raise ValueError('Нельзя записывать результат поверх исходного файла.')
         if target.exists():raise ValueError('Файл результата уже существует. Выберите новое имя.')
         target.parent.mkdir(parents=True,exist_ok=True)

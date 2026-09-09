@@ -1,0 +1,143 @@
+"""Exercise desktop state transitions on Windows, including old project files."""
+import base64
+import copy
+import json
+import sys
+import tempfile
+import time
+from pathlib import Path
+from unittest.mock import patch
+import tkinter as tk
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from hockey_editor.gui import App
+from hockey_editor.model import Project, Block, Clip
+from hockey_editor.timeline import Plan, Line, Card
+
+
+def check():
+    root = tk.Tk()
+    errors = []
+    root.report_callback_exception = lambda *exc: errors.append(str(exc[1]))
+    app = App(root)
+    out = ROOT / 'build'
+    out.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='hockey-ui-') as tmp:
+        tmp = Path(tmp)
+        host, clip = tmp / 'presenter.mp4', tmp / 'goal.mp4'
+        host.touch()
+        clip.touch()
+        project = Project(host=str(host), blocks=[Block(title='Тестовый разбор', script='Начинаем разбор матча. Команда выходит вперёд 2:1. Теперь посмотрим статистику бросков.', clips=[Clip(str(clip), '2:1')])])
+        path = tmp / 'project.hockeyproj'
+        project.version = 1
+        project.save(path)
+        with patch('hockey_editor.gui.filedialog.askopenfilename', return_value=str(path)):
+            app.load()
+        root.update()
+        app.collect()
+        assert app.project.version == 2 and app.project.settings.zoom_max == 1.2
+        assert app.project.settings.denoise and app.project.blocks[0].clips[0].phrase == '2:1'
+        assert app.page == 'materials' and 'Материалы готовы' in app.readiness.get()
+        initial_script = app.project.blocks[0].script
+        app.add_block()
+        app.title.set('Второй разбор')
+        app.script.insert('1.0', 'Другой текст сценария для проверки переключения между разборами.')
+        root.update()
+        app.blockbox.current(0)
+        app.switch_block()
+        app.collect()
+        assert app.project.blocks[0].script == initial_script
+        assert app.project.blocks[1].title == 'Второй разбор'
+        # Use an explicit plan only to exercise the UI controller; media tests cover real exports.
+        plan = Plan(0, 12, [(0, 12)], [Line('Начинаем разбор матча.', 0, 3), Line('Команда выходит вперёд 2:1.', 3, 7), Line('Теперь посмотрим статистику бросков.', 7, 12, 1.0)], [], [Card(7, 12, 'СТАТИСТИКА', 'Броски: 32 — 36', 2)], [], 12)
+        app.display_plan(plan)
+        app.linetable.selection_set('2')
+        with patch('hockey_editor.gui.simpledialog.askstring', return_value='Броски: 30 — 35') as ask:
+            app.edit_card()
+            assert ask.call_args.kwargs['initialvalue'] == 'Броски: 32 — 36'
+        assert app.project.blocks[0].card_overrides['2'] == 'Броски: 30 — 35'
+        app.show_page('review')
+        app.primary.invoke()
+        assert app.page == 'export'
+        app.show_page('settings')
+        app.noise.set('Мягко')
+        root.update()
+        assert app.plan is None and not app.linetable.get_children()
+        app.collect()
+        assert app.project.settings.noise_reduction == 6
+        app.set_busy(True)
+        app.set_busy(True)
+        assert all(str(w.cget('state')) == 'disabled' for w in app.controls)
+        app.show_page('materials')
+        app.set_busy(False)
+        assert str(app.blockbox.cget('state')) == 'readonly'
+        assert str(app.script.cget('state')) == 'normal'
+        assert str(app.primary.cget('state')) == 'normal'
+        # Exercise actual button -> worker -> queue -> review/export flow without rendering again.
+        class FakeEngine:
+            def __init__(self, project, *args):
+                self.project = project
+                assert project is not app.project
+            def analyze(self):
+                return copy.deepcopy(plan)
+            def render(self, value, target):
+                Path(target).touch()
+                return Path(target)
+        def drain():
+            deadline = time.monotonic() + 5
+            while app.busy and time.monotonic() < deadline:
+                root.update()
+                time.sleep(.02)
+            assert not app.busy
+            root.update()
+        with patch('hockey_editor.gui.Engine', FakeEngine), patch.object(app, 'cache_path', return_value=tmp / 'cache'):
+            app.start(False)
+            drain()
+            assert app.page == 'review' and app.plan is not None
+            target = tmp / 'result.mp4'
+            with patch('hockey_editor.gui.filedialog.asksaveasfilename', return_value=str(target)):
+                app.start(True)
+                drain()
+            assert app.result == target and app.page == 'export'
+            assert str(app.previewbutton.cget('state')) == 'normal'
+        app.script.insert('end', '\nЕщё одна фраза.')
+        root.update()
+        assert app.plan is None and app.result is None
+        assert str(app.previewbutton.cget('state')) == 'disabled'
+        # Screenshots contain synthetic data only, never user files or scripts.
+        root.geometry(f'{min(1220, root.winfo_screenwidth()-60)}x{min(860, root.winfo_screenheight()-100)}+20+20')
+        app.show_page('materials')
+        root.update()
+        from PIL import ImageGrab
+        for key in ('materials', 'review', 'settings'):
+            if key == 'review':
+                app.display_plan(plan)
+            app.show_page(key)
+            root.update()
+            root.lift()
+            time.sleep(.15)
+            bounds = (root.winfo_rootx(), root.winfo_rooty(), root.winfo_rootx() + root.winfo_width(), root.winfo_rooty() + root.winfo_height())
+            ImageGrab.grab(bbox=bounds).convert('RGB').save(out / f'gui-{key}.jpg', quality=80)
+        root.geometry('960x640')
+        for key in ('materials', 'review', 'export', 'settings'):
+            app.show_page(key)
+            root.update()
+            for widget in (app.primary, app.cancelbutton, app.heading):
+                assert widget.winfo_ismapped()
+                assert widget.winfo_rootx() + widget.winfo_width() <= root.winfo_rootx() + root.winfo_width() + 1
+                assert widget.winfo_rooty() + widget.winfo_height() <= root.winfo_rooty() + root.winfo_height() + 1
+        assert not errors, errors
+        app.close()
+    (out / 'gui-check.json').write_text(json.dumps({'status': 'ok', 'checks': ['v1-project-compatibility', 'block-switching', 'card-editing', 'stale-plan-invalidation', 'busy-control-restoration', 'worker-queue-flow', 'compact-window-layout']}, indent=2), encoding='utf-8')
+    # A compact visual record also allows review through text-only CI log access.
+    data = base64.b64encode((out / 'gui-materials.jpg').read_bytes()).decode()
+    print('GUI_PREVIEW_START')
+    for i in range(0, len(data), 4000):
+        print(data[i:i + 4000])
+    print('GUI_PREVIEW_END')
+    print('Desktop workflow and layout checks passed.')
+
+
+if __name__ == '__main__':
+    check()

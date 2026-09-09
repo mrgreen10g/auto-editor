@@ -13,3 +13,12 @@ The application bundle includes third-party software with its own license terms.
 - PyInstaller — https://github.com/pyinstaller/pyinstaller — GPL-2.0-or-later with its bootloader exception.
 
 No user recordings, scripts, media files or local project files are included in the source repository or generic application bundle.
+
+## Added in 0.2
+
+- RapidOCR ONNX Runtime 1.4.4 (Apache-2.0), including distributed PaddleOCR detection/recognition model files and their upstream notices.
+- ONNX Runtime 1.22.1 (MIT): local CPU inference; telemetry disabled before inference-session creation.
+- OpenCV Python 4.11 (Apache-2.0; packaged third-party notices also apply).
+- Shapely (BSD-3-Clause) and its GEOS components (LGPL-2.1); pyclipper (MIT / Clipper notices); PyYAML (MIT), protobuf (BSD-3-Clause).
+
+Dependency license files are copied into the Windows bundle's licenses directory. Models are included in the package; user media is not sent to a recognition service.
