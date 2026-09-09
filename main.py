@@ -26,7 +26,7 @@ if __name__=='__main__':
         elif '--smoke-gui' in sys.argv:
             import tkinter as tk
             from hockey_editor.gui import App
-            root=tk.Tk();root.withdraw();App(root);root.update();root.destroy()
+            root=tk.Tk();root.withdraw();app=App(root);root.update();app.set_busy(True);root.update();app.set_busy(False);root.destroy()
         elif '--render-project' in sys.argv:
             from hockey_editor.model import Project
             from hockey_editor.engine import Engine

@@ -53,7 +53,7 @@ class ProjectTests(unittest.TestCase):
             p=Project(host=str(folder/'ведущий.mp4'),blocks=[Block(script='Текст сценария')]);p.save(folder/'выпуск.hockeyproj')
             renamed=root/'новая папка';folder.rename(renamed)
             loaded=Project.load(renamed/'выпуск.hockeyproj')
-            self.assertEqual(loaded.host,str(renamed/'ведущий.mp4'))
+            self.assertTrue(Path(loaded.host).samefile(renamed/'ведущий.mp4'))
             self.assertEqual(loaded.settings.zoom_max,1.2);self.assertTrue(loaded.settings.denoise)
     def test_future_version_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
