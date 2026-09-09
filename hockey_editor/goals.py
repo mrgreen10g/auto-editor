@@ -210,9 +210,10 @@ class GoalScanner:
             shutil.rmtree(detail)
         data = {'signature': signature, 'duration': duration, 'box': self.reader.box,
                 'candidates': [asdict(c) for c in candidates], 'observations': [asdict(o) for o in observations]}
-        temp = saved.with_suffix('.tmp'); temp.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8'); temp.replace(saved)
+        payload = json.dumps(data, ensure_ascii=False)
+        temp = saved.with_suffix('.tmp'); temp.write_text(payload, encoding='utf-8'); temp.replace(saved)
         self.log(f'Поиск готов: {sum(c.kind == "goal" for c in candidates)} голов-кандидатов.')
-        return data
+        return json.loads(payload)
 
 
 def propose(requests, scans):

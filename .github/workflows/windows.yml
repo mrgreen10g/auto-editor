@@ -28,6 +28,7 @@ jobs:
       - name: Scoreboard OCR integration
         run: python scripts/check_ocr.py
       - name: Desktop workflow and layout check
+        if: ${{ !cancelled() }}
         run: python scripts/check_gui.py
       - name: Build and verify Windows application
         run: python scripts/build_windows.py

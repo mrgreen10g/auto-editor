@@ -38,6 +38,19 @@ class GoalTests(unittest.TestCase):
         self.assertIsNone(score_text('17:29')); self.assertIsNone(score_text('212'))
         self.assertEqual(clock_text('3RD 04:52'), 292)
 
+    def test_region_discovery_excludes_clock_subcrops(self):
+        import numpy as np
+        from hockey_editor.score_ocr import ScoreReader
+        reader = ScoreReader(ocr=lambda *a, **k: ([], None))
+        score = [.1, .9, .18, .96]
+        clock = [.5, .9, .65, .96]
+        reader.tokens = lambda image, top, bottom: [(score, '0|0', .99), (clock, '00:08', .99)] if top > .5 else []
+        reader.visual_candidates = lambda image: [([.5, .9, .55, .96], .99)]*8 + [(score, .9)]
+        result = reader.locate([np.zeros((720,1280,3), dtype='uint8')]*3, threading.Event(), lambda _:None)
+        self.assertEqual(result, score)
+        self.assertEqual(reader.clock_box, clock)
+        self.assertEqual(reader.location_debug[0][1], 3)
+
     def test_static_clock_not_play(self):
         obs = [Observation(t, (0, 0), .99, 2, ice=.8) for t in range(0, 20, 2)]
         self.assertEqual(detect_candidates(obs, 20), [])
