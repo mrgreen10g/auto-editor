@@ -12,6 +12,7 @@ class Clip:
     origin_path: str = ''
     origin_start: float = 0.
     kind: str = 'score'
+    flexible_source: bool = False
 
 @dataclass
 class MatchSource:

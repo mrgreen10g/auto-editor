@@ -81,7 +81,7 @@ def placements(block,lines,clip_meta,duration,frequency='normal'):
         if len(found)>1:
             warnings.append(f'Фраза «{clip.phrase}» встречается несколько раз: выбрано первое совпадение.')
         matched.append((found[0],clip))
-    matched.sort(key=lambda x:x[0]);used=set();inserts=[]
+    matched.sort(key=lambda x:x[0]);used=set();inserts=[];last_play_source=None
     for number,(idx,clip) in enumerate(matched):
         if idx in used:
             warnings.append(f'Две вставки к одной фразе: «{clip.phrase}» пропущена.');continue
@@ -95,6 +95,14 @@ def placements(block,lines,clip_meta,duration,frequency='normal'):
         if clip.kind=='play':
             gap,maximum={'low':(15,3.5),'normal':(8,5),'high':(3,7)}[frequency]
             if inserts and start-inserts[-1].end<gap: continue
+            source=clip.origin_path or clip.path
+            flexible=clip.flexible_source or clip.context_label.startswith('Архив')
+            # Spacing must not sample the same source every third event from an
+            # otherwise balanced A/B/C sequence. Prefer a nearby alternate slot.
+            if flexible and source==last_play_source and any(
+                c.kind=='play' and (c.flexible_source or c.context_label.startswith('Архив'))
+                and (c.origin_path or c.path)!=source and 0<lines[j].start-start<=8
+                for j,c in matched[number+1:]):continue
             end=min(end,start+maximum)
         if end-start>length:start=end-length
         if end-start<.25:
@@ -104,6 +112,7 @@ def placements(block,lines,clip_meta,duration,frequency='normal'):
         source_in=max(0,min(goal-((l.start+l.end)/2-start),length-(end-start)))
         inserts.append(Insert(clip.origin_path or clip.path,frame(start),frame(end),source_in+clip.origin_start,
                               clip.phrase,clip.context_label,clip.origin_start,clip.origin_start+length))
+        if clip.kind=='play':last_play_source=clip.origin_path or clip.path
     from .card_text import summarize_card
     cards=[Card(0,min(5,duration),'РАЗБОР МАТЧА',block.title)]
     for i,l in enumerate(lines):

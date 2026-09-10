@@ -79,6 +79,12 @@ class V04Tests(unittest.TestCase):
                 with Image.open(p) as im:self.assertLess(im.width,460)
                 self.assertLess(x,60);self.assertLess(y,60)
 
+    def test_density_does_not_undo_archive_source_rotation(self):
+        lines=[Line('Вступление',0,5)]+[Line(f'Фраза {i}',5+i*5,10+i*5) for i in range(12)]
+        clips=[Clip(str(i%3),l.text,3,'Архивные кадры',kind='play') for i,l in enumerate(lines[1:])]
+        inserts,_,_=placements(Block(clips=clips),lines,{str(i):{'duration':8} for i in range(3)},65,'normal')
+        self.assertEqual({c.path for c in inserts},{'0','1','2'})
+
     def test_edit_history_validates_bounds_and_roundtrips_portably(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);media=root/'game.mp4';media.touch()

@@ -349,5 +349,5 @@ def montage_block(project, index, cache, cancel):
         selection = event.selection
         path = cut_candidate(sources[event.source_id], selection, Path(cache)/'inserts', cancel)
         block.clips.append(Clip(str(path), event.phrase, selection.event_time-selection.source_start, selection.context_label,
-                                sources[event.source_id].path,selection.source_start,event.kind))
+                                sources[event.source_id].path,selection.source_start,event.kind,event.flexible_source))
     return block
