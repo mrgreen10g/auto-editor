@@ -42,7 +42,9 @@ if __name__=='__main__':
             from hockey_editor.model import Project
             from hockey_editor.engine import Engine
             i=sys.argv.index('--render-project');project=Project.load(sys.argv[i+1]);target=Path(sys.argv[i+2])
-            engine=Engine(project,0,target.parent/'.hockey-cache',threading.Event(),print)
+            from hockey_editor.episode import EpisodeEngine
+            engine_class=EpisodeEngine if project.whole_episode else Engine
+            engine=engine_class(project,0,target.parent/'.hockey-cache',threading.Event(),print)
             engine.render(engine.analyze(),target)
         else:
             from hockey_editor.gui import launch

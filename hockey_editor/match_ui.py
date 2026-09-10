@@ -144,6 +144,7 @@ class MatchMixin:
 
     def search_matches(self):
         if self.busy: return
+        if self.scope.get()=="Все разборы":return self.search_episode_matches()
         self.collect(); block = self.project.blocks[self.index]
         if not block.match_ids or len(block.script.strip()) < 30:
             return messagebox.showinfo('Материалы', 'Добавьте исходную запись матча и сценарий разбора.')
@@ -169,7 +170,44 @@ class MatchMixin:
             self.jobs.put(('goals', (propose_events(events, scans, sources, allow_other), scans, errors)))
         self.match_job('goals', work)
 
+    def search_episode_matches(self):
+        self.collect()
+        blocks=copy.deepcopy(self.project.blocks)
+        pending=[b for b in blocks if b.match_ids and not b.events]
+        if not pending:
+            if not messagebox.askyesno('Повторить поиск','Заменить подбор эпизодов во всех разборах?'):return
+            pending=[b for b in blocks if b.match_ids]
+        if not pending:return messagebox.showinfo('Материалы','Добавьте исходные матчи к разборам.')
+        if any(len(b.script.strip())<30 for b in pending):
+            return messagebox.showinfo('Материалы','Добавьте сценарий к каждому разбору перед поиском.')
+        ids={mid for b in pending for mid in b.match_ids}
+        sources=copy.deepcopy([m for m in self.project.matches if m.id in ids])
+        manual=self.project.settings.use_manual_clips;allow=self.project.settings.allow_other_matches
+        self.invalidate();self.show_page('review');self.reviewtabs.select(self.events_page)
+        self.review_summary.set('Ищем эпизоды для всех разборов…')
+        def work():
+            scans={};errors=[];output={}
+            for source in sources:
+                if self.cancel.is_set():raise Cancelled()
+                self.jobs.put(('log','Матч: '+source.title))
+                try:scans[source.id]=GoalScanner(cancel=self.cancel,log=lambda m:self.jobs.put(('log',m))).scan(source)
+                except Cancelled:raise
+                except Exception as error:errors.append(source.title+': '+str(error))
+            for block in pending:
+                local=[s for s in sources if s.id in block.match_ids]
+                output[block.uid]=propose_events(requests_for(block,local,manual),scans,local,allow)
+            self.jobs.put(('episode_goals',(output,scans,errors)))
+        self.match_job('goals',work)
+
     def handle_match_job(self, kind, value):
+        if kind=='episode_goals':
+            output,scans,errors=value;self.scans.update(scans)
+            for b in self.project.blocks:
+                if b.uid in output:b.events=output[b.uid]
+            self.refresh_events();self.update_summary()
+            self.review_summary.set(f'Подготовлено разборов: {len(output)}')
+            self.review_note.set(errors[0] if errors else 'Выбирайте разбор в «Материалах», чтобы проверить его эпизоды. Затем определите тайминги всего выпуска.')
+            self.log_lines.extend(errors);self.status.set('Поиск по всем разборам завершён.');return True
         if kind == 'goals':
             events, scans, errors = value
             self.project.blocks[self.index].events = events; self.scans.update(scans)
@@ -246,6 +284,7 @@ class MatchMixin:
         self.invalidate(); self.refresh_events(); self.eventtable.selection_set(str(len(block.events)-1)); self.edit_event()
 
     def edit_event(self):
+        from .timeline import format_time,parse_time
         if self.busy: return
         event = self.selected_event()
         if event is None: return
@@ -258,7 +297,7 @@ class MatchMixin:
         tree = ui.table(dialog, [('goal', 'Кандидат', 140), ('note', 'Проверка', 450)], 6)
         values = [tk.StringVar() for _ in range(3)]
         row = ttk.Frame(dialog); row.pack(fill='x', padx=20, pady=10)
-        for label, var in zip(('Начало, с', 'Конец, с', 'Гол, с'), values):
+        for label, var in zip(('Начало', 'Конец', 'Гол'), values):
             ttk.Label(row, text=label).pack(side='left', padx=(0, 4)); ttk.Entry(row, textvariable=var, width=9).pack(side='left', padx=(0, 12))
         note = ttk.Label(dialog, text=event.note or 'Выберите подходящий эпизод и посмотрите его. При необходимости поправьте границы.', wraplength=710); note.pack(fill='x', padx=20, pady=6)
         state = {'data': None, 'candidates': [], 'last_choice': None}
@@ -275,23 +314,23 @@ class MatchMixin:
                 tree.insert('', 'end', iid=str(i), values=(c.label, c.note or 'Смена счёта и игрового времени'))
             for var in values: var.set('')
             if event.selection and source.id == event.source_id and event.selection.source_signature == signature:
-                for var, n in zip(values, (event.selection.source_start, event.selection.source_end, event.selection.event_time)): var.set(f'{n:.2f}')
+                for var, n in zip(values, (event.selection.source_start, event.selection.source_end, event.selection.event_time)): var.set(format_time(n))
                 idx = next((i for i, c in enumerate(state['candidates']) if c.id == event.selection.candidate_id), None)
                 if idx is not None:
                     state['last_choice'] = str(idx)
                     tree.selection_set(str(idx)); tree.see(str(idx))
-            if not data: note.configure(text='Сначала выполните поиск в этой записи. Можно также задать границы вручную в секундах.')
+            if not data: note.configure(text='Сначала выполните поиск в этой записи. Можно также задать границы вручную в формате ММ:СС.сс.')
         def selected(_=None):
             if not tree.selection(): return
             choice = tree.selection()[0]
             if choice == state['last_choice']: return
             state['last_choice'] = choice
             c = state['candidates'][int(choice)]
-            for var, n in zip(values, (c.start, c.end, c.time)): var.set(f'{n:.2f}')
+            for var, n in zip(values, (c.start, c.end, c.time)): var.set(format_time(n))
             note.configure(text=c.note or 'Посмотрите эпизод перед использованием.')
         def selection():
             source = sources[combo.current()]
-            start, end, when = [float(v.get().replace(',', '.')) for v in values]
+            start, end, when = [parse_time(v.get()) for v in values]
             if not 0 <= start <= when <= end or not .5 <= end-start <= 60 or end > probe(source.path)['duration']+.05:
                 raise ValueError('Проверьте границы: начало ≤ гол ≤ конец; длина от 0,5 до 60 секунд.')
             ident = state['candidates'][int(tree.selection()[0])].id if tree.selection() else 'manual'
@@ -317,9 +356,21 @@ class MatchMixin:
                 path = cut_candidate(copy.deepcopy(source), chosen, scan_root()/'previews', self.cancel)
                 self.jobs.put(('clip_preview', path))
             self.match_job('preview', work)
+        def trim():
+            try:
+                source,chosen=selection()
+                lo,hi=chosen.source_start,chosen.source_end
+                for a,b in (state['data'] or {}).get('gameplay_ranges',[]):
+                    if a<=lo and b>=hi:lo,hi=max(a,lo-8),min(b,hi+8);break
+                from .trim_ui import TrimDialog
+                def apply(a,b,t):
+                    for var,n in zip(values,(a,b,t)):var.set(format_time(n))
+                TrimDialog(dialog,source.path,lo,hi,chosen.source_start,chosen.source_end,chosen.event_time,apply)
+            except Exception as error:messagebox.showerror('Обрезка',str(error),parent=dialog)
         tree.bind('<<TreeviewSelect>>', selected); combo.bind('<<ComboboxSelected>>', load_candidates)
         buttons = ttk.Frame(dialog); buttons.pack(fill='x', padx=20, pady=12)
-        ttk.Button(buttons, text='Посмотреть видео', command=preview).pack(side='left')
+        ttk.Button(buttons, text='Обрезать визуально', command=trim).pack(side='left')
+        ttk.Button(buttons, text='Посмотреть видео', command=preview).pack(side='left',padx=8)
         ttk.Button(buttons, text='Использовать эпизод', command=use, style='Primary.TButton').pack(side='right')
         load_candidates()
 

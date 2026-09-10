@@ -15,33 +15,36 @@ class Engine:
     def check(self):
         if self.cancel.is_set():raise Cancelled('Отменено.')
 
-    def signature(self):
+    def signature(self,source_floor=0):
         def stat(p):
             s=Path(p).stat();return [str(Path(p).resolve()),s.st_size,s.st_mtime_ns]
-        data={'version':__version__+'-align2','host':stat(self.project.host),'script':self.project.blocks[self.index].script}
+        data={'version':__version__+'-align2','host':stat(self.project.host),'script':self.project.blocks[self.index].script,'floor':frame(source_floor)}
         return hashlib.sha256(json.dumps(data,ensure_ascii=False).encode()).hexdigest()
 
-    def analyze(self):
+    def analyze(self,source_floor=0):
         p=self.project;p.validate(self.index);self.check()
         from .editing import saved_plan
         restored=saved_plan(p,self.index)
-        if restored is not None:
+        if restored is not None and restored.source_start>=source_floor-.035:
             self.log('Использую сохранённую монтажную дорожку с вашими правками.')
             return restored
         from .goals import montage_block
         block=montage_block(p,self.index,self.cache,self.cancel)
         info=probe(p.host)
         if not info['audio'] or not info['video']:raise ValueError('У записи ведущего должны быть и видео, и звук.')
-        if info['duration']>900:raise ValueError('Первая версия поддерживает записи ведущего длительностью до 15 минут.')
-        key=self.signature();cached=self.cache/'alignment.json'
+        if info['duration']>1800:raise ValueError('Поддерживается запись ведущего длительностью до 30 минут.')
+        if source_floor>=info['duration']-1:raise ValueError('В записи не осталось места для следующего разбора. Проверьте порядок текстов.')
+        key=self.signature(source_floor);cached=self.cache/'alignment.json'
         saved=json.loads(cached.read_text(encoding='utf-8')) if cached.exists() else {}
         if saved.get('key')==key:
             self.log('Использую сохраненную разметку речи.')
             source=[Line(**l) for l in saved['lines']];warnings=saved['warnings']
         else:
             self.log('Извлекаю голос ведущего…')
-            audio=self.cache/'host.wav';audio_extract(p.host,audio,self.cancel)
+            audio=self.cache/'host.wav'
+            run(['-y','-ss',source_floor,'-i',p.host,'-vn','-ac','1','-ar','16000','-c:a','pcm_s16le',audio],self.cancel)
             source,warnings=align(audio,p.blocks[self.index].script,self.cache,self.cancel,self.log)
+            for line in source:line.start+=source_floor;line.end+=source_floor
             cached.write_text(json.dumps({'key':key,'lines':[vars(l) for l in source],'warnings':warnings},ensure_ascii=False,indent=2),encoding='utf-8')
         if not source or any(l.end<=l.start for l in source):
             raise ValueError('Некорректная разметка: проверьте, что сценарий соответствует записи.')
@@ -129,16 +132,20 @@ class Engine:
                 parts.append(f'if(between(on,{a},{b}),(1-cos(PI*(on-{a})/{b-a}))/2,if(between(on,{b},{c}),1,if(between(on,{c},{d}),(1+cos(PI*(on-{c})/{d-c}))/2,0)))')
             z='1+'+str(s.zoom_max-1)+'*('+'+'.join(parts)+')'
             fl.append(f"[0:v]scale=2560:1440,zoompan=z='{z}':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s=1280x720:fps=30[zv]");v='zv'
-        for i,c in enumerate(plan.inserts):
+        from .timeline import game_transitions
+        for i,(c,tail,joined_before,joined_after) in enumerate(game_transitions(plan)):
             meta=probe(c.path);fade=.20 if s.transitions else 0
             # Transitions stay INSIDE the selected shot, never pull crowd frames in.
             pre=post=0
-            start=c.start-pre;length=c.end-c.start+pre+post
-            args+=['-threads','1','-ss',f'{c.source_in-pre:.6f}','-t',f'{length:.6f}','-i',c.path]
-            filt=f'trim=duration={length:.6f},setpts=PTS-STARTPTS,fps=30,scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1,format=rgba'
+            start=c.start;source_length=c.end-c.start;length=source_length+tail
+            args+=['-threads','1','-ss',f'{c.source_in:.6f}','-t',f'{source_length:.6f}','-i',c.path]
+            filt=f'trim=duration={source_length:.6f},setpts=PTS-STARTPTS,fps=30,scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1'
+            if tail:filt+=f',tpad=stop_mode=clone:stop_duration={tail:.6f}'
+            filt+=',format=rgba'
             if fade:
                 fin=pre or min(fade,length/4);fout=post or min(fade,length/4)
-                filt+=f',fade=t=in:st=0:d={fin:.6f}:alpha=1,fade=t=out:st={length-fout:.6f}:d={fout:.6f}:alpha=1'
+                if not joined_before:filt+=f',fade=t=in:st=0:d={fin:.6f}:alpha=1'
+                if not joined_after:filt+=f',fade=t=out:st={length-fout:.6f}:d={fout:.6f}:alpha=1'
             fl.append(f'[{inputs}:v]{filt},setpts=PTS+{start:.6f}/TB[clip{i}]');inputs+=1
             nv=f'ins{i}';fl.append(f"[{v}][clip{i}]overlay=0:0:eof_action=pass:enable='gte(t,{start:.6f})*lt(t,{start+length:.6f})'[{nv}]");v=nv
         for i,card in enumerate(plan.cards):
@@ -149,17 +156,20 @@ class Engine:
             args+=['-loop','1','-framerate','30','-i',image]
             filt=f'trim=duration={length:.6f},setpts=PTS-STARTPTS,format=rgba'
             edge=min(.25,length/3)
-            if s.animate_cards:filt+=f',fade=t=in:d={edge:.6f}:alpha=1,fade=t=out:st={length-edge:.6f}:d={edge:.6f}:alpha=1'
-            if s.wobble:filt+=f",rotate='0.00349*sin(2*PI*t/4+{i})':ow=iw:oh=ih:c=none"
+            divider=card.title=='СМЕНА МАТЧА'
+            animate=s.transitions if divider else s.animate_cards
+            if animate:filt+=f',fade=t=in:d={edge:.6f}:alpha=1,fade=t=out:st={length-edge:.6f}:d={edge:.6f}:alpha=1'
+            if s.wobble and not divider:filt+=f",rotate='0.00349*sin(2*PI*t/4+{i})':ow=iw:oh=ih:c=none"
             fl.append(f'[{inputs}:v]{filt},setpts=PTS+{card.start:.6f}/TB[card{i}]');inputs+=1
             xpos=str(x);ypos=str(y)
-            if s.wobble:
+            if s.wobble and not divider:
                 xpos+=f'+3*sin(2*PI*(t-{card.start:.6f})/3.7+{i})'
                 ypos+=f'+2*sin(2*PI*(t-{card.start:.6f})/4.3+{i})'
-            if s.animate_cards:ypos+=f'+16*pow(max(0,1-(t-{card.start:.6f})/{edge:.6f}),2)+16*pow(max(0,1-({card.end:.6f}-t)/{edge:.6f}),2)'
+            if animate and not divider:ypos+=f'+16*pow(max(0,1-(t-{card.start:.6f})/{edge:.6f}),2)+16*pow(max(0,1-({card.end:.6f}-t)/{edge:.6f}),2)'
+            if animate and divider:xpos+=f'+1280*pow(max(0,1-(t-{card.start:.6f})/{edge:.6f}),2)'
             enabled=f'gte(t,{card.start:.6f})*lt(t,{card.end:.6f})'
             if card.title=='РАЗБОР МАТЧА':
-                enabled+=''.join(f'*not(between(t,{c.start:.6f},{c.end:.6f}))' for c in plan.inserts)
+                enabled+=''.join(f'*not(between(t,{c.start:.6f},{c.end+tail:.6f}))' for c,tail,_,_ in game_transitions(plan))
             nv=f'panel{i}';fl.append(f"[{v}][card{i}]overlay=x='{xpos}':y='{ypos}':eof_action=pass:enable='{enabled}'[{nv}]");v=nv
         width,height=(640,360) if draft else (s.width,s.height)
         fl.append(f'[{v}]scale={width}:{height},format=yuv420p[final]')

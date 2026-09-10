@@ -15,6 +15,7 @@ from .model import Project, Block, Clip
 from .match_ui import MatchMixin
 from .goals import unresolved
 from .engine import Engine
+from .episode import EpisodeEngine,saved_episode
 from .media import Cancelled
 from . import __version__
 from . import ui
@@ -56,6 +57,7 @@ class App(MatchMixin):
         self.stage = None
         self.host = tk.StringVar()
         self.music = tk.StringVar()
+        self.scope = tk.StringVar(value="Текущий разбор")
         self.title = tk.StringVar(value='Новый разбор')
         self.status = tk.StringVar(value='Добавьте запись ведущего и сценарий — таймкоды найдём автоматически.')
         self.project_label = tk.StringVar(value='Проект не сохранён')
@@ -72,7 +74,7 @@ class App(MatchMixin):
         self.build_settings()
         self.build_footer()
         self.refresh()
-        for var in [self.host, self.music, self.title, self.rotate, self.noise,
+        for var in [self.host, self.music, self.scope, self.title, self.rotate, self.noise,
                     self.level, self.resolution, self.allow_other, self.use_manual, self.frequency, *self.effect_vars.values()]:
             var.trace_add('write', self.changed)
         self.script.bind('<<Modified>>', self.script_changed)
@@ -99,7 +101,7 @@ class App(MatchMixin):
                  font=('Segoe UI', 15, 'bold'), justify='left').pack(anchor='w')
         tk.Label(brand, text=f'Версия {__version__}  /  Windows', bg=ui.NAV, fg=ui.NAV_MUTED,
                  font=('Segoe UI', 9)).pack(anchor='w', pady=(8, 0))
-        tk.Label(rail, text='ВАШ РАЗБОР', bg=ui.NAV, fg=ui.NAV_MUTED,
+        tk.Label(rail, text='ВАШ ВЫПУСК', bg=ui.NAV, fg=ui.NAV_MUTED,
                  font=('Segoe UI', 8, 'bold')).pack(anchor='w', padx=22, pady=(6, 12))
         self.nav = {}
         for key, title in [('materials', '1   Материалы'), ('review', '2   Проверка'), ('export', '3   Экспорт')]:
@@ -158,7 +160,14 @@ class App(MatchMixin):
         self.blockbox.bind('<<ComboboxSelected>>', self.switch_block)
         self.button(block, '+ Разбор', self.add_block).pack(side='left', padx=8)
         self.button(block, 'Удалить', self.delete_block).pack(side='left')
-        presenter = ui.card(page, 'Запись ведущего', 'Можно весь выпуск до 15 минут. Нужны изображение и голос.', '01')
+        self.button(block, '↑', lambda:self.move_block(-1)).pack(side='left',padx=(8,2))
+        self.button(block, '↓', lambda:self.move_block(1)).pack(side='left')
+        mode=ttk.Frame(page);mode.pack(fill='x',pady=(0,12))
+        ttk.Label(mode,text='Что собираем',style='Muted.TLabel').pack(side='left',padx=(0,12))
+        scopebox=ttk.Combobox(mode,textvariable=self.scope,values=['Текущий разбор','Все разборы'],state='readonly',width=24)
+        scopebox.pack(side='left');self.controls.append(scopebox)
+        ttk.Label(page,text='Добавляйте 2–4 разбора в порядке речи. У каждого — свой сценарий и исходные матчи.',style='Muted.TLabel',wraplength=700).pack(anchor='w',pady=(0,12))
+        presenter = ui.card(page, 'Запись ведущего', 'Можно весь выпуск до 30 минут. Нужны изображение и голос.', '01')
         self.pathrow(presenter, self.host, self.choose_host, 'Выбрать видео')
         self.host_hint = ttk.Label(presenter, style='CardMuted.TLabel', wraplength=650)
         self.host_hint.pack(anchor='w', pady=(8, 0))
@@ -240,7 +249,7 @@ class App(MatchMixin):
         self.previewbutton.pack(side='left')
         self.folderbutton = ttk.Button(row, text='Показать в папке', command=self.result_folder, state='disabled')
         self.folderbutton.pack(side='left', padx=8)
-        ttk.Label(page, text='Экспортируется выбранный разбор. Остальные разборы сохраняются в проекте.',
+        ttk.Label(page, text='Режим «Все разборы» соединяет блоки в один MP4 с переходами. Вступление и заключение добавим на следующем этапе.',
                   style='Muted.TLabel', wraplength=700).pack(anchor='w')
 
     def build_settings(self):
@@ -364,23 +373,29 @@ class App(MatchMixin):
         self.settings_nav.configure(fg='#65E4C0' if key == 'settings' else 'white')
         self.update_summary()
 
+    def selected_indices(self):
+        return list(range(len(self.project.blocks))) if self.scope.get()=='Все разборы' else [self.index]
+
+    def restore_plan(self):
+        from .editing import saved_plan
+        restored=saved_episode(self.project) if self.project.whole_episode else saved_plan(self.project,self.index)
+        if restored:self.display_plan(restored)
+
     def primary_action(self):
-        if self.busy:
-            return
-        if self.page == 'settings':
-            self.show_page('export' if self.plan else 'materials')
-        elif self.project.blocks[self.index].match_ids and not self.project.blocks[self.index].events and not (self.use_manual.get() and self.project.blocks[self.index].clips):
-            self.search_matches()
-        elif unresolved(self.project.blocks[self.index]):
-            self.show_page('review')
-            self.reviewtabs.select(self.events_page)
-            block = self.project.blocks[self.index]
-            self.eventtable.selection_set(str(block.events.index(unresolved(block)[0])))
-            self.edit_event()
-        elif self.page == 'review' and self.plan:
-            self.show_page('export')
-        else:
-            self.start(self.page == 'export')
+        if self.busy:return
+        self.collect()
+        if self.page=='settings':return self.show_page('export' if self.plan else 'materials')
+        for i in self.selected_indices():
+            b=self.project.blocks[i]
+            if b.match_ids and not b.events and not (self.use_manual.get() and b.clips):
+                return self.search_matches()
+        for i in self.selected_indices():
+            b=self.project.blocks[i]
+            if unresolved(b):
+                self.index=i;self.refresh();self.show_page('review');self.reviewtabs.select(self.events_page)
+                self.eventtable.selection_set(str(b.events.index(unresolved(b)[0])));return self.edit_event()
+        if self.page=='review' and self.plan:self.show_page('export')
+        else:self.start(self.page=='export')
 
     def choose_host(self):
         path = filedialog.askopenfilename(title='Видео ведущего', filetypes=VIDEO)
@@ -420,6 +435,7 @@ class App(MatchMixin):
 
     def collect(self):
         p = self.project
+        p.whole_episode = self.scope.get()=='Все разборы'
         p.host = self.host.get().strip()
         p.music = self.music.get().strip()
         block = p.blocks[self.index]
@@ -442,10 +458,11 @@ class App(MatchMixin):
         self.refreshing = True
         p = self.project
         block = p.blocks[self.index]
+        self.scope.set("Все разборы" if p.whole_episode else "Текущий разбор")
         self.host.set(p.host)
         self.music.set(p.music)
         self.title.set(block.title)
-        self.blockbox['values'] = [x.title for x in p.blocks]
+        self.blockbox['values'] = [f'{i+1}. {x.title}' for i,x in enumerate(p.blocks)]
         self.blockbox.current(self.index)
         self.script.delete('1.0', 'end')
         self.script.insert('1.0', block.script)
@@ -496,16 +513,18 @@ class App(MatchMixin):
             effects.append('очистка голоса')
         if self.effect_vars['transitions'].get():
             effects.append('переходы')
-        self.export_summary.set(f'{self.title.get().strip() or "Новый разбор"}\n\nДлительность: {duration}\nMP4  ·  {self.resolution.get()}  ·  30 кадров/с\n\n' + ', '.join(effects).capitalize())
+        heading=('Весь выпуск · '+str(len(self.project.blocks))+' разбора\n'+' → '.join(b.title for b in self.project.blocks)) if self.scope.get()=='Все разборы' else self.title.get().strip() or 'Новый разбор'
+        self.export_summary.set(f'{heading}\n\nДлительность: {duration}\nMP4  ·  {self.resolution.get()}  ·  30 кадров/с\n\n' + ', '.join(effects).capitalize())
         labels = {'materials': 'Определить тайминги →', 'review': 'Перейти к экспорту →' if self.plan else 'Определить тайминги →',
                   'export': 'Собрать MP4', 'settings': 'Готово · вернуться'}
-        block = self.project.blocks[self.index]
-        if block.match_ids:
-            self.readiness.set(f'Записей: {len(block.match_ids)} · Эпизодов для проверки: {len(unresolved(block))}' if not missing else self.readiness.get())
-            if self.page != 'settings' and not block.events and not (self.use_manual.get() and block.clips):
-                labels[self.page] = 'Найти голы →'
-            elif self.page != 'settings' and unresolved(block):
-                labels[self.page] = 'Проверить эпизоды →'
+        selected=[self.project.blocks[i] for i in self.selected_indices()]
+        pending=sum(len(unresolved(b)) for b in selected)
+        unsearched=any(b.match_ids and not b.events and not (self.use_manual.get() and b.clips) for b in selected)
+        if not missing:self.readiness.set(f'Разборов: {len(selected)} · Эпизодов для проверки: {pending}')
+        if self.page!='settings':
+            if unsearched:labels[self.page]='Найти голы →'
+            elif pending:labels[self.page]='Проверить эпизоды →'
+            elif self.page=='export' and self.scope.get()=='Все разборы':labels[self.page]='Собрать весь выпуск'
         self.primary.configure(text='Идёт обработка…' if self.busy else labels[self.page])
 
     def switch_block(self, _=None):
@@ -514,13 +533,23 @@ class App(MatchMixin):
         self.index = idx
         self.invalidate()
         self.refresh()
+        self.restore_plan()
 
     def add_block(self):
+        if len(self.project.blocks)>=4:return messagebox.showinfo("Разборы","В этой версии можно собрать до четырёх разборов за выпуск.")
         self.collect()
+        self.project.whole_episode=True
         self.project.blocks.append(Block(title=f'Разбор {len(self.project.blocks) + 1}'))
         self.index = len(self.project.blocks) - 1
         self.invalidate()
         self.refresh()
+
+    def move_block(self,direction):
+        target=self.index+direction
+        if not 0<=target<len(self.project.blocks):return
+        self.collect();blocks=self.project.blocks
+        blocks[self.index],blocks[target]=blocks[target],blocks[self.index]
+        self.index=target;self.invalidate();self.refresh()
 
     def delete_block(self):
         if len(self.project.blocks) == 1:
@@ -597,10 +626,14 @@ class App(MatchMixin):
         self.collect()
         block = self.project.blocks[self.index]
         default = next((c.text for c in self.plan.cards if c.line == i), '')
-        text = block.card_overrides.get(str(i), default)
+        local_i=i
+        if self.plan.sections:
+            section=next(s for s in self.plan.sections if s['line_start']<=i<s['line_start']+s['line_count'])
+            block=next(b for b in self.project.blocks if b.uid==section['block_id']);local_i=i-section['line_start']
+        text = block.card_overrides.get(str(local_i), default)
         value = simpledialog.askstring('Плашка', 'Текст плашки. Оставьте пустым, чтобы отключить:', initialvalue=text)
         if value is not None:
-            block.card_overrides[str(i)] = value
+            block.card_overrides[str(local_i)] = value
             from .timeline import Card
             from .editing import store_plan
             existing=next((c for c in self.plan.cards if c.line==i),None)
@@ -684,7 +717,7 @@ class App(MatchMixin):
             return
         try:
             self.project = Project.load(path)
-            self.legacy_project = json.loads(Path(path).read_text(encoding='utf-8')).get('version',1) < 4
+            self.legacy_project = json.loads(Path(path).read_text(encoding='utf-8')).get('version',1) < 5
             self.scans = {}
             self.index = 0
             self.project_path = path
@@ -697,15 +730,13 @@ class App(MatchMixin):
                 self.status.set(f'Не найдены исходники: {len(missing)}. Проект хранит ссылки на видео. Нажмите «Восстановить ссылки».')
                 messagebox.showinfo('Не найдены исходные видео','Проект хранит пути к видео, а не копии самих файлов.\n\nНе найдены:\n'+'\n'.join(Path(p).name for p in missing)+'\n\nНажмите «Восстановить ссылки» и выберите папку с исходниками.')
             else:
-                from .editing import saved_plan
-                restored=saved_plan(self.project,self.index)
-                if restored:self.display_plan(restored)
+                self.restore_plan()
         except Exception as e:
             messagebox.showerror('Не удалось открыть проект', str(e))
 
     def save(self):
         self.collect()
-        path = filedialog.asksaveasfilename(defaultextension='.hockeyproj', initialfile=(Path(self.project_path).stem+'-0.4.hockeyproj' if self.legacy_project else Path(self.project_path).name) if self.project_path else 'Мой выпуск.hockeyproj', filetypes=[('Проект монтажа', '*.hockeyproj')])
+        path = filedialog.asksaveasfilename(defaultextension='.hockeyproj', initialfile=(Path(self.project_path).stem+'-0.5.hockeyproj' if self.legacy_project else Path(self.project_path).name) if self.project_path else 'Мой выпуск.hockeyproj', filetypes=[('Проект монтажа', '*.hockeyproj')])
         if path:
             try:
                 self.project.save(path)
@@ -717,7 +748,7 @@ class App(MatchMixin):
                 messagebox.showerror('Сохранение', str(e))
 
     def cache_path(self):
-        seed = self.project.host + '\n' + self.project.blocks[self.index].title
+        seed = self.project.host + '\n' + ('episode' if self.project.whole_episode else self.project.blocks[self.index].title)
         key = hashlib.sha256(seed.encode()).hexdigest()[:16]
         base = Path(os.environ.get('LOCALAPPDATA', str(Path.home() / '.cache'))) / 'HockeyAutoEditor' / 'Cache'
         return base / key
@@ -768,13 +799,15 @@ class App(MatchMixin):
             return
         self.collect()
         try:
-            self.project.validate(self.index)
+            for i in self.selected_indices():
+                try:self.project.validate(i)
+                except ValueError as error:raise ValueError(self.project.blocks[i].title+": "+str(error)) from error
         except Exception as e:
             self.show_page('materials')
             return messagebox.showerror('Проверьте материалы', str(e))
         target = None
         if render:
-            target = filedialog.asksaveasfilename(title='Готовый ролик — новое имя файла', defaultextension='.mp4', initialfile='Мой разбор.mp4', filetypes=[('Видео MP4', '*.mp4')])
+            target = filedialog.asksaveasfilename(title='Готовый ролик — новое имя файла', defaultextension='.mp4', initialfile='Мой выпуск.mp4' if self.project.whole_episode else 'Мой разбор.mp4', filetypes=[('Видео MP4', '*.mp4')])
             if not target:
                 return
             if Path(target).exists():
@@ -788,7 +821,8 @@ class App(MatchMixin):
         self.status.set('Начинаю обработку. Можно остановить её кнопкой «Отменить».')
         self.set_busy(True)
         # Snapshot prevents any navigation or future UI addition from mutating an active job.
-        engine = Engine(copy.deepcopy(self.project), self.index, self.cache_path(), self.cancel,
+        engine_class=EpisodeEngine if self.project.whole_episode else Engine
+        engine = engine_class(copy.deepcopy(self.project), self.index, self.cache_path(), self.cancel,
                         lambda msg: self.jobs.put(('log', msg)))
 
         def work():
@@ -818,7 +852,7 @@ class App(MatchMixin):
             self.linetable.insert('', 'end', iid=str(i), values=(f'{ui.timecode(line.start)}–{ui.timecode(line.end)}', line.text),
                                   tags=('stripe',) if i % 2 else ())
         uncertain = sum(line.agreement > .8 for line in plan.lines)
-        self.review_summary.set(f'{ui.timecode(plan.duration)}  ·  {len(plan.lines)} фраз  ·  {len(plan.inserts)} вставки')
+        self.review_summary.set((f'{len(plan.sections)} разбора · ' if plan.sections else '')+f'{ui.timecode(plan.duration)}  ·  {len(plan.lines)} фраз  ·  {len(plan.inserts)} вставки')
         if plan.warnings:
             self.review_note.set('Обратите внимание: ' + plan.warnings[0] + (f' Ещё замечаний: {len(plan.warnings) - 1}. Откройте «Подробности».' if len(plan.warnings) > 1 else ''))
         elif uncertain:

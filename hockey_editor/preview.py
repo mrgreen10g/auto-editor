@@ -19,9 +19,9 @@ class PreviewPlayer:
         self.started=None;self.base=0;self.index=0;self.pending=None
         self.audio_segment=None
 
-    def load(self,path,audio,duration):
-        self.stop();self.path=Path(path);self.audio=Path(audio);self.duration=duration
-        self.seek(0)
+    def load(self,path,audio,duration,position=0):
+        self.stop();self.path=Path(path);self.audio=Path(audio) if audio else None;self.duration=duration
+        self.seek(position)
 
     def stop(self):
         self.playing=False;self.generation+=1

@@ -10,6 +10,7 @@ from .timeline import Plan
 
 def project_edit_key(project, index):
     block = asdict(project.blocks[index]); block.pop('edit_plan',None);block.pop('edit_key',None)
+    block.pop('uid',None)  # Preserve the v0.4 per-block edit fingerprint.
     def identity(path):
         if not path: return None
         p=Path(path)
@@ -48,6 +49,16 @@ def validate_plan(plan, check_files=True):
         raise ValueError('Повреждена дорожка речи.')
     if abs(sum(b-a for a,b in plan.keep)-plan.duration)>.07:
         raise ValueError('Длительность речи не совпадает с дорожкой.')
+    if plan.sections:
+        cursor=0;seen=set()
+        for section in plan.sections:
+            a,b=section['start'],section['end'];span(a,b)
+            if abs(a-cursor)>.035 or section['block_id'] in seen:raise ValueError('Повреждён порядок разборов.')
+            cursor=b;seen.add(section['block_id'])
+        if abs(cursor-plan.duration)>.035:raise ValueError('Неполная дорожка выпуска.')
+        for item in [*plan.inserts,*plan.cards]:
+            if not any(item.start>=s['start']-.001 and item.end<=s['end']+.035 for s in plan.sections):
+                raise ValueError('Элемент пересекает границу разборов. Сократите его или перенесите целиком в один блок.')
     return plan
 
 
@@ -67,6 +78,9 @@ class EditHistory:
 
 
 def store_plan(project,index,plan):
+    if plan.sections:
+        from .episode import store_episode
+        return store_episode(project,plan)
     validate_plan(plan)
     block=project.blocks[index]
     block.edit_plan=plan.to_dict();block.edit_key=project_edit_key(project,index)

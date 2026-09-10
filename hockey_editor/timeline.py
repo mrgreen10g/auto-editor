@@ -1,6 +1,6 @@
 """Frame-exact cuts and automatic semantic placements."""
 import re, math
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 
 @dataclass
 class Line:
@@ -39,6 +39,7 @@ class Plan:
     warnings: list[str]
     duration: float
     rotation: int | None = None
+    sections: list = field(default_factory=list)
 
     def to_dict(self): return asdict(self)
     @classmethod
@@ -48,6 +49,33 @@ class Plan:
         return cls(**d)
 
 def frame(t,fps=30): return round(t*fps)/fps
+
+def format_time(seconds):
+    ticks=round(float(seconds)*100)
+    return f'{ticks//6000:02}:{ticks//100%60:02}.{ticks%100:02}'
+
+def parse_time(text):
+    parts=str(text).strip().replace(',','.').split(':')
+    if not 1<=len(parts)<=3:raise ValueError('Введите время в формате ММ:СС.сс')
+    values=[float(p) for p in parts]
+    if not all(math.isfinite(v) and v>=0 for v in values):raise ValueError('Время должно быть положительным.')
+    if len(values)>1 and any(v>=60 for v in values[1:]):raise ValueError('После двоеточия допустимы значения меньше 60.')
+    if any(v!=int(v) for v in values[:-1]):raise ValueError('Доли секунды допустимы только в последнем поле.')
+    return sum(v*60**(len(values)-i-1) for i,v in enumerate(values))
+
+def game_transitions(plan):
+    clips=sorted(plan.inserts,key=lambda c:c.start)
+    links=[]
+    for a,b in zip(clips,clips[1:]):
+        gap=frame(b.start-a.end)
+        same=not any(a.start<s['start']<=b.start for s in plan.sections)
+        links.append(same and 0<=gap<=.35)
+    for i,c in enumerate(clips):
+        before=i>0 and links[i-1];after=i<len(links) and links[i]
+        # Hold only a validated game frame across a very short gap, never pull
+        # unverified source frames (crowd/celebration) past the selected bounds.
+        tail=frame(clips[i+1].start-c.end) if after else 0
+        yield c,tail,before,after
 
 def keep_ranges(duration,silences,fps=30,enabled=True):
     total=round(duration*fps);cur=0;keep=[]

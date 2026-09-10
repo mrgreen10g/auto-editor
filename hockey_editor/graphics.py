@@ -79,16 +79,49 @@ def match_card(card, path, logos):
         x=218 if i==0 else 886
         anchor='lm' if i==0 else 'rm'
         size=35
-        while size>20 and d.textlength(name,font=font(size,True))>295: size-=1
+        while size>20 and d.textlength(name,font=font(size,True))>265: size-=1
         d.text((x,147),name,font=font(size,True),fill='#f6fbff',anchor=anchor)
     d.rounded_rectangle((503,113,600,179),radius=13,fill='#254659')
     d.text((551,146),'VS',font=font(29,True),fill='#72e2d4',anchor='mm')
-    im.save(path);return 88,420
+    im=im.resize((round(im.width*.82),round(im.height*.82)),Image.Resampling.LANCZOS)
+    im.save(path);return (1280-im.width)//2,720-im.height-46
+
+def forecast_card(card,path):
+    width=760;size=44
+    dummy=ImageDraw.Draw(Image.new('RGBA',(1,1)))
+    while size>24:
+        lines=wrap(dummy,card.text,font(size,True),width-110)
+        if len(lines)<=3:break
+        size-=1
+    height=85+len(lines)*(size+9)
+    if height>260:raise ValueError('Сократите текст основной ставки до команды, типа и значения.')
+    im=panel(width,height,(250,190,77,255));d=ImageDraw.Draw(im)
+    d.rounded_rectangle((40,30,228,62),radius=10,fill='#fabe4d')
+    d.text((56,36),'МОЙ ВЫБОР',font=font(17,True),fill='#102b40')
+    for i,line in enumerate(lines):d.text((48,82+i*(size+9)),line,font=font(size,True),fill='#fff5d9')
+    d.line((width-35,35,width-35,height-16),fill='#fabe4d',width=3)
+    im.save(path);return (1280-im.width)//2,720-im.height-30
+
+def section_card(card,path):
+    im=Image.new('RGBA',(1280,720),'#0c1b2b');d=ImageDraw.Draw(im)
+    d.polygon([(920,0),(1140,0),(640,720),(420,720)],fill='#14334a')
+    d.polygon([(1160,0),(1200,0),(700,720),(660,720)],fill='#43ccd0')
+    d.text((100,220),'СЛЕДУЮЩИЙ МАТЧ',font=font(22,True),fill='#69dbd3')
+    size=52
+    while size>28:
+        lines=wrap(d,card.text,font(size,True),1060)
+        if len(lines)<=2:break
+        size-=1
+    for i,line in enumerate(lines):d.text((100,285+i*(size+14)),line,font=font(size,True),fill='#f5faff')
+    d.line((100,470,460,470),fill='#fabe4d',width=5)
+    im.save(path);return 0,0
 
 
 def card_image(card, path, logos=None):
     logos=logos or {}
     if card.title=='РАЗБОР МАТЧА': return match_card(card,path,logos)
+    if card.title=='ПРОГНОЗ':return forecast_card(card,path)
+    if card.title=='СМЕНА МАТЧА':return section_card(card,path)
     forecast=card.title in ('ПРОГНОЗ','УСЛОВИЯ ПРОГНОЗА','ОЖИДАЕМЫЙ СЧЁТ')
     wide=card.title=='СОСТАВ КОМАНДЫ' and len(card.text)>85
     width=1000 if wide else 430

@@ -9,9 +9,10 @@ import tkinter as tk
 from tkinter import ttk,messagebox,simpledialog
 from . import ui
 from .editing import EditHistory,store_plan
-from .timeline import Insert,Card,frame
+from .timeline import Insert,Card,frame,format_time,parse_time
 from .preview import PreviewPlayer
 from .engine import Engine
+from .episode import EpisodeEngine
 from .media import run,Cancelled
 from .goals import scan_root,source_signature
 
@@ -20,7 +21,7 @@ class TimelineEditor:
     def __init__(self,app):
         self.app=app;self.history=EditHistory(app.plan)
         self.project=copy.deepcopy(app.project);self.index=app.index
-        self.selected=None;self.cursor=0.;self.drag=None;self.dirty=False
+        self.selected=None;self.scrubbing=False;self.cursor=0.;self.drag=None;self.dirty=False
         self.busy=False;self.closing=False;self.closed=False;self.preview_current=False
         self.cancel=threading.Event();self.jobs=queue.Queue();self.worker=None
         self.window=tk.Toplevel(app.root);w=self.window
@@ -44,11 +45,12 @@ class TimelineEditor:
         self.screen.pack(fill='both',expand=True)
         self.player=PreviewPlayer(self.screen,self.position_changed,lambda e:self.status.set('Предпросмотр: '+e))
         playbar=ttk.Frame(left);playbar.pack(fill='x')
-        self.play_button=ttk.Button(playbar,text='▶ / ❚❚',command=self.player.toggle);self.play_button.pack(side='left')
+        self.play_button=ttk.Button(playbar,text='▶ / ❚❚',command=self.toggle_preview);self.play_button.pack(side='left')
         self.seekvar=tk.DoubleVar()
         self.seekbar=ttk.Scale(playbar,from_=0,to=self.plan.duration,variable=self.seekvar)
         self.seekbar.pack(side='left',fill='x',expand=True,padx=8)
-        self.seekbar.bind('<ButtonRelease-1>',lambda _:self.seek(self.seekvar.get()))
+        self.seekbar.bind('<ButtonPress-1>',self.scrub_start)
+        self.seekbar.bind('<ButtonRelease-1>',lambda _:self.window.after_idle(self.scrub_end))
         self.clock=ttk.Label(playbar,text='00:00');self.clock.pack(side='right')
         inspector_shell=ttk.Frame(upper,padding=(14,0,0,0),width=260)
         inspector_shell.pack(side='right',fill='y');inspector_shell.pack_propagate(False)
@@ -67,7 +69,7 @@ class TimelineEditor:
         ttk.Label(inspector,text='Выбранный элемент',style='CardTitle.TLabel').pack(anchor='w',pady=8)
         self.kind=tk.StringVar(value='Не выбран');ttk.Label(inspector,textvariable=self.kind,wraplength=240).pack(anchor='w')
         self.fields=[]
-        for text in ('Начало на дорожке, с','Конец на дорожке, с','Начало в исходнике, с'):
+        for text in ('Начало на дорожке · ММ:СС.сс','Конец на дорожке · ММ:СС.сс','Начало в исходнике · ММ:СС.сс'):
             ttk.Label(inspector,text=text).pack(anchor='w',pady=(8,2))
             var=tk.StringVar();entry=ttk.Entry(inspector,textvariable=var);entry.pack(fill='x');self.fields.append((var,entry))
         ttk.Label(inspector,text='Текст плашки / подпись в редакторе').pack(anchor='w',pady=(8,2))
@@ -76,6 +78,12 @@ class TimelineEditor:
         self.replace_button=ttk.Button(inspector_actions,text='Заменить игровой момент',command=self.pick_clip)
         self.replace_button.pack(fill='x');self.buttons.append(self.replace_button)
         ttk.Label(inspector,text='Речь остаётся синхронной. Изменяются игровые вставки и плашки. Правки сохраняются в проекте.',wraplength=240,style='Muted.TLabel').pack(anchor='w',pady=10)
+        if self.plan.sections:
+            jump=ttk.Frame(w,padding=(12,4));jump.pack(fill='x')
+            ttk.Label(jump,text='Перейти к разбору:').pack(side='left',padx=(0,8))
+            self.sectionbox=ttk.Combobox(jump,state='readonly',values=[s['title'] for s in self.plan.sections],width=42)
+            self.sectionbox.pack(side='left');self.sectionbox.current(0)
+            self.sectionbox.bind('<<ComboboxSelected>>',lambda _:self.jump_section())
         area=ttk.Frame(w,padding=(12,8));area.pack(fill='x')
         self.canvas=tk.Canvas(area,height=155,bg='#142334',highlightthickness=0)
         self.canvas.pack(fill='x')
@@ -100,7 +108,12 @@ class TimelineEditor:
         for y,text in ((43,'Речь'),(88,'Игра'),(132,'Плашки')):
             c.create_text(8,y,text=text,fill='#dce7f1',anchor='w',font=('Segoe UI',10))
         c.create_rectangle(self.offset,28,width-25,59,fill='#304c66',outline='')
-        c.create_text(self.offset+8,43,text='Ведущий · голос',anchor='w',fill='#e0ebf5')
+        if plan.sections:
+            for i,s in enumerate(plan.sections):
+                x=self.offset+s['start']*self.scale
+                c.create_line(x,23,x,152,fill='#a99de5',width=2)
+                c.create_text(x+5,43,text=f'{i+1}. '+s['title'],anchor='w',fill='#e0ebf5')
+        else:c.create_text(self.offset+8,43,text='Ведущий · голос',anchor='w',fill='#e0ebf5')
         for name,items,y,color in (('insert',plan.inserts,68,'#238f94'),('card',plan.cards,112,'#a87835')):
             for i,item in enumerate(items):
                 x1=self.offset+item.start*self.scale;x2=self.offset+item.end*self.scale
@@ -123,7 +136,7 @@ class TimelineEditor:
         self.text.delete('1.0','end')
         if item:
             self.kind.set(('Игра · '+Path(item.path).name) if selected[0]=='insert' else item.title)
-            for (var,_),value in zip(self.fields,(item.start,item.end,getattr(item,'source_in',0))):var.set(f'{value:.2f}')
+            for (var,_),value in zip(self.fields,(item.start,item.end,getattr(item,'source_in',0))):var.set(format_time(value))
             self.text.insert('1.0',item.label if selected[0]=='insert' else item.text)
             self.fields[2][1].configure(state='normal' if selected[0]=='insert' else 'disabled')
             if getattr(item,'context_label',''):self.status.set(item.context_label+' · только в редакторе, не в видео')
@@ -131,12 +144,32 @@ class TimelineEditor:
         self.draw()
 
     def position_changed(self,t):
+        if self.scrubbing:return
         self.cursor=t;self.seekvar.set(t);self.clock.configure(text=ui.timecode(t));self.draw()
 
     def seek(self,t):
         self.cursor=max(0,min(self.plan.duration,t));self.position_changed(self.cursor)
         if self.preview_current:self.player.seek(self.cursor)
         else:self.status.set('После правок соберите новый предпросмотр. Курсор используется для добавления элементов.')
+
+    def toggle_preview(self):
+        if self.busy:return
+        if not self.preview_current:
+            self.status.set('Дорожка изменена. Нажмите «Обновить предпросмотр», чтобы воспроизводить актуальный монтаж.');return
+        self.player.toggle()
+
+    def scrub_start(self,event=None):
+        self.scrubbing=True;self.player.stop()
+
+    def scrub_end(self):
+        self.scrubbing=False;self.seek(self.seekvar.get())
+
+    def jump_section(self):
+        s=self.plan.sections[self.sectionbox.current()];self.seek(s['start'])
+        self.canvas.xview_moveto(max(0,(s['start']*self.scale)/(self.offset+self.plan.duration*self.scale+25)))
+
+    def section_at(self,t):
+        return next((s for s in self.plan.sections if s['start']<=t<s['end']),None)
 
     def down(self,event):
         if self.busy:return
@@ -170,7 +203,7 @@ class TimelineEditor:
         try:self.history.replace(plan)
         except Exception as error:
             self.status.set(str(error));self.draw();return False
-        self.dirty=True;self.preview_current=False;self.player.stop()
+        self.dirty=True;self.preview_current=False;self.player.stop();self.build_button.configure(text="Обновить предпросмотр")
         self.status.set('Правки внесены. Соберите предпросмотр, затем примените дорожку к проекту.')
         self.select(self.selected);return True
 
@@ -178,7 +211,7 @@ class TimelineEditor:
         if self.busy or self.item() is None:return
         plan=copy.deepcopy(self.plan);item=self.item(plan)
         try:
-            start,end,source=[float(var.get().replace(',','.')) for var,_ in self.fields]
+            start,end,source=[parse_time(var.get()) for var,_ in self.fields]
             item.start=frame(start);item.end=frame(end)
             text=self.text.get('1.0','end').strip()
             if self.selected[0]=='insert':item.source_in=frame(source);item.label=text
@@ -196,7 +229,7 @@ class TimelineEditor:
     def redo(self):
         if not self.busy and self.history.redo():self.after_history()
     def after_history(self):
-        self.selected=None;self.dirty=True;self.preview_current=False;self.player.stop();self.select(None)
+        self.selected=None;self.dirty=True;self.preview_current=False;self.player.stop();self.build_button.configure(text="Обновить предпросмотр");self.select(None)
         self.status.set('Дорожка изменена. Предпросмотр нужно обновить.')
 
     def add_card(self):
@@ -204,14 +237,17 @@ class TimelineEditor:
         value=simpledialog.askstring('Новая плашка','Краткий текст:',parent=self.window)
         if not value:return
         plan=copy.deepcopy(self.plan);start=min(self.cursor,max(0,plan.duration-.3))
-        plan.cards.append(Card(start,min(start+5,plan.duration),'ИНФОРМАЦИЯ',value))
+        section=self.section_at(start);limit=section['end'] if section else plan.duration
+        plan.cards.append(Card(start,min(start+5,limit),'ИНФОРМАЦИЯ',value))
         self.selected=('card',len(plan.cards)-1);self.change(plan)
 
     def pick_clip(self,add=False):
         if self.busy:return
         if not add and (not self.selected or self.selected[0]!='insert'):
             self.status.set('Выберите игровую вставку на дорожке или нажмите «+ Игра».');return
-        sources=[m for m in self.project.matches if m.id in self.project.blocks[self.index].match_ids and Path(m.path).is_file()]
+        section=self.section_at(self.cursor if add else self.item().start)
+        block=next((b for b in self.project.blocks if section and b.uid==section['block_id']),self.project.blocks[self.index])
+        sources=[m for m in self.project.matches if m.id in block.match_ids and Path(m.path).is_file()]
         choices=[]
         for source in sources:
             data=self.app.scans.get(source.id)
@@ -231,7 +267,7 @@ class TimelineEditor:
             if not table.selection():return
             source,c=choices[int(table.selection()[0])];plan=copy.deepcopy(self.plan)
             if add:
-                start=frame(self.cursor);end=min(plan.duration,start+5)
+                start=frame(self.cursor);end=min(section["end"] if section else plan.duration,start+5)
                 following=[v.start for v in plan.inserts if v.start>=start]
                 if following:end=min(end,min(following))
             else:old=self.item();start,end=old.start,old.end
@@ -266,7 +302,8 @@ class TimelineEditor:
         target=root/f'preview-{uuid.uuid4().hex[:10]}.mp4';audio=target.with_suffix('.wav')
         def work():
             try:
-                Engine(project,self.index,root,self.cancel,lambda s:self.jobs.put(('log',s))).render(plan,target,draft=True)
+                engine_class=EpisodeEngine if plan.sections else Engine
+                engine_class(project,self.index,root,self.cancel,lambda s:self.jobs.put(('log',s))).render(plan,target,draft=True)
                 run(['-y','-i',target,'-vn','-ac','1','-ar','16000','-c:a','pcm_s16le',audio],self.cancel)
                 self.jobs.put(('ready',(target,audio,plan.duration)))
             except Cancelled:self.jobs.put(('log','Сборка предпросмотра остановлена. Правки сохранены в окне.'))
@@ -281,7 +318,7 @@ class TimelineEditor:
                 kind,value=self.jobs.get_nowait()
                 if kind=='log':self.status.set(value)
                 elif kind=='ready' and not self.closing:
-                    self.preview_current=True;self.player.load(*value);self.status.set('Предпросмотр готов. Нажмите ▶ или выберите время на дорожке.')
+                    self.preview_current=True;self.player.load(*value,position=self.cursor);self.build_button.configure(text="Обновить предпросмотр");self.status.set('Предпросмотр готов. Нажмите ▶ или выберите время на дорожке.')
                 elif kind=='done':
                     self.busy=False
                     for b in self.buttons:b.configure(state='normal')

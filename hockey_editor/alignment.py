@@ -169,12 +169,12 @@ def align(audio,script,cache,cancel,log):
         log(f'Проверяю участок записи {k+1} из {len(candidates)}…')
         start=max(0,int(lo*SR/HOP));stop=min(len(full),int(hi*SR/HOP)+1)
         a=full[start:stop]
-        path,score=subsequence_dtw(normalized(a,0),normalized(b,0),cancel,free=False)
+        path,score=bounded_dtw(normalized(a,0),normalized(b,0),cancel,free=False)
         if best is None or score<best[0]:best=(score,start,a,path)
     if best is None:
         log('Ищу разбор в непрерывной записи…')
         a=full;start=0
-        path,score=subsequence_dtw(normalized(a,0),normalized(b,0),cancel)
+        path,score=bounded_dtw(normalized(a,0),normalized(b,0),cancel)
         free=True
     else:
         score,start,a,path=best
@@ -182,7 +182,7 @@ def align(audio,script,cache,cancel,log):
     bounds=[np.interp(anchors,np.arange(len(path))*HOP/SR,(path+start)*HOP/SR)]
     ends=[(path[-1]+start)*HOP/SR];quality=[score]
     log('Проверяю устойчивость таймингов вторым вариантом анализа…')
-    other,score=subsequence_dtw(normalized(a,1),normalized(b,1),cancel,free=free)
+    other,score=bounded_dtw(normalized(a,1),normalized(b,1),cancel,free=free)
     bounds.append(np.interp(anchors,np.arange(len(other))*HOP/SR,(other+start)*HOP/SR))
     ends.append((other[-1]+start)*HOP/SR);quality.append(score)
     starts=(bounds[0]+bounds[1])/2
@@ -196,3 +196,9 @@ def align(audio,script,cache,cancel,log):
     if disagreements:warnings.append('Проверьте фразы с неустойчивой разметкой: '+', '.join(str(i+1) for i in disagreements))
     if max(quality)>.65:warnings.append('Слабое совпадение текста и голоса. Проверьте сценарий и предпросмотр перед экспортом.')
     return lines,warnings
+
+def bounded_dtw(a,b,cancel=None,free=True,limit=180_000_000):
+    stride=max(1,int(np.ceil(np.sqrt(len(a)*len(b)/limit))))
+    path,score=subsequence_dtw(a[::stride],b[::stride],cancel,free=free)
+    if stride>1:path=np.interp(np.arange(len(b)),np.arange(len(path))*stride,path*stride)
+    return path,score

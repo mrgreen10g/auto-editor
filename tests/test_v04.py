@@ -72,9 +72,9 @@ class V04Tests(unittest.TestCase):
             self.assertTrue(all(c.start>=5 for c in inserts))
             self.assertFalse(any('КАДРЫ' in c.title for c in cards))
 
-    def test_short_forecast_and_stats_are_compact_top_left(self):
+    def test_short_expected_score_and_stats_are_compact_top_left(self):
         with tempfile.TemporaryDirectory() as tmp:
-            for title,text in [('ПРОГНОЗ','Лада\nФора (+2)'),('ОЖИДАЕМЫЙ СЧЁТ','3:2 или 4:2 · СКА'),('СТАТИСТИКА','Броски: 36 — 32')]:
+            for title,text in [('ОЖИДАЕМЫЙ СЧЁТ','3:2 или 4:2 · СКА'),('СТАТИСТИКА','Броски: 36 — 32')]:
                 p=Path(tmp)/'card.png';x,y=card_image(Card(0,5,title,text),p)
                 with Image.open(p) as im:self.assertLess(im.width,460)
                 self.assertLess(x,60);self.assertLess(y,60)

@@ -37,9 +37,9 @@ def check():
             app.load()
         root.update()
         app.collect()
-        assert app.project.version == 4 and app.project.settings.zoom_max == 1.2
+        assert app.project.version == 5 and app.project.settings.zoom_max == 1.2
         assert app.project.settings.denoise and app.project.blocks[0].clips[0].phrase == '2:1'
-        assert app.page == 'materials' and 'Материалы готовы' in app.readiness.get()
+        assert app.page == 'materials' and 'Разборов: 1' in app.readiness.get()
         initial_script = app.project.blocks[0].script
         app.add_block()
         app.title.set('Второй разбор')
@@ -50,6 +50,11 @@ def check():
         app.collect()
         assert app.project.blocks[0].script == initial_script
         assert app.project.blocks[1].title == 'Второй разбор'
+        assert app.scope.get()=='Все разборы'
+        first_id=app.project.blocks[0].uid
+        app.move_block(1);assert app.project.blocks[1].uid==first_id
+        app.move_block(-1);assert app.project.blocks[0].uid==first_id
+        app.scope.set('Текущий разбор');app.collect()
         # Use an explicit plan only to exercise the UI controller; media tests cover real exports.
         plan = Plan(0, 12, [(0, 12)], [Line('Начинаем разбор матча.', 0, 3), Line('Команда выходит вперёд 2:1.', 3, 7), Line('Теперь посмотрим статистику бросков.', 7, 12, 1.0)], [], [Card(7, 12, 'СТАТИСТИКА', 'Броски: 32 — 36', 2)], [], 12)
         app.display_plan(plan)
@@ -128,7 +133,7 @@ def check():
         def descendants(widget):
             return [child for w in widget.winfo_children() for child in [w, *descendants(w)]]
         fields = [w.get() for w in descendants(dialogs[0]) if w.winfo_class() == 'TEntry']
-        assert fields == ['2.00', '8.00', '5.00'], fields
+        assert fields == ['00:02.00', '00:08.00', '00:05.00'], fields
         dialogs[0].destroy()
         app.skip_event()
         assert event.skipped
@@ -172,6 +177,20 @@ def check():
         while editor.player.position<1.5 and time.monotonic()<deadline:root.update();time.sleep(.03)
         assert editor.player.image is not None and editor.player.position>=1.5
         editor.player.stop()
+        editor.select(('card',1));editor.text.delete('1.0','end');editor.text.insert('1.0','Лада +2 · обновлено');editor.edit()
+        assert not editor.preview_current
+        editor.seek(7);editor.toggle_preview();root.update()
+        assert not editor.player.playing and editor.cursor==7
+        with patch.object(app,'cache_path',return_value=tmp/'editor-cache'):
+            editor.build_preview()
+            deadline=time.monotonic()+120
+            while editor.busy and time.monotonic()<deadline:root.update();time.sleep(.03)
+        assert editor.preview_current and abs(editor.player.position-7)<.04,editor.status.get()
+        editor.apply();editor.scrub_start();editor.seekvar.set(3.25);editor.scrub_end();editor.toggle_preview()
+        deadline=time.monotonic()+8
+        while editor.player.position<3.5 and time.monotonic()<deadline:root.update();time.sleep(.03)
+        assert 3.5<=editor.player.position<5,editor.player.position
+        editor.player.stop()
         from PIL import ImageGrab
         bounds=(editor.window.winfo_rootx(),editor.window.winfo_rooty(),editor.window.winfo_rootx()+editor.window.winfo_width(),editor.window.winfo_rooty()+editor.window.winfo_height())
         ImageGrab.grab(bbox=bounds).convert('RGB').save(out/'gui-timeline.jpg',quality=80)
@@ -182,6 +201,38 @@ def check():
         editor.close()
         file=tmp/'edited.hockeyproj';app.project.save(file)
         loaded=Project.load(file);assert saved_plan(loaded,0).inserts[0].start==5.5
+        # Shared episode editor, section navigation and local edit persistence.
+        from hockey_editor.episode import combine,saved_episode
+        app.project=Project(host=str(host),whole_episode=True,blocks=[
+            Block(title='СКА — Лада',script='Текст первого разбора для проверки общего выпуска.'),
+            Block(title='ЦСКА — Торпедо',script='Текст второго разбора для проверки общего выпуска.')])
+        app.index=0;app.refresh()
+        first_plan=Plan(0,6,[(0,6)],[Line('Первый',0,6)],[],[Card(0,3,'РАЗБОР МАТЧА','СКА — Лада',0)],[],6,0)
+        second_plan=Plan(6,12,[(0,6)],[Line('Второй',0,6)],[],[Card(2,6,'ПРОГНОЗ','Торпедо +1,5',0)],[],6,0)
+        combined=combine(app.project,[first_plan,second_plan]);app.display_plan(combined)
+        app.linetable.selection_set('1')
+        with patch('hockey_editor.gui.simpledialog.askstring',return_value='Торпедо +2'):app.edit_card()
+        assert app.project.blocks[1].card_overrides['0']=='Торпедо +2'
+        assert not app.project.blocks[0].card_overrides
+        editor=TimelineEditor(app);root.update();editor.sectionbox.current(1);editor.jump_section()
+        assert editor.cursor==6
+        with patch.object(app,'cache_path',return_value=tmp/'episode-cache'):
+            editor.build_preview();deadline=time.monotonic()+120
+            while editor.busy and time.monotonic()<deadline:root.update();time.sleep(.03)
+        assert editor.preview_current,editor.status.get()
+        editor.apply();editor.close();assert len(saved_episode(app.project).sections)==2
+        app.project.save(tmp/'episode.hockeyproj')
+        assert len(saved_episode(Project.load(tmp/'episode.hockeyproj')).sections)==2
+        # Small source timeline: real thumbnails, preview and draggable bounds.
+        from hockey_editor.trim_ui import TrimDialog
+        trimmed=[]
+        trim=TrimDialog(root,str(clip),.5,7.5,1,7,6,lambda *v:trimmed.append(v))
+        deadline=time.monotonic()+40
+        while not trim.ready and time.monotonic()<deadline:root.update();time.sleep(.03)
+        assert trim.ready,trim.status.get()
+        trim.set_boundary('start',2);trim.set_boundary('end',6.5);trim.set_boundary('event',6.2)
+        assert trim.values[0].get()=='00:02.00';trim.apply()
+        assert trimmed==[(2,6.5,6.2)]
         # Screenshots contain synthetic data only, never user files or scripts.
         root.geometry(f'{min(1220, root.winfo_screenwidth()-60)}x{min(860, root.winfo_screenheight()-100)}+20+20')
         app.show_page('materials')
@@ -189,7 +240,7 @@ def check():
         from PIL import ImageGrab
         for key in ('materials', 'review', 'settings'):
             if key == 'review':
-                app.display_plan(plan)
+                app.display_plan(combined)
             app.show_page(key)
             root.update()
             root.lift()
@@ -210,7 +261,7 @@ def check():
                 assert widget.winfo_rooty() + widget.winfo_height() <= root.winfo_rooty() + root.winfo_height() + 1
         assert not errors, errors
         app.close()
-    (out / 'gui-check.json').write_text(json.dumps({'status': 'ok', 'checks': ['v1-project-compatibility', 'block-switching', 'card-editing', 'stale-plan-invalidation', 'busy-control-restoration', 'worker-queue-flow', 'compact-window-layout', 'multiple-source-review-flow', 'v2-project-roundtrip', 'review-retains-custom-trim']}, indent=2), encoding='utf-8')
+    (out / 'gui-check.json').write_text(json.dumps({'status': 'ok', 'checks': ['v1-project-compatibility', 'block-switching', 'card-editing', 'stale-plan-invalidation', 'busy-control-restoration', 'worker-queue-flow', 'compact-window-layout', 'multiple-source-review-flow', 'v2-project-roundtrip', 'review-retains-custom-trim','episode-editor-roundtrip','seek-after-edit-rebuild-save','source-visual-trim']}, indent=2), encoding='utf-8')
     print('Desktop workflow and layout checks passed.')
 
 

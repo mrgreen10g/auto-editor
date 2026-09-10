@@ -80,16 +80,20 @@ class Block:
     events: list[EventRequest] = field(default_factory=list)
     edit_plan: dict | None = None
     edit_key: str = ''
+    uid: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
 
 @dataclass
 class Project:
-    version: int = 4
+    version: int = 5
     host: str = ''
     music: str = ''
     blocks: list[Block] = field(default_factory=lambda: [Block()])
     settings: Settings = field(default_factory=Settings)
     matches: list[MatchSource] = field(default_factory=list)
     team_logos: dict[str, str] = field(default_factory=dict)
+    whole_episode: bool = False
+    episode_plan: dict | None = None
+    episode_key: str = ''
 
     def validate(self, index=0):
         if not self.host or not Path(self.host).is_file():
@@ -161,6 +165,8 @@ class Project:
                 c['origin_path'] = relative(c.get('origin_path',''))
             if block.get('edit_plan'):
                 for c in block['edit_plan']['inserts']: c['path'] = relative(c['path'])
+        if data.get('episode_plan'):
+            for c in data['episode_plan']['inserts']: c['path'] = relative(c['path'])
         target.parent.mkdir(parents=True, exist_ok=True)
         temp = target.with_suffix(target.suffix+'.tmp')
         temp.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
@@ -170,11 +176,11 @@ class Project:
     def load(cls, filename):
         p = Path(filename).resolve()
         data = json.loads(p.read_text(encoding='utf-8'))
-        if data.get('version') not in (1, 2, 3, 4): raise ValueError('Версия проекта не поддерживается.')
+        if data.get('version') not in (1, 2, 3, 4, 5): raise ValueError('Версия проекта не поддерживается.')
         def resolve(s):
             if not s: return ''
             return str((p.parent / s).resolve())
-        blocks = [Block(title=b['title'],script=b['script'],
+        blocks = [Block(title=b['title'],script=b['script'],uid=b.get('uid') or uuid.uuid4().hex[:12],
                   clips=[Clip(**{**c,'path':resolve(c['path']),'origin_path':resolve(c.get('origin_path',''))}) for c in b.get('clips',[])],
                   card_overrides=b.get('card_overrides',{}), match_ids=b.get('match_ids', []),
                   edit_plan=b.get('edit_plan'), edit_key=b.get('edit_key',''),
@@ -184,10 +190,14 @@ class Project:
             if block.edit_plan:
                 for c in block.edit_plan['inserts']: c['path'] = resolve(c['path'])
         settings = data.get('settings', {}).copy()
+        episode=data.get('episode_plan')
+        if episode:
+            for c in episode['inserts']: c['path']=resolve(c['path'])
         if data.get('version', 1) < 3:
             settings.setdefault('auto_rotate', settings.get('rotate', 0) == 0)
             settings.setdefault('use_manual_clips', any(b.clips for b in blocks))
         return cls(host=resolve(data['host']),music=resolve(data.get('music','')),
+                   whole_episode=data.get('whole_episode',False),episode_plan=episode,episode_key=data.get('episode_key',''),
                    blocks=blocks,settings=Settings(**settings),
                    matches=[MatchSource(**{**m, 'path': resolve(m['path'])}) for m in data.get('matches', [])],
                    team_logos={name: resolve(path) for name, path in data.get('team_logos', {}).items()})
