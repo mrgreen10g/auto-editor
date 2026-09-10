@@ -31,9 +31,11 @@ class AutomationTests(unittest.TestCase):
         scans={m.id:{'signature':m.id,'candidates':[vars(Candidate(f'broll-{i}',None,None,6+i*15,2+i*15,10+i*15,.8,kind='play')) for i in range(2)]} for m in sources}
         events=[EventRequest('', 'Лада уступила Северстали.',requested_teams=['Лада','Северсталь']) for _ in range(2)]
         propose(events,scans,sources,True)
-        self.assertTrue(all(e.source_id==related.id and e.selection.accepted for e in events))
+        self.assertEqual(events[0].source_id,related.id)
+        self.assertEqual(events[1].source_id,unrelated.id)
+        self.assertTrue(all(e.selection.accepted for e in events))
         self.assertTrue(all(e.selection.context_label.startswith('Архивные кадры') for e in events))
-        self.assertNotEqual(events[0].selection.candidate_id,events[1].selection.candidate_id)
+        self.assertNotEqual(events[0].source_id,events[1].source_id)
 
     def test_brief_reference_is_not_ignored(self):
         primary=MatchSource('one.mp4','СКА','Лада')

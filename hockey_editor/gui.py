@@ -73,7 +73,7 @@ class App(MatchMixin):
         self.build_footer()
         self.refresh()
         for var in [self.host, self.music, self.title, self.rotate, self.noise,
-                    self.level, self.resolution, self.allow_other, self.use_manual, *self.effect_vars.values()]:
+                    self.level, self.resolution, self.allow_other, self.use_manual, self.frequency, *self.effect_vars.values()]:
             var.trace_add('write', self.changed)
         self.script.bind('<<Modified>>', self.script_changed)
         self.root.bind_all('<MouseWheel>', self.scroll_page, add='+')
@@ -162,6 +162,7 @@ class App(MatchMixin):
         self.pathrow(presenter, self.host, self.choose_host, 'Выбрать видео')
         self.host_hint = ttk.Label(presenter, style='CardMuted.TLabel', wraplength=650)
         self.host_hint.pack(anchor='w', pady=(8, 0))
+        self.button(presenter,'Восстановить ссылки',self.relink_media).pack(anchor='w',pady=(6,0))
         script = ui.card(page, 'Сценарий разбора', 'Вставьте текст так, как его произносит ведущий. Таймкоды не нужны.', '02')
         row = ttk.Frame(script, style='Card.TFrame')
         row.pack(fill='x', pady=(0, 10))
@@ -219,6 +220,7 @@ class App(MatchMixin):
         self.button(row, 'Изменить плашку', self.edit_card).pack(side='left')
         self.button(row, 'Повторить анализ', lambda: self.start(False)).pack(side='left', padx=8)
         self.button(row, 'Подробности', self.details).pack(side='right')
+        self.button(summary, 'Открыть монтажную дорожку', self.open_timeline, 'Primary.TButton').pack(anchor='w',pady=(10,0))
         ttk.Label(page, text='Дважды нажмите на фразу, чтобы изменить плашку. Пустой текст отключает её.',
                   style='Muted.TLabel', wraplength=700).pack(anchor='w')
 
@@ -276,7 +278,10 @@ class App(MatchMixin):
             label = ttk.Label(row, style='CardMuted.TLabel', width=30); label.pack(side='left'); self.logo_labels.append(label)
             self.button(row, 'Выбрать логотип', lambda i=i: self.choose_logo(i)).pack(side='left', padx=6)
             self.button(row, 'Убрать', lambda i=i: self.clear_logo(i)).pack(side='left')
-        options = ui.card(page, 'Подбор игровых сцен', 'Точный гол → игра из этой встречи → другая загруженная встреча. Архивная замена обозначается в видео.')
+        options = ui.card(page, 'Подбор игровых сцен', 'Голы сохраняют приоритет. Резервные кадры берутся только из игровых сцен. Источник замены виден в редакторе.')
+        self.frequency=tk.StringVar(value='Обычно')
+        self.option(options,'Частота обычных игровых вставок',self.frequency,['Реже','Обычно','Чаще'])
+        ttk.Label(options,text='Частота меняет обычные перебивки. Прямые упоминания голов не пропускаются.',style='CardMuted.TLabel',wraplength=660).pack(anchor='w',pady=5)
         self.allow_other = tk.BooleanVar(value=True)
         self.use_manual = tk.BooleanVar(value=False)
         for label, var in [('Разрешить архивные кадры из других матчей', self.allow_other), ('Показывать и использовать готовые вставки (старые проекты)', self.use_manual)]:
@@ -425,6 +430,7 @@ class App(MatchMixin):
         p.settings.auto_rotate = self.rotate.get() == 'Автоматически'
         p.settings.use_manual_clips = self.use_manual.get()
         p.settings.allow_other_matches = self.allow_other.get()
+        p.settings.insert_frequency = {'Реже':'low','Обычно':'normal','Чаще':'high'}[self.frequency.get()]
         p.settings.rotate = {'Автоматически': 0, 'Без поворота': 0, '90°': 90, '180°': 180, '270°': 270}[self.rotate.get()]
         p.settings.zoom_max = 1.20
         p.settings.denoise = self.noise.get() != 'Выключено'
@@ -450,6 +456,7 @@ class App(MatchMixin):
         self.rotate.set('Автоматически' if p.settings.auto_rotate else {0: 'Без поворота', 90: '90°', 180: '180°', 270: '270°'}[p.settings.rotate])
         self.use_manual.set(p.settings.use_manual_clips)
         self.allow_other.set(p.settings.allow_other_matches)
+        self.frequency.set({'low':'Реже','normal':'Обычно','high':'Чаще'}[p.settings.insert_frequency])
         self.sync_manual_panel()
         for key, var in self.effect_vars.items():
             var.set(getattr(p.settings, key))
@@ -594,6 +601,15 @@ class App(MatchMixin):
         value = simpledialog.askstring('Плашка', 'Текст плашки. Оставьте пустым, чтобы отключить:', initialvalue=text)
         if value is not None:
             block.card_overrides[str(i)] = value
+            from .timeline import Card
+            from .editing import store_plan
+            existing=next((c for c in self.plan.cards if c.line==i),None)
+            if existing:
+                if value.strip():existing.text=value
+                else:self.plan.cards.remove(existing)
+            elif value.strip():
+                line=self.plan.lines[i];self.plan.cards.append(Card(line.start,line.end,'ИНФОРМАЦИЯ',value,i))
+            store_plan(self.project,self.index,self.plan)
             self.result = None
             self.previewbutton.configure(state='disabled')
             self.folderbutton.configure(state='disabled')
@@ -632,13 +648,43 @@ class App(MatchMixin):
         self.refresh()
         self.show_page('materials')
 
+    def open_timeline(self):
+        if self.busy:return
+        if self.plan is None:
+            return messagebox.showinfo('Монтажная дорожка','Сначала найдите игровые эпизоды и определите тайминги речи.')
+        self.collect()
+        from .timeline_ui import TimelineEditor
+        TimelineEditor(self)
+
+    def relink_media(self):
+        if self.busy:return
+        folder=filedialog.askdirectory(title='Папка с исходными видео и музыкой')
+        if not folder:return
+        self.collect();root=Path(folder);files={}
+        for path in root.rglob('*'):
+            if path.is_file():files.setdefault(path.name.casefold(),[]).append(path)
+        count=0;missing=[]
+        def replace(path):
+            nonlocal count
+            if not path or Path(path).is_file():return path
+            choices=files.get(Path(path).name.casefold(),[])
+            if len(choices)==1:count+=1;return str(choices[0].resolve())
+            missing.append(Path(path).name);return path
+        self.project.host=replace(self.project.host);self.project.music=replace(self.project.music)
+        for m in self.project.matches:m.path=replace(m.path)
+        for b in self.project.blocks:
+            for c in b.clips:c.path=replace(c.path)
+        self.project.team_logos={n:replace(p) for n,p in self.project.team_logos.items()}
+        self.scans={};self.invalidate();self.refresh()
+        self.status.set(f'Восстановлено ссылок: {count}. '+('Не найдены или неоднозначны: '+', '.join(missing) if missing else 'Повторите поиск голов и определение таймингов.'))
+
     def load(self):
         path = filedialog.askopenfilename(filetypes=[('Проект монтажа', '*.hockeyproj')])
         if not path:
             return
         try:
             self.project = Project.load(path)
-            self.legacy_project = json.loads(Path(path).read_text(encoding='utf-8')).get('version',1) < 3
+            self.legacy_project = json.loads(Path(path).read_text(encoding='utf-8')).get('version',1) < 4
             self.scans = {}
             self.index = 0
             self.project_path = path
@@ -646,12 +692,20 @@ class App(MatchMixin):
             self.refresh()
             self.show_page('materials')
             self.status.set('Проект открыт. Проверьте материалы и нажмите «Определить тайминги».')
+            missing=[p for p in [self.project.host,self.project.music]+[m.path for m in self.project.matches] if p and not Path(p).is_file()]
+            if missing:
+                self.status.set(f'Не найдены исходники: {len(missing)}. Проект хранит ссылки на видео. Нажмите «Восстановить ссылки».')
+                messagebox.showinfo('Не найдены исходные видео','Проект хранит пути к видео, а не копии самих файлов.\n\nНе найдены:\n'+'\n'.join(Path(p).name for p in missing)+'\n\nНажмите «Восстановить ссылки» и выберите папку с исходниками.')
+            else:
+                from .editing import saved_plan
+                restored=saved_plan(self.project,self.index)
+                if restored:self.display_plan(restored)
         except Exception as e:
             messagebox.showerror('Не удалось открыть проект', str(e))
 
     def save(self):
         self.collect()
-        path = filedialog.asksaveasfilename(defaultextension='.hockeyproj', initialfile=(Path(self.project_path).stem+'-0.3.hockeyproj' if self.legacy_project else Path(self.project_path).name) if self.project_path else 'Мой выпуск.hockeyproj', filetypes=[('Проект монтажа', '*.hockeyproj')])
+        path = filedialog.asksaveasfilename(defaultextension='.hockeyproj', initialfile=(Path(self.project_path).stem+'-0.4.hockeyproj' if self.legacy_project else Path(self.project_path).name) if self.project_path else 'Мой выпуск.hockeyproj', filetypes=[('Проект монтажа', '*.hockeyproj')])
         if path:
             try:
                 self.project.save(path)
@@ -755,6 +809,8 @@ class App(MatchMixin):
 
     def display_plan(self, plan):
         self.plan = plan
+        from .editing import store_plan
+        store_plan(self.project,self.index,plan)
         self.reviewtabs.select(1)
         self.linetable.delete(*self.linetable.get_children())
         for i, line in enumerate(plan.lines):

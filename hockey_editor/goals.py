@@ -9,7 +9,7 @@ import shutil
 from .model import EventSelection, Clip
 from .media import probe, run, Cancelled
 
-SCAN_VERSION = 'score-v2-gameplay'
+SCAN_VERSION = 'score-v4-continuous-rink-2'
 
 @dataclass
 class Observation:
@@ -168,15 +168,22 @@ class GoalScanner:
             ready.touch()
         files = sorted(frames.glob('*.jpg'))
         if not files: raise ValueError('Не удалось прочитать кадры матча.')
-        from .gameplay import gameplay_candidates
+        from .gameplay import gameplay_ranges, candidates_from_ranges, bound_goal
         self.log('Подбираю игровые сцены независимо от табло…')
-        gameplay = gameplay_candidates(files, duration, self.cancel)
+        visual = folder/'visual'; visual.mkdir(exist_ok=True)
+        run(['-y','-i',source.path,'-an','-vf','fps=2,scale=320:180',
+             '-q:v','3','-start_number','0',visual/'%06d.jpg'],self.cancel)
+        ranges = gameplay_ranges(sorted(visual.glob('*.jpg')),duration,self.cancel,.5)
+        gameplay = candidates_from_ranges(ranges)
+        shutil.rmtree(visual)
         observations = []; scan_note = ''
         try:
             if self.reader is None:
                 from .score_ocr import ScoreReader
                 self.reader = ScoreReader()
-            sample = sorted(set(min(len(files)-1, n) for n in [0, 1, 3, 5, int(len(files)*.15), int(len(files)*.35), int(len(files)*.6), int(len(files)*.8)]))
+            # Locate the live scoreboard on actual play, not countdowns in the intro.
+            sample = sorted(set(min(len(files)-1,int((a+b)/4)) for a,b in ranges))
+            sample = sample[::max(1,len(sample)//12)][:12] or [int(len(files)*v) for v in (.2,.4,.6,.8)]
             self.reader.locate([read_image(files[i]) for i in sample], self.cancel, self.log, source.score_box)
             observations = []
             for i, file in enumerate(files):
@@ -195,7 +202,9 @@ class GoalScanner:
             if candidate.kind != 'goal': continue
             try:
                 self.check(); self.log('Уточняю момент: '+candidate.label)
-                detail = folder/'detail'; detail.mkdir(exist_ok=True)
+                detail = folder/'detail'
+                if detail.exists(): shutil.rmtree(detail)
+                detail.mkdir()
                 start = max(0, candidate.time-8)
                 run(['-y', '-ss', start, '-t', min(16, duration-start), '-i', source.path, '-an', '-vf',
                      'fps=2,scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2',
@@ -210,7 +219,7 @@ class GoalScanner:
                         runs[-1].append(o)
                     else: runs.append([o])
                 plateaus = [g for g in runs if len(g) >= 3 and abs(g[0].time-candidate.time) <= 6
-                            and list(g[0].score) in (candidate.before, candidate.score)]
+                            and list(g[0].score) == candidate.before]
                 if plateaus:
                     candidate.time = min(plateaus, key=lambda g: abs(g[0].time-candidate.time))[0].time
                 else:
@@ -224,7 +233,9 @@ class GoalScanner:
                 candidate.confidence=min(candidate.confidence,.5)
                 candidate.note+=' Не удалось уточнить момент; доступна игровая замена.'
                 self.log('Уточнение эпизода пропущено: '+str(error))
-        data = {'signature': signature, 'duration': duration, 'box': getattr(self.reader, 'box', None), 'note': scan_note,
+        # All automatically proposed footage must be inside a continuous game shot.
+        candidates = [c for c in candidates if c.kind == 'play' or bound_goal(c,ranges)]
+        data = {'signature': signature, 'duration': duration, 'gameplay_ranges': ranges, 'box': getattr(self.reader, 'box', None), 'note': scan_note,
                 'candidates': [asdict(c) for c in candidates], 'observations': [asdict(o) for o in observations]}
         payload = json.dumps(data, ensure_ascii=False)
         temp = saved.with_suffix('.tmp'); temp.write_text(payload, encoding='utf-8'); temp.replace(saved)
@@ -235,14 +246,17 @@ class GoalScanner:
 def propose(requests, scans, sources=(), allow_other=False):
     from .event_rules import clean, team_position
     source_map = {m.id: m for m in sources}
-    usage = {}
+    usage = {}; source_usage = {}; last_source = None
     def next_play(source_id):
         data = scans.get(source_id, {})
-        choices = [Candidate(**c) for c in data.get('candidates', []) if c['kind'] == 'play']
+        choices = [Candidate(**c) for c in data.get('candidates', []) if c['kind'] == 'play' and c['confidence']>=.65]
         choices.sort(key=lambda c: (-c.confidence, c.time))
         if not choices: return None
         used = usage.setdefault(source_id, set())
-        candidate = next((c for c in choices if c.id not in used), choices[0])
+        remaining = [c for c in choices if c.id not in used]
+        if not remaining:
+            used.clear(); remaining = choices
+        candidate = remaining[0]
         used.add(candidate.id)
         return candidate
     for event in requests:
@@ -258,14 +272,16 @@ def propose(requests, scans, sources=(), allow_other=False):
         if event.kind == 'overtime':
             ot = [c for c in candidates if any(x in c.period.upper() for x in ('OT', 'ОТ'))]
             candidates = ot or candidates
-        candidates.sort(key=lambda c: (-c.confidence, c.time))
+        candidates.sort(key=lambda c: (-c.time,-c.confidence) if event.kind=='overtime' and event.score is None else (-c.confidence,c.time))
         exact = candidates[0] if candidates and event.kind != 'play' else None
-        # Low-confidence exact matches stay available in the picker. Default to game footage.
-        c = exact if exact and exact.confidence >= .85 else next_play(event.source_id)
+        # A detected score remains the score candidate even without a frozen clock.
+        # Weak evidence is reviewed, never silently replaced by an unrelated attack.
+        c = exact or (None if event.flexible_source and allow_other else next_play(event.source_id))
         original_id = event.source_id
         if c is None and allow_other:
-            alternatives = [m for m in sources if m.id != original_id and m.id in scans]
-            alternatives.sort(key=lambda m: -sum(any(team_position(team, name) is not None for name in (m.home, m.away)) for team in event.requested_teams))
+            alternatives = [m for m in sources if (m.id != original_id or event.flexible_source) and m.id in scans]
+            alternatives.sort(key=lambda m: (source_usage.get(m.id,0),m.id==last_source,
+                -sum(any(team_position(team,name) is not None for name in (m.home,m.away)) for team in event.requested_teams)))
             for source in alternatives:
                 c = next_play(source.id)
                 if c:
@@ -275,13 +291,15 @@ def propose(requests, scans, sources=(), allow_other=False):
         if c is None:
             event.note = 'Нет пригодного видео в загруженных записях. Добавьте запись или оставьте ведущего.'
             continue
+        source_usage[event.source_id] = source_usage.get(event.source_id,0)+1
+        last_source = event.source_id
         fallback = c.kind == 'play'
         source = source_map.get(event.source_id)
         archive = event.source_id != original_id
         title = source.title if source else 'другой матч'
         label = ('Архивные кадры · '+title) if archive else ('Кадры матча' if fallback and event.kind != 'play' else '')
         event.selection = EventSelection(c.id, c.start, c.end, c.time, data['signature'],
-                                         fallback or c.confidence >= .85, label)
+                                         fallback or c.confidence >= .65, label)
         if archive:
             event.note = 'Резерв из другой встречи: '+title+'. '+c.note
         elif fallback and event.kind != 'play':
@@ -330,5 +348,6 @@ def montage_block(project, index, cache, cancel):
         if event.skipped: continue
         selection = event.selection
         path = cut_candidate(sources[event.source_id], selection, Path(cache)/'inserts', cancel)
-        block.clips.append(Clip(str(path), event.phrase, selection.event_time-selection.source_start, selection.context_label))
+        block.clips.append(Clip(str(path), event.phrase, selection.event_time-selection.source_start, selection.context_label,
+                                sources[event.source_id].path,selection.source_start,event.kind))
     return block

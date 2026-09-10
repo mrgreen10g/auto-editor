@@ -17,6 +17,8 @@ class Insert:
     source_in: float
     label: str
     context_label: str = ''
+    source_min: float = 0.
+    source_max: float | None = None
 
 @dataclass
 class Card:
@@ -70,7 +72,7 @@ def map_time(t,keep):
 
 def norm(text):return re.sub(r'\s+',' ',text.lower().replace('ё','е')).strip()
 
-def placements(block,lines,clip_meta,duration):
+def placements(block,lines,clip_meta,duration,frequency='normal'):
     warnings=[];matched=[]
     for clip in block.clips:
         found=[i for i,l in enumerate(lines) if norm(clip.phrase) in norm(l.text)]
@@ -85,20 +87,25 @@ def placements(block,lines,clip_meta,duration):
             warnings.append(f'Две вставки к одной фразе: «{clip.phrase}» пропущена.');continue
         used.add(idx)
         l=lines[idx];start=l.start
-        if number==0 and idx>1:start=max(lines[idx-1].start,l.start-6)
+        if number==0 and idx>1 and clip.kind!='play':start=max(lines[idx-1].start,l.start-3)
         end=l.end
         if number+1<len(matched):end=min(end,lines[matched[number+1][0]].start)
         length=clip_meta[clip.path]['duration']
+        start=max(start,min(5,duration))  # The introduction belongs to the presenter.
+        if clip.kind=='play':
+            gap,maximum={'low':(15,3.5),'normal':(8,5),'high':(3,7)}[frequency]
+            if inserts and start-inserts[-1].end<gap: continue
+            end=min(end,start+maximum)
         if end-start>length:start=end-length
         if end-start<.25:
             warnings.append(f'Слишком короткая фраза для «{clip.phrase}».');continue
         goal=clip.goal_time if clip.goal_time is not None else length*.58
         if goal>=length:raise ValueError(f'Положение события за пределами клипа: {clip.path}')
         source_in=max(0,min(goal-((l.start+l.end)/2-start),length-(end-start)))
-        inserts.append(Insert(clip.path,frame(start),frame(end),source_in,clip.phrase,clip.context_label))
+        inserts.append(Insert(clip.origin_path or clip.path,frame(start),frame(end),source_in+clip.origin_start,
+                              clip.phrase,clip.context_label,clip.origin_start,clip.origin_start+length))
     from .card_text import summarize_card
     cards=[Card(0,min(5,duration),'РАЗБОР МАТЧА',block.title)]
-    cards += [Card(c.start,c.end,'АРХИВНЫЕ КАДРЫ' if c.context_label.startswith('Архив') else 'КАДРЫ МАТЧА',c.context_label) for c in inserts if c.context_label]
     for i,l in enumerate(lines):
         if any(c.start<l.end and c.end>l.start for c in inserts):continue
         t=norm(l.text);title='';body=l.text
@@ -113,12 +120,12 @@ def placements(block,lines,clip_meta,duration):
         if title: body=summarize_card(title,l.text)
         if str(i) in block.card_overrides:
             body=block.card_overrides[str(i)];title=title or 'ИНФОРМАЦИЯ'
-        if title and body.strip():cards.append(Card(l.start,l.end,title,body,i))
+        if title and body.strip() and l.end>5:cards.append(Card(max(5,l.start),l.end,title,body,i))
     return inserts,cards,warnings
 
 def zoom_windows(duration,inserts):
     gaps=[];cur=0
-    for c in inserts:
+    for c in sorted(inserts,key=lambda c:c.start):
         if c.start>cur:gaps.append((cur,c.start))
         cur=max(cur,c.end)
     if cur<duration:gaps.append((cur,duration))

@@ -24,9 +24,21 @@ class MediaTests(unittest.TestCase):
             run(['-y','-f','lavfi','-i','color=c=blue:s=320x180:r=25:d=14','-f','lavfi','-i','sine=f=220:r=48000:d=14','-t','14','-c:v','libx264','-c:a','aac',d/'host.mp4'])
             run(['-y','-f','lavfi','-i','color=c=red:s=320x180:r=25:d=3','-c:v','libx264',d/'clip.mp4'])
             p=Project(host=str(d/'host.mp4'),blocks=[Block(title='Проверка',script='Достаточно длинная строка сценария для проверки.')])
-            plan=Plan(0,14,[(0,14)],[Line('Проверка',0,14)],[Insert(str(d/'clip.mp4'),2,4,.4,'Гол')],[Card(6,11,'СТАТИСТИКА','Броски: 36 — 32')],[],14)
+            plan=Plan(0,14,[(0,14)],[Line('Проверка',0,14)],[Insert(str(d/'clip.mp4'),2,4,.4,'Гол')],
+                      [Card(0,5,'РАЗБОР МАТЧА','СКА — Лада'),Card(6,11,'СТАТИСТИКА','Броски: 36 — 32'),
+                       Card(2,4,'АРХИВНЫЕ КАДРЫ','Устаревшая подпись')],[],14)
             e=Engine(p,0,d/'cache',threading.Event());e.render(plan,d/'result.mp4')
             self.assertTrue((d/'result.srt').is_file());self.assertTrue((d/'result.timing.json').is_file())
+            run(['-y','-ss',3,'-i',d/'result.mp4','-frames:v','1',d/'check.png'])
+            from PIL import Image
+            with Image.open(d/'check.png') as im:
+                # Neither the opening logos nor legacy provenance may cover game footage.
+                for point in ((200,500),(200,70)):
+                    red,green,blue=im.convert('RGB').getpixel(point)
+                    self.assertGreater(red,200);self.assertLess(blue,50)
+            e.render(plan,d/'draft.mp4',draft=True)
+            self.assertEqual(probe(d/'draft.mp4')['width'],640)
+            self.assertTrue(probe(d/'draft.mp4')['audio'])
             for selector in ('-an','-vn'):
                 log=run(['-i',d/'result.mp4',selector,'-progress','pipe:2','-f','null','-'])
                 times=re.findall(r'out_time_us=(\d+)',log)

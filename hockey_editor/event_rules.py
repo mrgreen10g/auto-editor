@@ -81,6 +81,7 @@ def requests_for(block, matches, use_manual=True):
         if not kind: continue
         if use_manual and any(clean(c.phrase) in text for c in block.clips if c.phrase.strip()): continue
         note = 'Несколько записей этих команд: источник можно заменить в выборе эпизода.' if len(pairs) > 1 else ''
-        result.append(EventRequest(source_id, phrase, kind, score, note=note, requested_teams=requested.copy()))
+        result.append(EventRequest(source_id, phrase, kind, score, note=note, requested_teams=requested.copy(),
+                                   flexible_source=kind=='play' and not pairs and not known))
         if score: previous[source_id] = score
     return result

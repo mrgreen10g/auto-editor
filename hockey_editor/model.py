@@ -9,6 +9,9 @@ class Clip:
     phrase: str
     goal_time: float | None = None
     context_label: str = ''
+    origin_path: str = ''
+    origin_start: float = 0.
+    kind: str = 'score'
 
 @dataclass
 class MatchSource:
@@ -43,6 +46,7 @@ class EventRequest:
     skipped: bool = False
     note: str = ''
     requested_teams: list[str] = field(default_factory=list)
+    flexible_source: bool = False
 
 @dataclass
 class Settings:
@@ -50,6 +54,7 @@ class Settings:
     auto_rotate: bool = True
     use_manual_clips: bool = False
     allow_other_matches: bool = True
+    insert_frequency: str = 'normal'
     zoom_max: float = 1.20
     zoom: bool = True
     transitions: bool = True
@@ -72,10 +77,12 @@ class Block:
     card_overrides: dict[str, str] = field(default_factory=dict)
     match_ids: list[str] = field(default_factory=list)
     events: list[EventRequest] = field(default_factory=list)
+    edit_plan: dict | None = None
+    edit_key: str = ''
 
 @dataclass
 class Project:
-    version: int = 3
+    version: int = 4
     host: str = ''
     music: str = ''
     blocks: list[Block] = field(default_factory=lambda: [Block()])
@@ -126,6 +133,8 @@ class Project:
                       or not 0 <= c.source_start <= c.event_time <= c.source_end or c.source_end <= c.source_start):
                 raise ValueError('Некорректные границы игрового эпизода.')
         s = self.settings
+        if s.insert_frequency not in ('low','normal','high'):
+            raise ValueError('Неизвестная частота вставок.')
         if not 1 <= s.zoom_max <= 1.4 or not 1 <= s.noise_reduction <= 20:
             raise ValueError('Некорректная настройка масштаба или очистки звука.')
         if s.rotate not in (0, 90, 180, 270):
@@ -146,7 +155,11 @@ class Project:
         data['team_logos'] = {name: relative(path) for name, path in self.team_logos.items()}
         for match in data['matches']: match['path'] = relative(match['path'])
         for block in data['blocks']:
-            for c in block['clips']: c['path'] = relative(c['path'])
+            for c in block['clips']:
+                c['path'] = relative(c['path'])
+                c['origin_path'] = relative(c.get('origin_path',''))
+            if block.get('edit_plan'):
+                for c in block['edit_plan']['inserts']: c['path'] = relative(c['path'])
         target.parent.mkdir(parents=True, exist_ok=True)
         temp = target.with_suffix(target.suffix+'.tmp')
         temp.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
@@ -156,15 +169,19 @@ class Project:
     def load(cls, filename):
         p = Path(filename).resolve()
         data = json.loads(p.read_text(encoding='utf-8'))
-        if data.get('version') not in (1, 2, 3): raise ValueError('Версия проекта не поддерживается.')
+        if data.get('version') not in (1, 2, 3, 4): raise ValueError('Версия проекта не поддерживается.')
         def resolve(s):
             if not s: return ''
             return str((p.parent / s).resolve())
         blocks = [Block(title=b['title'],script=b['script'],
-                  clips=[Clip(path=resolve(c['path']),phrase=c['phrase'],goal_time=c.get('goal_time'), context_label=c.get('context_label', '')) for c in b.get('clips',[])],
+                  clips=[Clip(**{**c,'path':resolve(c['path']),'origin_path':resolve(c.get('origin_path',''))}) for c in b.get('clips',[])],
                   card_overrides=b.get('card_overrides',{}), match_ids=b.get('match_ids', []),
+                  edit_plan=b.get('edit_plan'), edit_key=b.get('edit_key',''),
                   events=[EventRequest(**{**e, 'selection': EventSelection(**e['selection']) if e.get('selection') else None}) for e in b.get('events', [])]) for b in data['blocks']]
         if not blocks: raise ValueError('В проекте нет разборов.')
+        for block in blocks:
+            if block.edit_plan:
+                for c in block.edit_plan['inserts']: c['path'] = resolve(c['path'])
         settings = data.get('settings', {}).copy()
         if data.get('version', 1) < 3:
             settings.setdefault('auto_rotate', settings.get('rotate', 0) == 0)

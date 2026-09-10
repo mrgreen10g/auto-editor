@@ -1,7 +1,7 @@
 name: Windows build
 on:
   push:
-    branches: [main, version-0.2, version-0.3]
+    branches: [main, version-0.2, version-0.3, version-0.4]
   workflow_dispatch:
 permissions:
   contents: read

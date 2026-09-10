@@ -89,16 +89,15 @@ def match_card(card, path, logos):
 def card_image(card, path, logos=None):
     logos=logos or {}
     if card.title=='РАЗБОР МАТЧА': return match_card(card,path,logos)
-    context=card.title in ('АРХИВНЫЕ КАДРЫ','КАДРЫ МАТЧА')
     forecast=card.title in ('ПРОГНОЗ','УСЛОВИЯ ПРОГНОЗА','ОЖИДАЕМЫЙ СЧЁТ')
-    wide=forecast or card.title=='СОСТАВ КОМАНДЫ'
-    width=1080 if wide else 700 if context else 430
-    maxheight=230 if wide else 110 if context else 320
-    size=36 if forecast else 30 if wide else 19 if context else 28
+    wide=card.title=='СОСТАВ КОМАНДЫ' and len(card.text)>85
+    width=1000 if wide else 430
+    maxheight=230 if wide else 320
+    size=30 if wide else 28
     body=card.text
-    if context:
-        body=body.removeprefix('Архивные кадры · ')
-        if body=='Кадры матча': body='Иллюстрация к разбору'
+    measure=ImageDraw.Draw(Image.new('RGBA',(1,1)))
+    if not wide:
+        width=max(245,min(430,int(max([measure.textlength(s,font=font(size,True)) for s in body.splitlines()]+[measure.textlength(card.title,font=font(15,True))]))+74))
     dummy=ImageDraw.Draw(Image.new('RGBA',(width,maxheight)))
     while size>=18:
         ft=font(size,True);lines=wrap(dummy,body,ft,width-72)
@@ -112,4 +111,4 @@ def card_image(card, path, logos=None):
     d.text((42,29),card.title,font=font(15,True),fill=accent)
     for i,line in enumerate(lines): d.text((42,65+i*(size+8)),line,font=ft,fill='#f5faff')
     im.save(path)
-    return (30,22) if context else (88,720-height-48) if wide else (28,720-height-48)
+    return (88,720-height-48) if wide else (28,28)

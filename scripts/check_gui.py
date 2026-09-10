@@ -37,7 +37,7 @@ def check():
             app.load()
         root.update()
         app.collect()
-        assert app.project.version == 3 and app.project.settings.zoom_max == 1.2
+        assert app.project.version == 4 and app.project.settings.zoom_max == 1.2
         assert app.project.settings.denoise and app.project.blocks[0].clips[0].phrase == '2:1'
         assert app.page == 'materials' and 'Материалы готовы' in app.readiness.get()
         initial_script = app.project.blocks[0].script
@@ -138,6 +138,43 @@ def check():
         app.project.save(saved)
         restored = Project.load(saved)
         assert len(restored.matches) == 2 and restored.blocks[0].events[0].skipped
+        # Real timeline editing, rendered audiovisual preview, and retained export plan.
+        from hockey_editor.timeline_ui import TimelineEditor
+        from hockey_editor.timeline import Insert
+        from hockey_editor.editing import saved_plan
+        from hockey_editor.media import run
+        run(['-y','-f','lavfi','-i','color=c=blue:s=320x180:r=30:d=12','-f','lavfi','-i','sine=f=220:r=16000:d=12',
+             '-t','12','-c:v','libx264','-c:a','aac',host])
+        run(['-y','-f','lavfi','-i','color=c=red:s=320x180:r=30:d=8','-c:v','libx264',clip])
+        app.project=Project(host=str(host),blocks=[Block(title='СКА — Лада',script='Текст для проверки редактирования дорожки и предпросмотра.')])
+        app.index=0;app.refresh()
+        edited_plan=Plan(0,12,[(0,12)],[Line('Текст',0,12)],
+            [Insert(str(clip),6,9,1,'Игра',source_min=.5,source_max=7)],
+            [Card(0,5,'РАЗБОР МАТЧА','СКА — Лада'),Card(9,12,'ПРОГНОЗ','Лада\nФора (+2)')],[],12,0)
+        app.display_plan(edited_plan);editor=TimelineEditor(app);root.update()
+        editor.select(('insert',0))
+        for (var,_),value in zip(editor.fields,('5.5','8.5','1.5')):var.set(value)
+        editor.edit();assert editor.plan.inserts[0].start==5.5
+        editor.undo();assert editor.plan.inserts[0].start==6
+        editor.redo();assert editor.plan.inserts[0].start==5.5
+        editor.select(('card',1));editor.text.delete('1.0','end');editor.text.insert('1.0','Лада +2');editor.edit()
+        editor.apply();assert saved_plan(app.project,0).cards[1].text=='Лада +2'
+        with patch.object(app,'cache_path',return_value=tmp/'editor-cache'):
+            editor.build_preview()
+            deadline=time.monotonic()+120
+            while editor.busy and time.monotonic()<deadline:root.update();time.sleep(.03)
+        assert not editor.busy and editor.preview_current,editor.status.get()
+        editor.player.seek(1,True)
+        deadline=time.monotonic()+8
+        while editor.player.position<1.5 and time.monotonic()<deadline:root.update();time.sleep(.03)
+        assert editor.player.image is not None and editor.player.position>=1.5
+        editor.player.stop()
+        from PIL import ImageGrab
+        bounds=(editor.window.winfo_rootx(),editor.window.winfo_rooty(),editor.window.winfo_rootx()+editor.window.winfo_width(),editor.window.winfo_rooty()+editor.window.winfo_height())
+        ImageGrab.grab(bbox=bounds).convert('RGB').save(out/'gui-timeline.jpg',quality=80)
+        editor.close()
+        file=tmp/'edited.hockeyproj';app.project.save(file)
+        loaded=Project.load(file);assert saved_plan(loaded,0).inserts[0].start==5.5
         # Screenshots contain synthetic data only, never user files or scripts.
         root.geometry(f'{min(1220, root.winfo_screenwidth()-60)}x{min(860, root.winfo_screenheight()-100)}+20+20')
         app.show_page('materials')

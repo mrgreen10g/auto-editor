@@ -23,6 +23,11 @@ class Engine:
 
     def analyze(self):
         p=self.project;p.validate(self.index);self.check()
+        from .editing import saved_plan
+        restored=saved_plan(p,self.index)
+        if restored is not None:
+            self.log('Использую сохранённую монтажную дорожку с вашими правками.')
+            return restored
         from .goals import montage_block
         block=montage_block(p,self.index,self.cache,self.cancel)
         info=probe(p.host)
@@ -50,7 +55,7 @@ class Engine:
         lines=[Line(l.text,frame(map_time(l.start-start,keep)),frame(map_time(l.end-start,keep)),l.agreement) for l in source]
         meta={c.path:probe(c.path) for c in block.clips}
         if any(not x['video'] for x in meta.values()):raise ValueError('Игровая вставка должна содержать видео.')
-        inserts,cards,extra=placements(block,lines,meta,duration)
+        inserts,cards,extra=placements(block,lines,meta,duration,p.settings.insert_frequency)
         from .orientation import detect_rotation
         rotation=detect_rotation(p.host,self.cache,self.cancel,self.log) if p.settings.auto_rotate else p.settings.rotate
         plan=Plan(start,end,keep,lines,inserts,cards,list(warnings)+extra,duration,rotation)
@@ -64,8 +69,10 @@ class Engine:
             ms=round(t*1000);return f'{ms//3600000:02}:{ms//60000%60:02}:{ms//1000%60:02},{ms%1000:03}'
         (self.cache/'timing.srt').write_text('\n\n'.join(f'{i+1}\n{stamp(l.start)} --> {stamp(l.end)}\n{l.text}' for i,l in enumerate(plan.lines))+'\n',encoding='utf-8')
 
-    def render(self,plan,target):
+    def render(self,plan,target,draft=False):
         self.check();self.project.validate(self.index)
+        from .editing import validate_plan
+        validate_plan(plan)
         target=Path(target).resolve();p=self.project;s=p.settings
         protected=[p.host,p.music]+[c.path for b in p.blocks for c in b.clips]+[m.path for m in p.matches]+list(p.team_logos.values())
         if any(target==Path(f).resolve() for f in protected if f):raise ValueError('Нельзя записывать результат поверх исходного файла.')
@@ -101,7 +108,17 @@ class Engine:
         args+=['-filter_complex_threads','2','-filter_complex_script',graph,'-map','[video]','-map','[audio]',
                '-c:v','libx264','-preset','fast','-crf','19','-threads','4','-pix_fmt','yuv420p','-r','30',
                '-c:a','aac','-b:a','160k','-ar','48000','-t',plan.duration,base]
-        run(args,self.cancel,self.cache/'base-render.log',lambda t:self.log(f'Подготовка ведущего: {min(100,int(t/plan.duration*100))}%'))
+        def media_key(path):
+            if not path:return None
+            st=Path(path).stat();return [str(Path(path).resolve()),st.st_size,st.st_mtime_ns]
+        base_key=hashlib.sha256(json.dumps([media_key(p.host),media_key(p.music),plan.source_start,
+            plan.source_end,plan.keep,fl,s.music_db],ensure_ascii=False).encode()).hexdigest()
+        ready=self.cache/'base-ready.txt'
+        if not (base.is_file() and ready.exists() and ready.read_text()==base_key):
+            ready.unlink(missing_ok=True)
+            run(args,self.cancel,self.cache/'base-render.log',lambda t:self.log(f'Подготовка ведущего: {min(100,int(t/plan.duration*100))}%'))
+            ready.write_text(base_key)
+        else:self.log('Использую подготовленную дорожку ведущего.')
         self.check();self.log('Собираю игровые вставки, наезды до 120% и анимацию…')
         args=['-y','-threads','2','-i',base];fl=[];v='0:v';inputs=1
         windows=zoom_windows(plan.duration,plan.inserts) if s.zoom else []
@@ -114,16 +131,18 @@ class Engine:
             fl.append(f"[0:v]scale=2560:1440,zoompan=z='{z}':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s=1280x720:fps=30[zv]");v='zv'
         for i,c in enumerate(plan.inserts):
             meta=probe(c.path);fade=.20 if s.transitions else 0
-            pre=min(fade,c.source_in,c.start);post=min(fade,max(0,meta['duration']-(c.source_in+c.end-c.start)),max(0,plan.duration-c.end))
+            # Transitions stay INSIDE the selected shot, never pull crowd frames in.
+            pre=post=0
             start=c.start-pre;length=c.end-c.start+pre+post
-            args+=['-threads','1','-i',c.path]
-            filt=f'trim=start={c.source_in-pre:.6f}:duration={length:.6f},setpts=PTS-STARTPTS,fps=30,scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1,format=rgba'
+            args+=['-threads','1','-ss',f'{c.source_in-pre:.6f}','-t',f'{length:.6f}','-i',c.path]
+            filt=f'trim=duration={length:.6f},setpts=PTS-STARTPTS,fps=30,scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1,format=rgba'
             if fade:
                 fin=pre or min(fade,length/4);fout=post or min(fade,length/4)
                 filt+=f',fade=t=in:st=0:d={fin:.6f}:alpha=1,fade=t=out:st={length-fout:.6f}:d={fout:.6f}:alpha=1'
             fl.append(f'[{inputs}:v]{filt},setpts=PTS+{start:.6f}/TB[clip{i}]');inputs+=1
             nv=f'ins{i}';fl.append(f"[{v}][clip{i}]overlay=0:0:eof_action=pass:enable='gte(t,{start:.6f})*lt(t,{start+length:.6f})'[{nv}]");v=nv
         for i,card in enumerate(plan.cards):
+            if card.title in ('АРХИВНЫЕ КАДРЫ','КАДРЫ МАТЧА'): continue
             length=card.end-card.start
             if length<.15:continue
             image=self.cache/f'card-{i}.png';x,y=card_image(card,image,p.team_logos)
@@ -138,12 +157,16 @@ class Engine:
                 xpos+=f'+3*sin(2*PI*(t-{card.start:.6f})/3.7+{i})'
                 ypos+=f'+2*sin(2*PI*(t-{card.start:.6f})/4.3+{i})'
             if s.animate_cards:ypos+=f'+16*pow(max(0,1-(t-{card.start:.6f})/{edge:.6f}),2)+16*pow(max(0,1-({card.end:.6f}-t)/{edge:.6f}),2)'
-            nv=f'panel{i}';fl.append(f"[{v}][card{i}]overlay=x='{xpos}':y='{ypos}':eof_action=pass:enable='gte(t,{card.start:.6f})*lt(t,{card.end:.6f})'[{nv}]");v=nv
-        fl.append(f'[{v}]scale={s.width}:{s.height},format=yuv420p[final]')
+            enabled=f'gte(t,{card.start:.6f})*lt(t,{card.end:.6f})'
+            if card.title=='РАЗБОР МАТЧА':
+                enabled+=''.join(f'*not(between(t,{c.start:.6f},{c.end:.6f}))' for c in plan.inserts)
+            nv=f'panel{i}';fl.append(f"[{v}][card{i}]overlay=x='{xpos}':y='{ypos}':eof_action=pass:enable='{enabled}'[{nv}]");v=nv
+        width,height=(640,360) if draft else (s.width,s.height)
+        fl.append(f'[{v}]scale={width}:{height},format=yuv420p[final]')
         graph=self.cache/'final-filter.txt';graph.write_text(';\n'.join(fl),encoding='utf-8')
         temp=target.with_name(target.stem+'.partial.mp4')
         if temp.exists():temp.unlink()
-        args+=['-filter_complex_threads','2','-filter_complex_script',graph,'-map','[final]','-map','0:a:0','-c:v','libx264','-preset','fast','-crf','19','-threads','4','-c:a','copy','-r','30','-t',plan.duration,'-movflags','+faststart',temp]
+        args+=['-filter_complex_threads','2','-filter_complex_script',graph,'-map','[final]','-map','0:a:0','-c:v','libx264','-preset','ultrafast' if draft else 'fast','-crf','27' if draft else '19','-threads','4','-c:a','copy','-r','30','-t',plan.duration,'-movflags','+faststart',temp]
         try:
             run(args,self.cancel,self.cache/'final-render.log',lambda t:self.log(f'Экспорт: {min(100,int(t/plan.duration*100))}%'))
             self.check()
