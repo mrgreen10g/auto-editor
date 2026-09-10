@@ -24,6 +24,17 @@ def block_plan(start,title,path=None):
 
 
 class V05Tests(unittest.TestCase):
+    def test_episode_restores_with_noncanonical_source_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);(root/'nested').mkdir();(root/'game.mp4').touch()
+            media=root/'nested'/'..'/'game.mp4'
+            p=Project(host=str(media),blocks=[Block(title='A'),Block(title='B')],whole_episode=True)
+            merged=combine(p,[block_plan(0,'A',media),block_plan(12,'B',media)])
+            store_episode(p,merged);p.save(root/'saved.hockeyproj')
+            restored=saved_episode(Project.load(root/'saved.hockeyproj'))
+            self.assertIsNotNone(restored)
+            self.assertEqual(len(restored.inserts),2)
+
     def test_time_input_and_legacy_seconds(self):
         self.assertEqual(format_time(649.9),'10:49.90')
         for value in ('10:49.90','649.9','00:10:49,90'):self.assertAlmostEqual(parse_time(value),649.9)

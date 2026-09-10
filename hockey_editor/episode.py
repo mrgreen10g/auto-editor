@@ -9,7 +9,15 @@ from .timeline import Plan,Card,frame
 
 
 def episode_key(project):
-    data=[(b.uid,project_edit_key(project,i),b.edit_plan) for i,b in enumerate(project.blocks)]
+    def canonical_plan(value):
+        result=copy.deepcopy(value)
+        if result:
+            for clip in result.get('inserts',[]):
+                # Project.load resolves paths (including Windows short names).
+                # Compare the same canonical path before and after saving.
+                clip['path']=str(Path(clip['path']).resolve())
+        return result
+    data=[(b.uid,project_edit_key(project,i),canonical_plan(b.edit_plan)) for i,b in enumerate(project.blocks)]
     return hashlib.sha256(json.dumps(data,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
 
 
