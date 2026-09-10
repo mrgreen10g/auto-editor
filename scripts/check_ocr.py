@@ -24,7 +24,13 @@ def check():
             draw.text((375, 652), 'AWAY', font=font(28, True), fill='#112634')
             draw.text((510, 652), '1ST', font=font(25, True), fill='#112634')
             draw.text((600, 652), f'00:{max(2,8-t):02}', font=font(28, True), fill='#112634')
-            draw.rectangle((200+t*15, 300, 230+t*15, 340), fill='#152736')
+            # A rink shot has multiple moving players; a blank scoreboard slide
+            # must no longer pass the gameplay gate introduced in 0.4.
+            draw.line((80,190,1180,190),fill='#5685a3',width=5)
+            for player in range(10):
+                x=100+(player*95+t*(14 if player%2 else -11))%1000
+                y=260+(player%3)*105
+                draw.rectangle((x,y,x+30,y+40),fill='#152736')
             image.save(folder/f'{t:03}.png')
         video = folder/'match.mp4'
         run(['-y', '-framerate', '1', '-i', folder/'%03d.png', '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=mono', '-t', '18', '-r', '30', '-c:v', 'libx264', '-c:a', 'aac', '-pix_fmt', 'yuv420p', video])
