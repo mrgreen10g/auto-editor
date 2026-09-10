@@ -152,6 +152,9 @@ def check():
             [Insert(str(clip),6,9,1,'Игра',source_min=.5,source_max=7)],
             [Card(0,5,'РАЗБОР МАТЧА','СКА — Лада'),Card(9,12,'ПРОГНОЗ','Лада\nФора (+2)')],[],12,0)
         app.display_plan(edited_plan);editor=TimelineEditor(app);root.update()
+        for widget in (editor.apply_button,editor.replace_button):
+            assert widget.winfo_ismapped()
+            assert widget.winfo_rooty()+widget.winfo_height()<=editor.canvas.winfo_rooty()
         editor.select(('insert',0))
         for (var,_),value in zip(editor.fields,('5.5','8.5','1.5')):var.set(value)
         editor.edit();assert editor.plan.inserts[0].start==5.5

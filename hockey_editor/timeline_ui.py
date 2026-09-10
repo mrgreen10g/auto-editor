@@ -50,7 +50,20 @@ class TimelineEditor:
         self.seekbar.pack(side='left',fill='x',expand=True,padx=8)
         self.seekbar.bind('<ButtonRelease-1>',lambda _:self.seek(self.seekvar.get()))
         self.clock=ttk.Label(playbar,text='00:00');self.clock.pack(side='right')
-        inspector=ttk.Frame(upper,padding=(14,0,0,0),width=260);inspector.pack(side='right',fill='y');inspector.pack_propagate(False)
+        inspector_shell=ttk.Frame(upper,padding=(14,0,0,0),width=260)
+        inspector_shell.pack(side='right',fill='y');inspector_shell.pack_propagate(False)
+        inspector_actions=ttk.Frame(inspector_shell);inspector_actions.pack(side='bottom',fill='x',pady=(6,0))
+        inspector_scroll=ttk.Scrollbar(inspector_shell,orient='vertical');inspector_scroll.pack(side='right',fill='y')
+        inspector_canvas=tk.Canvas(inspector_shell,bg=ui.BG,highlightthickness=0,yscrollcommand=inspector_scroll.set,width=240)
+        inspector_canvas.pack(side='left',fill='both',expand=True);inspector_scroll.configure(command=inspector_canvas.yview)
+        inspector=ttk.Frame(inspector_canvas)
+        inspector_id=inspector_canvas.create_window((0,0),window=inspector,anchor='nw')
+        inspector.bind('<Configure>',lambda _:inspector_canvas.configure(scrollregion=inspector_canvas.bbox('all')))
+        inspector_canvas.bind('<Configure>',lambda e:inspector_canvas.itemconfigure(inspector_id,width=e.width))
+        def scroll_inspector(event):
+            if event.x_root>=inspector_shell.winfo_rootx():
+                inspector_canvas.yview_scroll(-int(event.delta/120),'units');return 'break'
+        w.bind('<MouseWheel>',scroll_inspector,add='+')
         ttk.Label(inspector,text='Выбранный элемент',style='CardTitle.TLabel').pack(anchor='w',pady=8)
         self.kind=tk.StringVar(value='Не выбран');ttk.Label(inspector,textvariable=self.kind,wraplength=240).pack(anchor='w')
         self.fields=[]
@@ -59,8 +72,9 @@ class TimelineEditor:
             var=tk.StringVar();entry=ttk.Entry(inspector,textvariable=var);entry.pack(fill='x');self.fields.append((var,entry))
         ttk.Label(inspector,text='Текст плашки / подпись в редакторе').pack(anchor='w',pady=(8,2))
         self.text=tk.Text(inspector,height=4,wrap='word',font=('Segoe UI',10));self.text.pack(fill='x')
-        self.apply_button=ttk.Button(inspector,text='Применить правку',command=self.edit);self.apply_button.pack(fill='x',pady=6);self.buttons.append(self.apply_button)
-        b=ttk.Button(inspector,text='Заменить игровой момент',command=self.pick_clip);b.pack(fill='x');self.buttons.append(b)
+        self.apply_button=ttk.Button(inspector_actions,text='Применить правку',command=self.edit);self.apply_button.pack(fill='x',pady=(0,4));self.buttons.append(self.apply_button)
+        self.replace_button=ttk.Button(inspector_actions,text='Заменить игровой момент',command=self.pick_clip)
+        self.replace_button.pack(fill='x');self.buttons.append(self.replace_button)
         ttk.Label(inspector,text='Речь остаётся синхронной. Изменяются игровые вставки и плашки. Правки сохраняются в проекте.',wraplength=240,style='Muted.TLabel').pack(anchor='w',pady=10)
         area=ttk.Frame(w,padding=(12,8));area.pack(fill='x')
         self.canvas=tk.Canvas(area,height=155,bg='#142334',highlightthickness=0)
