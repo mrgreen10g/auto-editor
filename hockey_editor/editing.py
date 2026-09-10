@@ -16,6 +16,9 @@ def project_edit_key(project, index):
         if not p.is_file(): return [str(p),'missing']
         st=p.stat();return [str(p.resolve()),st.st_size,st.st_mtime_ns]
     structural={k:getattr(project.settings,k) for k in ('cut_pauses','insert_frequency','auto_rotate','rotate','use_manual_clips','allow_other_matches')}
+    for clip in block['clips']:
+        clip['path']=identity(clip['path'])
+        if clip.get('origin_path'):clip['origin_path']=identity(clip['origin_path'])
     data=[block,structural,identity(project.host),
           [(m.id,m.home,m.away,identity(m.path),m.score_box) for m in project.matches if m.id in block['match_ids']]]
     return hashlib.sha256(json.dumps(data,ensure_ascii=False,sort_keys=True).encode()).hexdigest()

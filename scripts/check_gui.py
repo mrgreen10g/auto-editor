@@ -172,6 +172,10 @@ def check():
         from PIL import ImageGrab
         bounds=(editor.window.winfo_rootx(),editor.window.winfo_rooty(),editor.window.winfo_rootx()+editor.window.winfo_width(),editor.window.winfo_rooty()+editor.window.winfo_height())
         ImageGrab.grab(bbox=bounds).convert('RGB').save(out/'gui-timeline.jpg',quality=80)
+        data=base64.b64encode((out/'gui-timeline.jpg').read_bytes()).decode()
+        print('TIMELINE_PREVIEW_START')
+        for offset in range(0,len(data),4000):print(data[offset:offset+4000])
+        print('TIMELINE_PREVIEW_END')
         editor.close()
         file=tmp/'edited.hockeyproj';app.project.save(file)
         loaded=Project.load(file);assert saved_plan(loaded,0).inserts[0].start==5.5
