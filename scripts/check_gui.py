@@ -223,6 +223,45 @@ def check():
         editor.apply();editor.close();assert len(saved_episode(app.project).sections)==2
         app.project.save(tmp/'episode.hockeyproj')
         assert len(saved_episode(Project.load(tmp/'episode.hockeyproj')).sections)==2
+        # Global navigation and all-block event rows retain their true owner.
+        first=MatchSource(str(clip),'СКА','Лада');second=MatchSource(str(host),'ЦСКА','Торпедо')
+        app.project.matches=[first,second]
+        event_a=EventRequest(first.id,'Первый эпизод',kind='play',selection=EventSelection('a',1,6,4,source_signature(first),True))
+        event_b=EventRequest(second.id,'Второй эпизод',kind='play',selection=EventSelection('b',1,6,4,source_signature(second),True))
+        for block,source,event in zip(app.project.blocks,[first,second],[event_a,event_b]):
+            block.match_ids=[source.id];block.events=[event]
+        app.refresh();app.display_plan(combined);app.show_page('review');app.reviewtabs.select(app.events_page)
+        root.update();assert len(app.eventtable.get_children())==2
+        app.eventtable.selection_set(app.event_row_id(1,0))
+        assert app.selected_event() is event_b and app.selected_event_block() is app.project.blocks[1]
+        app.scans[second.id]={'signature':source_signature(second),'candidates':[vars(Candidate('b',None,None,4,1,6,.9,kind='play'))]}
+        app.edit_event();root.update()
+        dialogs=[w for w in root.winfo_children() if isinstance(w,tk.Toplevel)]
+        assert len(dialogs)==1
+        combo=next(w for w in descendants(dialogs[0]) if w.winfo_class()=='TCombobox')
+        assert len(combo.cget('values'))==1 and 'ЦСКА' in combo.get(),combo.get()
+        next(w for w in descendants(dialogs[0]) if w.winfo_class()=='TButton' and w.cget('text')=='Использовать эпизод').invoke()
+        assert app.project.blocks[0].events[0] is event_a and app.project.blocks[1].events[0].source_id==second.id
+        app.display_plan(combined)
+        for page in ('materials','review','settings','export'):
+            app.show_page(page);app.reviewtabs.select(app.events_page)
+            app.blockbox.current(1);app.switch_block();root.update()
+            assert app.page==page and app.plan is not None and len(app.plan.sections)==2
+            assert app.reviewtabs.select()==str(app.events_page)
+            assert len(app.eventtable.get_children())==2
+            for widget in (app.blockbox,app.scopebox):assert widget.winfo_ismapped()
+            app.blockbox.current(0);app.switch_block()
+        app.show_page('settings');assert len(app.logo_tabs.tabs())==2
+        from PIL import Image
+        logo=tmp/'team-logo.png';Image.new('RGB',(32,32),'red').save(logo)
+        app.logo_tabs.select(1)
+        with patch('hockey_editor.gui.filedialog.askopenfilename',return_value=str(logo)):
+            app.choose_logo(1,app.logo_indices[1])
+        assert app.project.team_logos['Торпедо']==str(logo) and 'Лада' not in app.project.team_logos
+        app.clear_logo(1,app.logo_indices[1]);assert 'Торпедо' not in app.project.team_logos
+        app.scope.set('Текущий разбор');root.update();assert len(app.eventtable.get_children())==1
+        app.scope.set('Все разборы');root.update();assert len(app.eventtable.get_children())==2
+        app.collect()
         # Small source timeline: real thumbnails, preview and draggable bounds.
         from hockey_editor.trim_ui import TrimDialog
         trimmed=[]
@@ -255,13 +294,13 @@ def check():
         for key in ('materials', 'review', 'export', 'settings'):
             app.show_page(key)
             root.update()
-            for widget in (app.primary, app.cancelbutton, app.heading):
+            for widget in (app.primary, app.cancelbutton, app.heading, app.blockbox, app.scopebox):
                 assert widget.winfo_ismapped(), (key, str(widget), root.geometry())
                 assert widget.winfo_rootx() + widget.winfo_width() <= root.winfo_rootx() + root.winfo_width() + 1
                 assert widget.winfo_rooty() + widget.winfo_height() <= root.winfo_rooty() + root.winfo_height() + 1
         assert not errors, errors
         app.close()
-    (out / 'gui-check.json').write_text(json.dumps({'status': 'ok', 'checks': ['v1-project-compatibility', 'block-switching', 'card-editing', 'stale-plan-invalidation', 'busy-control-restoration', 'worker-queue-flow', 'compact-window-layout', 'multiple-source-review-flow', 'v2-project-roundtrip', 'review-retains-custom-trim','episode-editor-roundtrip','seek-after-edit-rebuild-save','source-visual-trim']}, indent=2), encoding='utf-8')
+    (out / 'gui-check.json').write_text(json.dumps({'status': 'ok', 'checks': ['v1-project-compatibility', 'block-switching', 'card-editing', 'stale-plan-invalidation', 'busy-control-restoration', 'worker-queue-flow', 'compact-window-layout', 'multiple-source-review-flow', 'v2-project-roundtrip', 'review-retains-custom-trim','episode-editor-roundtrip','seek-after-edit-rebuild-save','source-visual-trim','persistent-block-navigation','all-block-events-own-source','per-block-logo-tabs']}, indent=2), encoding='utf-8')
     print('Desktop workflow and layout checks passed.')
 
 

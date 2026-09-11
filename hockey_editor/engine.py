@@ -7,6 +7,9 @@ from .alignment import align
 from .timeline import Plan,Line,Card,keep_ranges,map_time,placements,zoom_windows,frame
 from .graphics import card_image
 
+# Speech alignment is unchanged in 0.5.1; retain the accepted 0.5 audio cache.
+ALIGNMENT_VERSION = '0.5.0-align2'
+
 class Engine:
     def __init__(self,project,index,cache,cancel,log=lambda _:None):
         self.project=project;self.index=index;self.cancel=cancel;self.log=log
@@ -18,7 +21,7 @@ class Engine:
     def signature(self,source_floor=0):
         def stat(p):
             s=Path(p).stat();return [str(Path(p).resolve()),s.st_size,s.st_mtime_ns]
-        data={'version':__version__+'-align2','host':stat(self.project.host),'script':self.project.blocks[self.index].script,'floor':frame(source_floor)}
+        data={'version':ALIGNMENT_VERSION,'host':stat(self.project.host),'script':self.project.blocks[self.index].script,'floor':frame(source_floor)}
         return hashlib.sha256(json.dumps(data,ensure_ascii=False).encode()).hexdigest()
 
     def analyze(self,source_floor=0):

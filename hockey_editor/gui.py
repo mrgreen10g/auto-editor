@@ -130,6 +130,15 @@ class App(MatchMixin):
         ttk.Label(bar, text='РАБОЧАЯ ОБЛАСТЬ', style='Muted.TLabel', font=('Segoe UI', 9, 'bold')).pack(side='left')
         for label, cmd in [('Сохранить проект', self.save), ('Открыть проект', self.load), ('Новый', self.new)]:
             self.button(bar, label, cmd).pack(side='right', padx=(8, 0))
+        context=ttk.Frame(main);context.pack(fill='x',pady=(0,12))
+        ttk.Label(context,text='Разбор',style='Muted.TLabel').pack(side='left',padx=(0,8))
+        self.blockbox=ttk.Combobox(context,state='readonly',width=25)
+        self.blockbox.pack(side='left',fill='x',expand=True);self.controls.append(self.blockbox)
+        self.blockbox.bind('<<ComboboxSelected>>',self.switch_block)
+        ttk.Label(context,text='Режим',style='Muted.TLabel').pack(side='left',padx=(12,8))
+        self.scopebox=ttk.Combobox(context,textvariable=self.scope,values=['Текущий разбор','Все разборы'],state='readonly',width=20)
+        self.scopebox.pack(side='left');self.controls.append(self.scopebox)
+        ui.Tooltip(self.scopebox,'Определяет поиск эпизодов, анализ речи, общий список и экспорт. В режиме «Все разборы» каждый блок использует свои матчи.')
         self.heading = ttk.Label(main, style='Heading.TLabel')
         self.heading.pack(anchor='w')
         self.subtitle = ttk.Label(main, style='Muted.TLabel', wraplength=800)
@@ -153,19 +162,10 @@ class App(MatchMixin):
         page = self.scrollable('materials')
         block = ttk.Frame(page)
         block.pack(fill='x', pady=(0, 14))
-        ttk.Label(block, text='Разбор', style='Muted.TLabel').pack(side='left', padx=(0, 10))
-        self.blockbox = ttk.Combobox(block, state='readonly', width=28)
-        self.blockbox.pack(side='left', fill='x', expand=True)
-        self.controls.append(self.blockbox)
-        self.blockbox.bind('<<ComboboxSelected>>', self.switch_block)
         self.button(block, '+ Разбор', self.add_block).pack(side='left', padx=8)
         self.button(block, 'Удалить', self.delete_block).pack(side='left')
         self.button(block, '↑', lambda:self.move_block(-1)).pack(side='left',padx=(8,2))
         self.button(block, '↓', lambda:self.move_block(1)).pack(side='left')
-        mode=ttk.Frame(page);mode.pack(fill='x',pady=(0,12))
-        ttk.Label(mode,text='Что собираем',style='Muted.TLabel').pack(side='left',padx=(0,12))
-        scopebox=ttk.Combobox(mode,textvariable=self.scope,values=['Текущий разбор','Все разборы'],state='readonly',width=24)
-        scopebox.pack(side='left');self.controls.append(scopebox)
         ttk.Label(page,text='Добавляйте 2–4 разбора в порядке речи. У каждого — свой сценарий и исходные матчи.',style='Muted.TLabel',wraplength=700).pack(anchor='w',pady=(0,12))
         presenter = ui.card(page, 'Запись ведущего', 'Можно весь выпуск до 30 минут. Нужны изображение и голос.', '01')
         self.pathrow(presenter, self.host, self.choose_host, 'Выбрать видео')
@@ -281,12 +281,17 @@ class App(MatchMixin):
         self.button(row, 'Убрать музыку', lambda: self.music.set('')).pack(side='right')
         self.option(sound, 'Громкость музыки', self.level, ['Очень тихо', 'Тихо', 'Заметнее'])
         logos = ui.card(page, 'Карточка матча', 'Логотипы команд выбираются отдельно. PNG, JPEG или WebP автоматически вписываются в карточку; детали размытого оригинала не восстанавливаются.')
-        self.logo_labels = []
-        for i in range(2):
-            row = ttk.Frame(logos, style='Card.TFrame'); row.pack(fill='x', pady=5)
-            label = ttk.Label(row, style='CardMuted.TLabel', width=30); label.pack(side='left'); self.logo_labels.append(label)
-            self.button(row, 'Выбрать логотип', lambda i=i: self.choose_logo(i)).pack(side='left', padx=6)
-            self.button(row, 'Убрать', lambda i=i: self.clear_logo(i)).pack(side='left')
+        self.logo_tabs=ttk.Notebook(logos);self.logo_tabs.pack(fill='x')
+        self.logo_frames=[];self.logo_rows=[];self.logo_indices=[]
+        for slot in range(4):
+            panel=ttk.Frame(self.logo_tabs,padding=8);self.logo_frames.append(panel);labels=[]
+            for side in range(2):
+                row=ttk.Frame(panel);row.pack(fill='x',pady=5)
+                label=ttk.Label(row,width=29);label.pack(side='left');labels.append(label)
+                self.button(row,'Выбрать логотип',lambda slot=slot,side=side:self.choose_logo(side,self.logo_indices[slot])).pack(side='left',padx=6)
+                self.button(row,'Убрать',lambda slot=slot,side=side:self.clear_logo(side,self.logo_indices[slot])).pack(side='left')
+            self.logo_rows.append(labels)
+        self.logo_labels=self.logo_rows[0]
         options = ui.card(page, 'Подбор игровых сцен', 'Голы сохраняют приоритет. Резервные кадры берутся только из игровых сцен. Источник замены виден в редакторе.')
         self.frequency=tk.StringVar(value='Обычно')
         self.option(options,'Частота обычных игровых вставок',self.frequency,['Реже','Обычно','Чаще'])
@@ -393,7 +398,7 @@ class App(MatchMixin):
             b=self.project.blocks[i]
             if unresolved(b):
                 self.index=i;self.refresh();self.show_page('review');self.reviewtabs.select(self.events_page)
-                self.eventtable.selection_set(str(b.events.index(unresolved(b)[0])));return self.edit_event()
+                self.eventtable.selection_set(self.event_row_id(i,b.events.index(unresolved(b)[0])));return self.edit_event()
         if self.page=='review' and self.plan:self.show_page('export')
         else:self.start(self.page=='export')
 
@@ -420,6 +425,7 @@ class App(MatchMixin):
             return
         self.sync_manual_panel()
         self.invalidate()
+        self.refresh_events()
         self.update_summary()
 
     def invalidate(self):
@@ -501,10 +507,7 @@ class App(MatchMixin):
         if self.music.get().strip() and not Path(self.music.get().strip()).is_file():
             missing.append('файл музыки')
         self.readiness.set('Нужно добавить: ' + ', '.join(missing) if missing else 'Материалы готовы  ·  ' + str(len(clips)) + ' вставки')
-        from .graphics import block_teams
-        for i,name in enumerate(block_teams(self.title.get())):
-            path=self.project.team_logos.get(name,'')
-            self.logo_labels[i].configure(text=(name or 'Команда')+(' · выбран' if path else ' · без логотипа'))
+        self.refresh_logo_tabs()
         duration = ui.timecode(self.plan.duration) if self.plan else 'определится после анализа'
         effects = []
         if self.effect_vars['zoom'].get():
@@ -528,12 +531,18 @@ class App(MatchMixin):
         self.primary.configure(text='Идёт обработка…' if self.busy else labels[self.page])
 
     def switch_block(self, _=None):
+        tab=self.reviewtabs.select()
         idx = self.blockbox.current()
         self.collect()
         self.index = idx
-        self.invalidate()
+        # Navigation within the episode is not a montage change.
+        shared=saved_episode(self.project) if self.project.whole_episode else None
+        if not shared:self.invalidate()
         self.refresh()
-        self.restore_plan()
+        if shared:
+            self.plan=shared
+        else:self.restore_plan()
+        self.reviewtabs.select(tab)
 
     def add_block(self):
         if len(self.project.blocks)>=4:return messagebox.showinfo("Разборы","В этой версии можно собрать до четырёх разборов за выпуск.")
@@ -653,10 +662,26 @@ class App(MatchMixin):
         if self.use_manual.get(): self.manual_panel.pack(fill='x', pady=(8,0))
         else: self.manual_panel.pack_forget()
 
-    def choose_logo(self, index):
+    def refresh_logo_tabs(self):
+        from .graphics import block_teams
+        indices=self.selected_indices()
+        old=self.logo_tabs.select()
+        self.logo_indices=indices
+        wanted=[str(self.logo_frames[i]) for i in range(len(indices))]
+        for tab in self.logo_tabs.tabs():
+            if tab not in wanted:self.logo_tabs.forget(tab)
+        for slot,idx in enumerate(indices):
+            title=self.title.get() if idx==self.index else self.project.blocks[idx].title
+            self.logo_tabs.add(self.logo_frames[slot],text=title if len(indices)<=2 or len(title)<=18 else title[:18]+"…")
+            for label,name in zip(self.logo_rows[slot],block_teams(title)):
+                label.configure(text=(name or 'Команда')+(' · выбран' if self.project.team_logos.get(name) else ' · без логотипа'))
+        if old in self.logo_tabs.tabs():self.logo_tabs.select(old)
+
+    def choose_logo(self, index, block_index=None):
         from .graphics import block_teams
         from PIL import Image
-        self.collect(); name=block_teams(self.title.get())[index]
+        self.collect(); block_index=self.index if block_index is None else block_index
+        name=block_teams(self.project.blocks[block_index].title)[index]
         if not name: return messagebox.showinfo('Команды','Укажите название разбора в виде «Команда — Команда».')
         path=filedialog.askopenfilename(title='Логотип: '+name,filetypes=[('Логотип','*.png *.jpg *.jpeg *.webp')])
         if not path: return
@@ -666,9 +691,10 @@ class App(MatchMixin):
             self.invalidate();self.update_summary()
         except Exception as e: messagebox.showerror('Логотип',str(e))
 
-    def clear_logo(self, index):
+    def clear_logo(self, index, block_index=None):
         from .graphics import block_teams
-        self.project.team_logos.pop(block_teams(self.title.get())[index],None)
+        self.collect();block_index=self.index if block_index is None else block_index
+        self.project.team_logos.pop(block_teams(self.project.blocks[block_index].title)[index],None)
         self.invalidate();self.update_summary()
 
     def new(self):

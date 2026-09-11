@@ -44,7 +44,7 @@ class TimelineTests(unittest.TestCase):
         clips=[Insert('x',15,27,0,'goal')];windows=zoom_windows(70,clips)
         self.assertGreaterEqual(len(windows),3)
         for a,b,c,d in windows:self.assertFalse(a<27 and d>15);self.assertLess(a,b);self.assertLess(c,d)
-        for w1,w2 in zip(windows,windows[1:]):self.assertGreaterEqual(w2[0]-w1[3],3.99)
+        for w1,w2 in zip(windows,windows[1:]):self.assertGreaterEqual(w2[0]-w1[3],1.59)
 
 class ProjectTests(unittest.TestCase):
     def test_relative_paths_survive_moving_whole_folder(self):

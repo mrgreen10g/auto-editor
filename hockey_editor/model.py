@@ -129,7 +129,7 @@ class Project:
         for event in block.events:
             if event.source_id not in block.match_ids and not (not event.source_id and (event.skipped or event.selection is None)):
                 raise ValueError('Событие относится к записи вне этого разбора.')
-            if event.kind not in ('score', 'equalizer', 'overtime', 'play'):
+            if event.kind not in ('score', 'result', 'equalizer', 'overtime', 'play'):
                 raise ValueError('Неизвестный тип события.')
             if event.score is not None and (len(event.score) != 2 or any(type(n) is not int or not 0 <= n <= 15 for n in event.score)):
                 raise ValueError('Некорректный счёт события.')

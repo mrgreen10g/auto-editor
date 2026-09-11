@@ -51,7 +51,7 @@ class MatchMixin:
 
     def build_event_review(self, parent):
         ttk.Label(parent, text='Проверьте спорные эпизоды. Двойной щелчок — посмотреть и выбрать.', style='Muted.TLabel', wraplength=660).pack(anchor='w', pady=8)
-        self.eventtable = ui.table(parent, [('source', 'Матч', 160), ('phrase', 'Фраза ведущего', 250), ('goal', 'Эпизод', 90), ('state', 'Статус', 100)], 6)
+        self.eventtable = ui.table(parent, [('block','Разбор',150),('source', 'Матч', 160), ('phrase', 'Фраза ведущего', 250), ('goal', 'Эпизод', 90), ('state', 'Статус', 100)], 6)
         self.eventtable.bind('<Double-1>', lambda _: self.edit_event() if not self.busy else None)
         row = ttk.Frame(parent); row.pack(side='bottom', fill='x', pady=8, before=self.eventtable.master)
         for label, command in [('Посмотреть / выбрать', self.edit_event), ('Оставить ведущего', self.skip_event), ('+ Фраза', self.add_event)]:
@@ -65,14 +65,19 @@ class MatchMixin:
                 self.matchtable.insert('', 'end', iid=m.id, values=(m.title, Path(m.path).name))
         self.refresh_events()
 
+    def event_row_id(self,block_index,event_index):
+        return f'{self.project.blocks[block_index].uid}:{event_index}' if self.scope.get()=='Все разборы' else str(event_index)
+
     def refresh_events(self):
-        self.eventtable.delete(*self.eventtable.get_children())
-        sources = {m.id: m for m in self.project.matches}
-        for i, e in enumerate(self.project.blocks[self.index].events):
-            state = 'Ведущий' if e.skipped else ('Архив' if e.selection.context_label.startswith('Архив') else 'Игра' if e.selection.candidate_id.startswith('broll') else 'Готово') if e.selection and e.selection.accepted else 'Проверить' if e.selection else 'Не найден'
-            goal = ':'.join(map(str, e.score)) if e.score else 'Овертайм' if e.kind == 'overtime' else 'Игра'
-            self.eventtable.insert('', 'end', iid=str(i), values=(sources[e.source_id].title if e.source_id in sources else 'Нет записи', e.phrase, goal, state),
-                                   tags=('check',) if state in ('Проверить', 'Не найден') else ('stripe',) if i%2 else ())
+        self.eventtable.delete(*self.eventtable.get_children());self.event_rows={}
+        sources={m.id:m for m in self.project.matches}
+        for bi in self.selected_indices():
+            block=self.project.blocks[bi]
+            for i,e in enumerate(block.events):
+                state='Ведущий' if e.skipped else ('Архив' if e.selection.context_label.startswith('Архив') else 'Игра' if e.selection.candidate_id.startswith('broll') else 'Готово') if e.selection and e.selection.accepted else 'Проверить' if e.selection else 'Не найден'
+                goal=':'.join(map(str,e.score)) if e.score else 'Овертайм' if e.kind=='overtime' else 'Игра'
+                iid=self.event_row_id(bi,i);self.event_rows[iid]=(block,e)
+                self.eventtable.insert('','end',iid=iid,values=(block.title,sources[e.source_id].title if e.source_id in sources else 'Нет записи',e.phrase,goal,state),tags=('check',) if state in ('Проверить','Не найден') else ('stripe',) if i%2 else ())
 
     def selected_match(self):
         sel = self.matchtable.selection()
@@ -149,7 +154,7 @@ class MatchMixin:
         if not block.match_ids or len(block.script.strip()) < 30:
             return messagebox.showinfo('Материалы', 'Добавьте исходную запись матча и сценарий разбора.')
         if block.events and any(e.selection and e.selection.accepted for e in block.events):
-            if not messagebox.askyesno('Повторить поиск', 'Заново подобрать эпизоды? Ваш выбор эпизодов будет заменён; сохранённое видео останется.'):
+            if not messagebox.askyesno('Повторить поиск', 'Заново подобрать эпизоды? Выбор эпизодов и правки дорожки этого разбора будут заменены; сохранённое видео останется.'):
                 return
         events = requests_for(block, self.project.matches, self.project.settings.use_manual_clips)
         if not events:
@@ -175,7 +180,7 @@ class MatchMixin:
         blocks=copy.deepcopy(self.project.blocks)
         pending=[b for b in blocks if b.match_ids and not b.events]
         if not pending:
-            if not messagebox.askyesno('Повторить поиск','Заменить подбор эпизодов во всех разборах?'):return
+            if not messagebox.askyesno('Повторить поиск','Заменить подбор эпизодов и заново сформировать дорожки всех разборов?'):return
             pending=[b for b in blocks if b.match_ids]
         if not pending:return messagebox.showinfo('Материалы','Добавьте исходные матчи к разборам.')
         if any(len(b.script.strip())<30 for b in pending):
@@ -203,14 +208,16 @@ class MatchMixin:
         if kind=='episode_goals':
             output,scans,errors=value;self.scans.update(scans)
             for b in self.project.blocks:
-                if b.uid in output:b.events=output[b.uid]
+                if b.uid in output:
+                    b.events=output[b.uid];b.edit_plan=None;b.edit_key=''
             self.refresh_events();self.update_summary()
             self.review_summary.set(f'Подготовлено разборов: {len(output)}')
-            self.review_note.set(errors[0] if errors else 'Выбирайте разбор в «Материалах», чтобы проверить его эпизоды. Затем определите тайминги всего выпуска.')
+            self.review_note.set(errors[0] if errors else 'Все эпизоды показаны в одном списке. Столбец «Разбор» указывает принадлежность. Затем определите тайминги выпуска.')
             self.log_lines.extend(errors);self.status.set('Поиск по всем разборам завершён.');return True
         if kind == 'goals':
             events, scans, errors = value
-            self.project.blocks[self.index].events = events; self.scans.update(scans)
+            block=self.project.blocks[self.index]
+            block.events=events;block.edit_plan=None;block.edit_key='';self.scans.update(scans)
             self.refresh_events(); self.update_summary()
             count = sum(not e.skipped and (not e.selection or not e.selection.accepted) for e in events)
             self.review_summary.set(f'Найдено привязок: {sum(e.selection is not None for e in events)} · Для проверки: {count}')
@@ -266,7 +273,11 @@ class MatchMixin:
 
     def selected_event(self):
         sel = self.eventtable.selection()
-        return self.project.blocks[self.index].events[int(sel[0])] if sel else None
+        return self.event_rows[sel[0]][1] if sel and sel[0] in self.event_rows else None
+
+    def selected_event_block(self):
+        sel=self.eventtable.selection()
+        return self.event_rows[sel[0]][0] if sel and sel[0] in self.event_rows else None
 
     def skip_event(self):
         event = self.selected_event()
@@ -281,14 +292,15 @@ class MatchMixin:
         if phrase.strip() not in block.script:
             return messagebox.showinfo('Фраза', 'Эта фраза не найдена в сценарии. Скопируйте её без изменений.')
         block.events.append(EventRequest(block.match_ids[0], phrase.strip(), 'play'))
-        self.invalidate(); self.refresh_events(); self.eventtable.selection_set(str(len(block.events)-1)); self.edit_event()
+        self.invalidate(); self.refresh_events(); self.eventtable.selection_set(self.event_row_id(self.index,len(block.events)-1)); self.edit_event()
 
     def edit_event(self):
         from .timeline import format_time,parse_time
         if self.busy: return
         event = self.selected_event()
         if event is None: return
-        sources = [m for m in self.project.matches if m.id in self.project.blocks[self.index].match_ids]
+        owner=self.selected_event_block()
+        sources = [m for m in self.project.matches if m.id in owner.match_ids]
         if not sources: return
         dialog = tk.Toplevel(self.root); dialog.title('Выбор игрового эпизода'); dialog.geometry('760x580'); dialog.transient(self.root); dialog.grab_set()
         ttk.Label(dialog, text=event.phrase, wraplength=700).pack(anchor='w', padx=20, pady=(16, 8))

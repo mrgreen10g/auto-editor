@@ -101,6 +101,7 @@ def map_time(t,keep):
 def norm(text):return re.sub(r'\s+',' ',text.lower().replace('ё','е')).strip()
 
 def placements(block,lines,clip_meta,duration,frequency='normal'):
+    from .event_rules import explicit_reference,topic_for_phrase,suggested_names
     warnings=[];matched=[]
     for clip in block.clips:
         found=[i for i,l in enumerate(lines) if norm(clip.phrase) in norm(l.text)]
@@ -110,6 +111,8 @@ def placements(block,lines,clip_meta,duration,frequency='normal'):
             warnings.append(f'Фраза «{clip.phrase}» встречается несколько раз: выбрано первое совпадение.')
         matched.append((found[0],clip))
     matched.sort(key=lambda x:x[0]);used=set();inserts=[];last_play_source=None
+    early=[lines[i].start for i,c in matched if lines[i].start>0 and explicit_reference(c.phrase)]
+    intro_end=min([5,duration]+early)
     for number,(idx,clip) in enumerate(matched):
         if idx in used:
             warnings.append(f'Две вставки к одной фразе: «{clip.phrase}» пропущена.');continue
@@ -119,8 +122,8 @@ def placements(block,lines,clip_meta,duration,frequency='normal'):
         end=l.end
         if number+1<len(matched):end=min(end,lines[matched[number+1][0]].start)
         length=clip_meta[clip.path]['duration']
-        start=max(start,min(5,duration))  # The introduction belongs to the presenter.
-        if clip.kind=='play':
+        start=max(start,intro_end)  # The introduction belongs to the presenter.
+        if clip.kind=='play' and not explicit_reference(clip.phrase):
             gap,maximum={'low':(15,3.5),'normal':(8,5),'high':(3,7)}[frequency]
             if inserts and start-inserts[-1].end<gap: continue
             source=clip.origin_path or clip.path
@@ -141,23 +144,17 @@ def placements(block,lines,clip_meta,duration,frequency='normal'):
         inserts.append(Insert(clip.origin_path or clip.path,frame(start),frame(end),source_in+clip.origin_start,
                               clip.phrase,clip.context_label,clip.origin_start,clip.origin_start+length))
         if clip.kind=='play':last_play_source=clip.origin_path or clip.path
-    from .card_text import summarize_card
-    cards=[Card(0,min(5,duration),'РАЗБОР МАТЧА',block.title)]
+    from .card_text import summarize_card,classify_card
+    cards=[Card(0,intro_end,'РАЗБОР МАТЧА',block.title)] if intro_end>=.15 else []
+    topic=next(iter(suggested_names(block.title)),'')
     for i,l in enumerate(lines):
-        if any(c.start<l.end and c.end>l.start for c in inserts):continue
-        t=norm(l.text);title='';body=l.text
-        if i==0:continue
-        if any(w in t for w in ('броск','переброс')):title='СТАТИСТИКА'
-        elif any(w in t for w in ('выиграл','обыграл','уступил','победы в')) and re.search(r'\d',t):title='РЕЗУЛЬТАТ ВСТРЕЧИ'
-        elif any(w in t for w in ('повреждени','травм')):title='СОСТАВ КОМАНДЫ'
-        elif re.search(r'\b1[.,]\d{2}\b',t):title='КОЭФФИЦИЕНТ ИЗ РАЗБОРА'
-        elif 'мой выбор' in t or 'форой плюс' in t:title='ПРОГНОЗ'
-        elif 'возврат' in t or 'ставка выигрывает' in t:title='УСЛОВИЯ ПРОГНОЗА'
-        elif 'по счёту жду' in l.text.lower() or 'по счету жду' in t:title='ОЖИДАЕМЫЙ СЧЁТ'
-        if title: body=summarize_card(title,l.text)
+        topic=topic_for_phrase(topic,l.text,block.title)
+        if norm(l.text).rstrip('.')==norm(block.title):continue
+        title=classify_card(l.text);body=summarize_card(title,l.text,topic) if title else l.text
         if str(i) in block.card_overrides:
             body=block.card_overrides[str(i)];title=title or 'ИНФОРМАЦИЯ'
-        if title and body.strip() and l.end>5:cards.append(Card(max(5,l.start),l.end,title,body,i))
+        if title and body.strip() and l.end-l.start>=.15:
+            cards.append(Card(l.start,l.end,title,body,i))
     return inserts,cards,warnings
 
 def zoom_windows(duration,inserts):
@@ -168,8 +165,11 @@ def zoom_windows(duration,inserts):
     if cur<duration:gaps.append((cur,duration))
     windows=[]
     for lo,hi in gaps:
-        t=lo+1
-        while t+7.4<hi-.2:
-            windows.append((t,t+5,t+5.4,t+7.4))
-            t+=11.4
+        t=lo+.4
+        # Complete a smooth 100→120→100 cycle even in shorter presenter shots.
+        while hi-t>=3.6:
+            span=min(5.8,hi-t-.15)
+            up=span*.62;hold=span*.08
+            windows.append((t,t+up,t+up+hold,t+span))
+            t+=span+1.6
     return windows

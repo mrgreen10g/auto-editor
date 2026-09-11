@@ -21,10 +21,31 @@ def suggested_names(filename):
     found = sorted((p, n) for p, n in found if p is not None)
     return [n for _, n in found[:2]]
 
+def topic_for_phrase(topic,phrase,block_title):
+    text=clean(phrase)
+    if re.match(r'^(?:сначала|затем)\s+\d',text):return topic
+    names=[n for n in suggested_names(block_title) if team_position(n,phrase) is not None]
+    if names:return min(names,key=lambda n:team_position(n,phrase))
+    if 'владивосток' in text:return 'Адмирал'
+    if 'тольяттин' in text:return 'Лада'
+    return topic
+
+def result_reference(text):
+    t=clean(text)
+    return bool(re.search(r'\d{1,2}\s*[:：]\s*\d{1,2}',t) and (
+        re.match(r'^(?:сначала|затем)\s+\d',t) or
+        any(w in t for w in ('проигр','уступ','обыгр','выигр','побед','заверш','закончил'))))
+
+def explicit_reference(text):
+    t=clean(text)
+    return result_reference(text) or any(w in t for w in ('сыграли','проигр','уступ','обыгр','выигр','побед','поражен','встречалась','предсезон'))
+
 def requests_for(block, matches, use_manual=True):
     sources = [m for m in matches if m.id in block.match_ids]
     if not sources: return []
     primary = next((m for m in sources if all(team_position(n, block.title) is not None for n in (m.home, m.away))), sources[0])
+    title_names=suggested_names(block.title)
+    topic=title_names[0] if title_names else primary.home
     current = primary; subject = 0; previous = {}; finals = {}; result = []
     lines = [s.strip() for s in re.split(r'(?<=[.!?])\s+|\n+', block.script) if s.strip()]
     requested = [primary.home, primary.away]; active = False; last_generic = -3
@@ -33,6 +54,8 @@ def requests_for(block, matches, use_manual=True):
         text = clean(phrase)
         if 'по счету жду' in text or 'мой выбор' in text: break
         if clean(block.title) == text.rstrip('.'): continue
+        if any(w in text for w in ('ставка проходит','ставка выигрывает','возврат')):
+            active=False;continue
         if any(w in text for w in ('форой', 'фора', 'минус полтор', 'плюс полтор', 'коэффициент', 'рынок', 'травм', 'поврежден', 'потерял', 'недоступен')):
             active = False; continue
         pairs = [m for m in sources if all(team_position(n, phrase) is not None for n in (m.home, m.away))]
@@ -41,7 +64,13 @@ def requests_for(block, matches, use_manual=True):
         known = []
         for name in mentioned:
             if not any(team_position(name, old) is not None for old in known): known.append(name)
-        historical = any(w in text for w in ('сыграли', 'выиграл', 'обыграл', 'уступил', 'проиграл', 'вела', 'вперед', 'сравн', 'забил', 'заброс', 'прошл', 'товарищ', 'предсезон', 'летом', 'встрече', 'встреча', 'встречу'))
+        known.sort(key=lambda n:team_position(n,phrase))
+        historical = result_reference(phrase) or any(w in text for w in ('побед','поражен','сыграли', 'выиграл', 'обыграл', 'уступил', 'проиграл', 'вела', 'вперед', 'сравн', 'забил', 'заброс', 'прошл', 'товарищ', 'предсезон', 'летом', 'встрече', 'встреча', 'встречу'))
+        new_topic=topic_for_phrase(topic,phrase,block.title)
+        if new_topic!=topic and not any(team_position(new_topic,n) is not None for n in requested):
+            options=[m for m in sources if any(team_position(new_topic,n) is not None for n in (m.home,m.away))]
+            current=options[0] if len(options)==1 else None;requested=[new_topic];active=True
+        topic=new_topic
         if pairs:
             current = pairs[0]; requested = [current.home, current.away]
             active = historical or current.id != primary.id or active
@@ -56,17 +85,28 @@ def requests_for(block, matches, use_manual=True):
                 teammate = next((n for n in requested if team_position(n, block.title) is not None), primary.home)
                 current = None; requested = [teammate, known[0]]; active = True
         if historical: active = True
+        is_result=result_reference(phrase)
+        if is_result:
+            opponents=[n for n in known if team_position(n,topic) is None]
+            if opponents:
+                opponent=opponents[0]
+                exact_sources=[m for m in sources if all(any(team_position(n,k) is not None for k in (m.home,m.away)) for n in (topic,opponent))]
+                current=exact_sources[0] if exact_sources else None
+                requested=[topic,opponent];active=True
+        if is_result and current is None:subject=0
         source_id = current.id if current else ''
         if current:
             positions = sorted((p, k) for k, n in enumerate((current.home, current.away)) if (p := team_position(n, phrase)) is not None)
             if positions: subject = positions[0][1]
+            if is_result:
+                subject=0 if team_position(current.home,topic) is not None or team_position(topic,current.home) is not None else 1
         if any(w in text for w in ('броск', 'переброс')): continue
         score_match = re.search(r'\b(\d{1,2})\s*[:：]\s*(\d{1,2})\b', phrase)
         score = None; kind = None
         if score_match and historical:
             a, b = map(int, score_match.groups())
             if max(a, b) > 15: continue
-            score = [a, b] if subject == 0 else [b, a]; kind = 'score'
+            score = [a, b] if subject == 0 else [b, a]; kind = 'result' if is_result else 'score'
             if 'овертайм' in text:
                 finals[source_id] = score
                 if any('овертайм' in clean(l) and any(w in clean(l) for w in ('затем', 'решил', 'победный')) for l in lines[i+1:]): continue

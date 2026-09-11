@@ -272,7 +272,7 @@ def propose(requests, scans, sources=(), allow_other=False):
         if event.kind == 'overtime':
             ot = [c for c in candidates if any(x in c.period.upper() for x in ('OT', 'ОТ'))]
             candidates = ot or candidates
-        candidates.sort(key=lambda c: (-c.time,-c.confidence) if event.kind=='overtime' and event.score is None else (-c.confidence,c.time))
+        candidates.sort(key=lambda c: (-c.time,-c.confidence) if (event.kind=='overtime' and event.score is None) or event.kind=='result' else (-c.confidence,c.time))
         exact = candidates[0] if candidates and event.kind != 'play' else None
         # A detected score remains the score candidate even without a frozen clock.
         # Weak evidence is reviewed, never silently replaced by an unrelated attack.
