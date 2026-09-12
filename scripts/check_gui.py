@@ -279,7 +279,7 @@ def check():
         with patch('hockey_editor.episode_ui.filedialog.askopenfilenames',return_value=[str(clip)]):
             next(w for w in descendants(dialog) if w.winfo_class()=='TButton' and w.cget('text')=='+ Добавить части').invoke()
         next(w for w in descendants(dialog) if w.winfo_class()=='TButton' and w.cget('text')=='Сохранить порядок').invoke()
-        assert app.project.host_paths()==[str(host),str(clip)]
+        assert [Path(v).resolve() for v in app.project.host_paths()]==[host.resolve(),clip.resolve()]
         app.edit_framing();root.update()
         app.framing_fields['intro'].insert('1.0','Всем привет! Сегодня разбираем две встречи и начинаем выпуск.')
         app.framing_fields['outro'].insert('1.0','Итак, подведём итоги. Всем удачи и до встречи в следующем разборе!')
@@ -288,8 +288,8 @@ def check():
         with patch('hockey_editor.episode_ui.kit_path',return_value=tmp/'kit.json'):app.apply_framing()
         root.update();assert app.project.full_video and app.project.whole_episode
         app.project.save(tmp/'full.hockeyproj')
-        loaded=Project.load(tmp/'full.hockeyproj');assert loaded.hosts==[str(host),str(clip)] and loaded.full_video
-        assert loaded.assets['telegram']==str(clip) and 'Всем привет' in loaded.intro.script
+        loaded=Project.load(tmp/'full.hockeyproj');assert loaded.hosts==[str(host.resolve()),str(clip.resolve())] and loaded.full_video
+        assert loaded.assets['telegram']==str(clip.resolve()) and 'Всем привет' in loaded.intro.script
         app.edit_framing();root.update();assert 'Всем привет' in app.framing_fields['intro'].get('1.0','end');app.framing_window.destroy()
         app.project=previous;app.index=0;app.invalidate();app.refresh()
         # Screenshots contain synthetic data only, never user files or scripts.

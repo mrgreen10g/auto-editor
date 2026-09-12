@@ -20,7 +20,7 @@ class EpisodeMixin:
         self.collect();paths=[p for p in self.project.host_paths() if p]
         w=tk.Toplevel(self.root);w.title('Части записи ведущего');w.geometry('800x400');w.transient(self.root)
         ttk.Label(w,text='Расположите файлы от начала к продолжению. Склеивать видео заранее не нужно.',wraplength=740).pack(anchor='w',padx=16,pady=16)
-        table=ui.table(w,[('order','Порядок',80),('file','Запись ведущего',620)],7);table.pack_configure(padx=16)
+        table=ui.table(w,[('order','Порядок',80),('file','Запись ведущего',620)],7);table.master.pack_configure(padx=16)
         def refresh(selected=0):
             table.delete(*table.get_children())
             for i,path in enumerate(paths):table.insert('','end',iid=str(i),values=(f'Часть {i+1}',Path(path).name))
@@ -47,7 +47,7 @@ class EpisodeMixin:
     def edit_framing(self):
         if self.busy:return
         self.collect();draft=copy.deepcopy(self.project)
-        w=tk.Toplevel(self.root);w.title('Начало и завершение выпуска');w.geometry('850x740');w.minsize(700,600);w.transient(self.root)
+        w=tk.Toplevel(self.root);w.title('Начало и завершение выпуска');w.geometry(f'{min(850,w.winfo_screenwidth()-60)}x{min(740,w.winfo_screenheight()-100)}');w.minsize(700,600);w.transient(self.root)
         bottom=ttk.Frame(w,padding=12);bottom.pack(side='bottom',fill='x')
         enabled=tk.BooleanVar(value=draft.full_video)
         ttk.Checkbutton(w,text='Добавлять начало и завершение в режиме «Все разборы»',variable=enabled).pack(anchor='w',padx=16,pady=12)

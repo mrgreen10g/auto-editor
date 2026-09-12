@@ -42,7 +42,7 @@ class V06Tests(unittest.TestCase):
    for i,b in enumerate(runtime.blocks):
     title='ПРОГНОЗ' if b.kind=='analysis' else 'ИНФОРМАЦИЯ';plans.append(Plan(i*5,i*5+4,[(0,4)],[Line(b.title,0,4)],[],[Card(0,4,title,'Текст')],[],4,0,[],[{'path':str(host),'start':0,'end':4,'rotation':0,'kind':'host'}]))
    merged=combine(runtime,plans);store_episode(p,merged);p.save(root/'saved.hockeyproj');loaded=Project.load(root/'saved.hockeyproj');restored=saved_episode(loaded)
-   self.assertIsNotNone(restored);self.assertTrue(loaded.full_video);self.assertEqual(loaded.hosts,p.hosts);self.assertEqual(restored.media[0]['path'],str(host));self.assertEqual(loaded.intro.script,INTRO)
+   self.assertIsNotNone(restored);self.assertTrue(loaded.full_video);self.assertEqual(loaded.hosts,[str(Path(v).resolve()) for v in p.hosts]);self.assertEqual(restored.media[0]['path'],str(host.resolve()));self.assertEqual(loaded.intro.script,INTRO)
    loaded.hosts.append(str(tg));self.assertIsNone(saved_episode(loaded))
  def test_real_video_join_and_alpha(self):
   with tempfile.TemporaryDirectory() as d:
