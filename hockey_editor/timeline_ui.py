@@ -80,7 +80,7 @@ class TimelineEditor:
         ttk.Label(inspector,text='Речь остаётся синхронной. Изменяются игровые вставки и плашки. Правки сохраняются в проекте.',wraplength=240,style='Muted.TLabel').pack(anchor='w',pady=10)
         if self.plan.sections:
             jump=ttk.Frame(w,padding=(12,4));jump.pack(fill='x')
-            ttk.Label(jump,text='Перейти к разбору:').pack(side='left',padx=(0,8))
+            ttk.Label(jump,text='Перейти к разделу:').pack(side='left',padx=(0,8))
             self.sectionbox=ttk.Combobox(jump,state='readonly',values=[s['title'] for s in self.plan.sections],width=42)
             self.sectionbox.pack(side='left');self.sectionbox.current(0)
             self.sectionbox.bind('<<ComboboxSelected>>',lambda _:self.jump_section())
@@ -200,7 +200,13 @@ class TimelineEditor:
             plan=self.dragged(self.canvas.canvasx(event.x));self.drag=None;self.change(plan)
 
     def change(self,plan):
-        try:self.history.replace(plan)
+        try:
+            # Forecast text edits are shared with the recap in both directions.
+            for before,after in zip(self.plan.cards,plan.cards):
+                if after.forecast_id and before.text!=after.text:
+                    for other in plan.cards:
+                        if other.forecast_id==after.forecast_id:other.text=after.text
+            self.history.replace(plan)
         except Exception as error:
             self.status.set(str(error));self.draw();return False
         self.dirty=True;self.preview_current=False;self.player.stop();self.build_button.configure(text="Обновить предпросмотр")
@@ -246,6 +252,8 @@ class TimelineEditor:
         if not add and (not self.selected or self.selected[0]!='insert'):
             self.status.set('Выберите игровую вставку на дорожке или нажмите «+ Игра».');return
         section=self.section_at(self.cursor if add else self.item().start)
+        if section and section.get('kind') in ('intro','outro','disclaimer'):
+            self.status.set('Игровые вставки доступны в разделах с разборами.');return
         block=next((b for b in self.project.blocks if section and b.uid==section['block_id']),self.project.blocks[self.index])
         sources=[m for m in self.project.matches if m.id in block.match_ids and Path(m.path).is_file()]
         choices=[]

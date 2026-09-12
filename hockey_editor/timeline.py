@@ -27,6 +27,9 @@ class Card:
     title: str
     text: str
     line: int = -1
+    asset: str = ''
+    source_in: float = 0.
+    forecast_id: str = ''
 
 @dataclass
 class Plan:
@@ -40,6 +43,7 @@ class Plan:
     duration: float
     rotation: int | None = None
     sections: list = field(default_factory=list)
+    media: list = field(default_factory=list)
 
     def to_dict(self): return asdict(self)
     @classmethod

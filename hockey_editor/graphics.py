@@ -106,7 +106,7 @@ def section_card(card,path):
     im=Image.new('RGBA',(1280,720),'#0c1b2b');d=ImageDraw.Draw(im)
     d.polygon([(920,0),(1140,0),(640,720),(420,720)],fill='#14334a')
     d.polygon([(1160,0),(1200,0),(700,720),(660,720)],fill='#43ccd0')
-    d.text((100,220),'СЛЕДУЮЩИЙ МАТЧ',font=font(22,True),fill='#69dbd3')
+    d.text((100,220),('ИТОГИ ВЫПУСКА' if card.title=='ИТОГИ ВЫПУСКА' else 'СЛЕДУЮЩИЙ МАТЧ'),font=font(22,True),fill='#69dbd3')
     size=52
     while size>28:
         lines=wrap(d,card.text,font(size,True),1060)
@@ -121,7 +121,7 @@ def card_image(card, path, logos=None):
     logos=logos or {}
     if card.title=='РАЗБОР МАТЧА': return match_card(card,path,logos)
     if card.title=='ПРОГНОЗ':return forecast_card(card,path)
-    if card.title=='СМЕНА МАТЧА':return section_card(card,path)
+    if card.title in ('СМЕНА МАТЧА','ИТОГИ ВЫПУСКА'):return section_card(card,path)
     forecast=card.title in ('ПРОГНОЗ','УСЛОВИЯ ПРОГНОЗА','ОЖИДАЕМЫЙ СЧЁТ')
     wide=card.title=='СОСТАВ КОМАНДЫ' and len(card.text)>85
     width=1000 if wide else 430

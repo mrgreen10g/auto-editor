@@ -32,7 +32,9 @@ def open_file(path):
         subprocess.Popen(['xdg-open', str(path)])
 
 
-class App(MatchMixin):
+from .episode_ui import EpisodeMixin,kit_path
+
+class App(EpisodeMixin,MatchMixin):
     def __init__(self, root):
         self.root = root
         root.title(f'Auto Editor {__version__}')
@@ -41,6 +43,9 @@ class App(MatchMixin):
         root.minsize(min(960, w), min(640, h))
         root.configure(bg=ui.BG)
         self.project = Project()
+        try:
+            self.project.assets={k:v for k,v in json.loads(kit_path().read_text(encoding='utf-8')).items() if Path(v).is_file()}
+        except (OSError,ValueError):pass
         self.project_path = None
         self.scans = {}
         self.legacy_project = False
@@ -171,7 +176,11 @@ class App(MatchMixin):
         self.pathrow(presenter, self.host, self.choose_host, 'Выбрать видео')
         self.host_hint = ttk.Label(presenter, style='CardMuted.TLabel', wraplength=650)
         self.host_hint.pack(anchor='w', pady=(8, 0))
+        self.button(presenter,'Части записи · добавить / изменить порядок',self.edit_hosts).pack(anchor='w',pady=(8,0))
         self.button(presenter,'Восстановить ссылки',self.relink_media).pack(anchor='w',pady=(6,0))
+        framing=ui.card(page,'Начало и завершение','Дисклеймер, представление команд, Telegram, итоги и подписка.')
+        self.button(framing,'Настроить полный выпуск…',self.edit_framing).pack(anchor='w')
+        self.framing_hint=ttk.Label(framing,style='CardMuted.TLabel',wraplength=650);self.framing_hint.pack(anchor='w',pady=(8,0))
         script = ui.card(page, 'Сценарий разбора', 'Вставьте текст так, как его произносит ведущий. Таймкоды не нужны.', '02')
         row = ttk.Frame(script, style='Card.TFrame')
         row.pack(fill='x', pady=(0, 10))
@@ -405,6 +414,7 @@ class App(MatchMixin):
     def choose_host(self):
         path = filedialog.askopenfilename(title='Видео ведущего', filetypes=VIDEO)
         if path:
+            if self.project.hosts:self.project.hosts[0]=path
             self.host.set(path)
 
     def choose_music(self):
@@ -443,6 +453,7 @@ class App(MatchMixin):
         p = self.project
         p.whole_episode = self.scope.get()=='Все разборы'
         p.host = self.host.get().strip()
+        if p.hosts:p.hosts[0]=p.host
         p.music = self.music.get().strip()
         block = p.blocks[self.index]
         block.title = self.title.get().strip() or 'Разбор'
@@ -495,7 +506,9 @@ class App(MatchMixin):
         script = self.script.get('1.0', 'end').strip()
         host = self.host.get().strip()
         clips = self.project.blocks[self.index].clips if self.use_manual.get() else []
+        self.framing_hint.configure(text='Включено · полный выпуск с началом и завершением' if self.project.full_video else 'Выключено · собираются только выбранные разборы')
         self.host_hint.configure(text=Path(host).name if host and Path(host).is_file() else 'Выберите файл с компьютера.' if not host else 'Файл не найден. Выберите запись заново.')
+        if len(self.project.host_paths())>1:self.host_hint.configure(text=f'Частей записи: {len(self.project.host_paths())}. Порядок — в окне «Части записи».')
         self.clip_hint.configure(text=f'Добавлено фрагментов: {len(clips)}. Двойной щелчок — изменить привязку.' if clips else 'Пока нет вставок. Без них в кадре останется ведущий.')
         missing = []
         if not host or not Path(host).is_file():
@@ -638,7 +651,11 @@ class App(MatchMixin):
         local_i=i
         if self.plan.sections:
             section=next(s for s in self.plan.sections if s['line_start']<=i<s['line_start']+s['line_count'])
-            block=next(b for b in self.project.blocks if b.uid==section['block_id']);local_i=i-section['line_start']
+            from .episode import assembly_project
+            block=next(b for b in assembly_project(self.project).blocks if b.uid==section['block_id']);local_i=i-section['line_start']
+        linked=next((c for c in self.plan.cards if c.line==i and c.asset),None)
+        if linked:
+            self.status.set('Это видео '+linked.title+'. Его файл меняется в настройках начала и завершения; длительность привязана к речи.');return
         text = block.card_overrides.get(str(local_i), default)
         value = simpledialog.askstring('Плашка', 'Текст плашки. Оставьте пустым, чтобы отключить:', initialvalue=text)
         if value is not None:
@@ -647,7 +664,11 @@ class App(MatchMixin):
             from .editing import store_plan
             existing=next((c for c in self.plan.cards if c.line==i),None)
             if existing:
-                if value.strip():existing.text=value
+                if value.strip():
+                    existing.text=value
+                    if existing.forecast_id:
+                        for other in self.plan.cards:
+                            if other.forecast_id==existing.forecast_id:other.text=value
                 else:self.plan.cards.remove(existing)
             elif value.strip():
                 line=self.plan.lines[i];self.plan.cards.append(Card(line.start,line.end,'ИНФОРМАЦИЯ',value,i))
@@ -730,6 +751,8 @@ class App(MatchMixin):
             if len(choices)==1:count+=1;return str(choices[0].resolve())
             missing.append(Path(path).name);return path
         self.project.host=replace(self.project.host);self.project.music=replace(self.project.music)
+        self.project.hosts=[replace(p) for p in self.project.hosts]
+        self.project.assets={k:replace(v) for k,v in self.project.assets.items()}
         for m in self.project.matches:m.path=replace(m.path)
         for b in self.project.blocks:
             for c in b.clips:c.path=replace(c.path)
@@ -743,7 +766,7 @@ class App(MatchMixin):
             return
         try:
             self.project = Project.load(path)
-            self.legacy_project = json.loads(Path(path).read_text(encoding='utf-8')).get('version',1) < 5
+            self.legacy_project = json.loads(Path(path).read_text(encoding='utf-8')).get('version',1) < 6
             self.scans = {}
             self.index = 0
             self.project_path = path
@@ -751,7 +774,7 @@ class App(MatchMixin):
             self.refresh()
             self.show_page('materials')
             self.status.set('Проект открыт. Проверьте материалы и нажмите «Определить тайминги».')
-            missing=[p for p in [self.project.host,self.project.music]+[m.path for m in self.project.matches] if p and not Path(p).is_file()]
+            missing=[p for p in self.project.host_paths()+list(self.project.assets.values())+[self.project.music]+[m.path for m in self.project.matches] if p and not Path(p).is_file()]
             if missing:
                 self.status.set(f'Не найдены исходники: {len(missing)}. Проект хранит ссылки на видео. Нажмите «Восстановить ссылки».')
                 messagebox.showinfo('Не найдены исходные видео','Проект хранит пути к видео, а не копии самих файлов.\n\nНе найдены:\n'+'\n'.join(Path(p).name for p in missing)+'\n\nНажмите «Восстановить ссылки» и выберите папку с исходниками.')
@@ -762,7 +785,7 @@ class App(MatchMixin):
 
     def save(self):
         self.collect()
-        path = filedialog.asksaveasfilename(defaultextension='.hockeyproj', initialfile=(Path(self.project_path).stem+'-0.5.hockeyproj' if self.legacy_project else Path(self.project_path).name) if self.project_path else 'Мой выпуск.hockeyproj', filetypes=[('Проект монтажа', '*.hockeyproj')])
+        path = filedialog.asksaveasfilename(defaultextension='.hockeyproj', initialfile=(Path(self.project_path).stem+'-0.6.hockeyproj' if self.legacy_project else Path(self.project_path).name) if self.project_path else 'Мой выпуск.hockeyproj', filetypes=[('Проект монтажа', '*.hockeyproj')])
         if path:
             try:
                 self.project.save(path)
@@ -878,7 +901,7 @@ class App(MatchMixin):
             self.linetable.insert('', 'end', iid=str(i), values=(f'{ui.timecode(line.start)}–{ui.timecode(line.end)}', line.text),
                                   tags=('stripe',) if i % 2 else ())
         uncertain = sum(line.agreement > .8 for line in plan.lines)
-        self.review_summary.set((f'{len(plan.sections)} разбора · ' if plan.sections else '')+f'{ui.timecode(plan.duration)}  ·  {len(plan.lines)} фраз  ·  {len(plan.inserts)} вставки')
+        self.review_summary.set((f'{len(plan.sections)} разделов · ' if plan.sections else '')+f'{ui.timecode(plan.duration)}  ·  {len(plan.lines)} фраз  ·  {len(plan.inserts)} вставки')
         if plan.warnings:
             self.review_note.set('Обратите внимание: ' + plan.warnings[0] + (f' Ещё замечаний: {len(plan.warnings) - 1}. Откройте «Подробности».' if len(plan.warnings) > 1 else ''))
         elif uncertain:

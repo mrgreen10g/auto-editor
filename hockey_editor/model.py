@@ -81,10 +81,11 @@ class Block:
     edit_plan: dict | None = None
     edit_key: str = ''
     uid: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
+    kind: str = 'analysis'
 
 @dataclass
 class Project:
-    version: int = 5
+    version: int = 6
     host: str = ''
     music: str = ''
     blocks: list[Block] = field(default_factory=lambda: [Block()])
@@ -94,9 +95,19 @@ class Project:
     whole_episode: bool = False
     episode_plan: dict | None = None
     episode_key: str = ''
+    hosts: list[str] = field(default_factory=list)
+    full_video: bool = False
+    intro: Block = field(default_factory=lambda: Block(title='Начало', uid='intro', kind='intro'))
+    outro: Block = field(default_factory=lambda: Block(title='Итоги', uid='outro', kind='outro'))
+    assets: dict[str, str] = field(default_factory=dict)
+
+    def host_paths(self):
+        # The legacy first-file field remains compatible with earlier projects.
+        return [self.host, *self.hosts[1:]] if self.hosts else [self.host]
+
 
     def validate(self, index=0):
-        if not self.host or not Path(self.host).is_file():
+        if any(not path or not Path(path).is_file() for path in self.host_paths()):
             raise ValueError('Выберите существующий файл ведущего.')
         if not 0 <= index < len(self.blocks):
             raise ValueError('Выберите разбор.')
@@ -157,6 +168,15 @@ class Project:
             try: return os.path.relpath(Path(s).resolve(), target.parent)
             except ValueError: return str(Path(s).resolve())
         for key in ('host','music'): data[key] = relative(data[key])
+        data['hosts'] = [relative(path) for path in self.host_paths()] if self.hosts else []
+        data['assets'] = {key: relative(path) for key,path in self.assets.items()}
+        def plan_paths(plan):
+            if not plan:return
+            for c in plan.get('cards',[]):
+                if c.get('asset'):c['asset']=relative(c['asset'])
+            for c in plan.get('media',[]):c['path']=relative(c['path'])
+        for b in [*data['blocks'], data['intro'],data['outro']]:plan_paths(b.get('edit_plan'))
+        plan_paths(data.get('episode_plan'))
         data['team_logos'] = {name: relative(path) for name, path in self.team_logos.items()}
         for match in data['matches']: match['path'] = relative(match['path'])
         for block in data['blocks']:
@@ -176,12 +196,12 @@ class Project:
     def load(cls, filename):
         p = Path(filename).resolve()
         data = json.loads(p.read_text(encoding='utf-8'))
-        if data.get('version') not in (1, 2, 3, 4, 5): raise ValueError('Версия проекта не поддерживается.')
+        if data.get('version') not in (1, 2, 3, 4, 5, 6): raise ValueError('Версия проекта не поддерживается.')
         def resolve(s):
             if not s: return ''
-            return str((p.parent / s).resolve())
+            return str((p.parent / s.replace('\\','/')).resolve())
         blocks = [Block(title=b['title'],script=b['script'],uid=b.get('uid') or uuid.uuid4().hex[:12],
-                  clips=[Clip(**{**c,'path':resolve(c['path']),'origin_path':resolve(c.get('origin_path',''))}) for c in b.get('clips',[])],
+                  kind=b.get('kind','analysis'), clips=[Clip(**{**c,'path':resolve(c['path']),'origin_path':resolve(c.get('origin_path',''))}) for c in b.get('clips',[])],
                   card_overrides=b.get('card_overrides',{}), match_ids=b.get('match_ids', []),
                   edit_plan=b.get('edit_plan'), edit_key=b.get('edit_key',''),
                   events=[EventRequest(**{**e, 'selection': EventSelection(**e['selection']) if e.get('selection') else None}) for e in b.get('events', [])]) for b in data['blocks']]
@@ -189,6 +209,21 @@ class Project:
         for block in blocks:
             if block.edit_plan:
                 for c in block.edit_plan['inserts']: c['path'] = resolve(c['path'])
+        def load_plan(plan):
+            if not plan:return
+            for c in plan.get('cards',[]):
+                if c.get('asset'):c['asset']=resolve(c['asset'])
+            for c in plan.get('media',[]):c['path']=resolve(c['path'])
+        def framing(name):
+            item=data.get(name)
+            if not item:return Block(title='Начало' if name=='intro' else 'Итоги',uid=name,kind=name)
+            value=Block(**item)
+            if value.edit_plan:
+                for c in value.edit_plan.get('inserts',[]):c['path']=resolve(c['path'])
+            load_plan(value.edit_plan)
+            return value
+        for b in blocks:load_plan(b.edit_plan)
+        load_plan(data.get('episode_plan'))
         settings = data.get('settings', {}).copy()
         episode=data.get('episode_plan')
         if episode:
@@ -197,6 +232,8 @@ class Project:
             settings.setdefault('auto_rotate', settings.get('rotate', 0) == 0)
             settings.setdefault('use_manual_clips', any(b.clips for b in blocks))
         return cls(host=resolve(data['host']),music=resolve(data.get('music','')),
+                   hosts=[resolve(v) for v in data.get('hosts',[])],full_video=data.get('full_video',False),
+                   intro=framing('intro'),outro=framing('outro'),assets={k:resolve(v) for k,v in data.get('assets',{}).items()},
                    whole_episode=data.get('whole_episode',False),episode_plan=episode,episode_key=data.get('episode_key',''),
                    blocks=blocks,settings=Settings(**settings),
                    matches=[MatchSource(**{**m, 'path': resolve(m['path'])}) for m in data.get('matches', [])],

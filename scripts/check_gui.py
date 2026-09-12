@@ -37,7 +37,7 @@ def check():
             app.load()
         root.update()
         app.collect()
-        assert app.project.version == 5 and app.project.settings.zoom_max == 1.2
+        assert app.project.version == 6 and app.project.settings.zoom_max == 1.2
         assert app.project.settings.denoise and app.project.blocks[0].clips[0].phrase == '2:1'
         assert app.page == 'materials' and 'Разборов: 1' in app.readiness.get()
         initial_script = app.project.blocks[0].script
@@ -272,6 +272,26 @@ def check():
         trim.set_boundary('start',2);trim.set_boundary('end',6.5);trim.set_boundary('event',6.2)
         assert trim.values[0].get()=='00:02.00';trim.apply()
         assert trimmed==[(2,6.5,6.2)]
+        # Multiple host sources and full-video dialog must save and survive reopening.
+        previous=copy.deepcopy(app.project)
+        app.edit_hosts();root.update()
+        dialog=next(w for w in root.winfo_children() if isinstance(w,tk.Toplevel))
+        with patch('hockey_editor.episode_ui.filedialog.askopenfilenames',return_value=[str(clip)]):
+            next(w for w in descendants(dialog) if w.winfo_class()=='TButton' and w.cget('text')=='+ Добавить части').invoke()
+        next(w for w in descendants(dialog) if w.winfo_class()=='TButton' and w.cget('text')=='Сохранить порядок').invoke()
+        assert app.project.host_paths()==[str(host),str(clip)]
+        app.edit_framing();root.update()
+        app.framing_fields['intro'].insert('1.0','Всем привет! Сегодня разбираем две встречи и начинаем выпуск.')
+        app.framing_fields['outro'].insert('1.0','Итак, подведём итоги. Всем удачи и до встречи в следующем разборе!')
+        for var in app.framing_assets.values():var.set(str(clip))
+        app.framing_enabled.set(True)
+        with patch('hockey_editor.episode_ui.kit_path',return_value=tmp/'kit.json'):app.apply_framing()
+        root.update();assert app.project.full_video and app.project.whole_episode
+        app.project.save(tmp/'full.hockeyproj')
+        loaded=Project.load(tmp/'full.hockeyproj');assert loaded.hosts==[str(host),str(clip)] and loaded.full_video
+        assert loaded.assets['telegram']==str(clip) and 'Всем привет' in loaded.intro.script
+        app.edit_framing();root.update();assert 'Всем привет' in app.framing_fields['intro'].get('1.0','end');app.framing_window.destroy()
+        app.project=previous;app.index=0;app.invalidate();app.refresh()
         # Screenshots contain synthetic data only, never user files or scripts.
         root.geometry(f'{min(1220, root.winfo_screenwidth()-60)}x{min(860, root.winfo_screenheight()-100)}+20+20')
         app.show_page('materials')
@@ -300,7 +320,7 @@ def check():
                 assert widget.winfo_rooty() + widget.winfo_height() <= root.winfo_rooty() + root.winfo_height() + 1
         assert not errors, errors
         app.close()
-    (out / 'gui-check.json').write_text(json.dumps({'status': 'ok', 'checks': ['v1-project-compatibility', 'block-switching', 'card-editing', 'stale-plan-invalidation', 'busy-control-restoration', 'worker-queue-flow', 'compact-window-layout', 'multiple-source-review-flow', 'v2-project-roundtrip', 'review-retains-custom-trim','episode-editor-roundtrip','seek-after-edit-rebuild-save','source-visual-trim','persistent-block-navigation','all-block-events-own-source','per-block-logo-tabs']}, indent=2), encoding='utf-8')
+    (out / 'gui-check.json').write_text(json.dumps({'status': 'ok', 'checks': ['v1-project-compatibility', 'block-switching', 'card-editing', 'stale-plan-invalidation', 'busy-control-restoration', 'worker-queue-flow', 'compact-window-layout', 'multiple-source-review-flow', 'v2-project-roundtrip', 'review-retains-custom-trim','episode-editor-roundtrip','seek-after-edit-rebuild-save','source-visual-trim','persistent-block-navigation','all-block-events-own-source','per-block-logo-tabs','ordered-host-sources','full-video-dialog-roundtrip']}, indent=2), encoding='utf-8')
     print('Desktop workflow and layout checks passed.')
 
 

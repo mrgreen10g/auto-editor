@@ -39,7 +39,7 @@ def detect_rotation(host, cache, cancel, log=lambda _:None):
     saved=folder/'result.json'
     if saved.exists():
         data=json.loads(saved.read_text(encoding='utf-8'))
-        if data.get('signature')==signature:
+        if data.get('signature')==signature and 'недоступен' not in data.get('note',''):
             log(data['note']);return data['angle']
     try:
         import cv2

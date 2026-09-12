@@ -111,4 +111,4 @@ class GoalTests(unittest.TestCase):
             path = Path(tmp)/'v1.hockeyproj'
             path.write_text(json.dumps({'version': 1, 'host': '', 'blocks': [{'title': 'Test', 'script': ''}]}))
             project = Project.load(path)
-            self.assertEqual(project.version, 5); self.assertEqual(project.matches, [])
+            self.assertEqual(project.version, 6); self.assertEqual(project.matches, [])

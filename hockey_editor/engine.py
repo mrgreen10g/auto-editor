@@ -21,7 +21,8 @@ class Engine:
     def signature(self,source_floor=0):
         def stat(p):
             s=Path(p).stat();return [str(Path(p).resolve()),s.st_size,s.st_mtime_ns]
-        data={'version':ALIGNMENT_VERSION,'host':stat(self.project.host),'script':self.project.blocks[self.index].script,'floor':frame(source_floor)}
+        from .framing import prepared_script
+        data={'version':ALIGNMENT_VERSION,'host':stat(self.project.host) if len(self.project.host_paths())==1 else [stat(v) for v in self.project.host_paths()],'script':prepared_script(self.project.blocks[self.index]),'floor':frame(source_floor)}
         return hashlib.sha256(json.dumps(data,ensure_ascii=False).encode()).hexdigest()
 
     def analyze(self,source_floor=0):
@@ -30,11 +31,15 @@ class Engine:
         restored=saved_plan(p,self.index)
         if restored is not None and restored.source_start>=source_floor-.035:
             self.log('Использую сохранённую монтажную дорожку с вашими правками.')
+            if (len(p.host_paths())>1 or p.full_video) and not restored.media:
+                from .host_media import sources,media_ranges
+                restored.media=media_ranges(p,restored,sources(p),self.cache,self.cancel,self.log)
             return restored
         from .goals import montage_block
         block=montage_block(p,self.index,self.cache,self.cancel)
-        info=probe(p.host)
-        if not info['audio'] or not info['video']:raise ValueError('У записи ведущего должны быть и видео, и звук.')
+        from .host_media import analysis_source,media_ranges
+        audio_source,total,parts=analysis_source(p,self.cache,self.cancel,self.log)
+        info={'duration':total}
         if info['duration']>1800:raise ValueError('Поддерживается запись ведущего длительностью до 30 минут.')
         if source_floor>=info['duration']-1:raise ValueError('В записи не осталось места для следующего разбора. Проверьте порядок текстов.')
         key=self.signature(source_floor);cached=self.cache/'alignment.json'
@@ -45,16 +50,17 @@ class Engine:
         else:
             self.log('Извлекаю голос ведущего…')
             audio=self.cache/'host.wav'
-            run(['-y','-ss',source_floor,'-i',p.host,'-vn','-ac','1','-ar','16000','-c:a','pcm_s16le',audio],self.cancel)
-            source,warnings=align(audio,p.blocks[self.index].script,self.cache,self.cancel,self.log)
+            run(['-y','-ss',source_floor,'-i',audio_source,'-vn','-ac','1','-ar','16000','-c:a','pcm_s16le',audio],self.cancel)
+            from .framing import prepared_script
+            source,warnings=align(audio,prepared_script(block),self.cache,self.cancel,self.log)
             for line in source:line.start+=source_floor;line.end+=source_floor
             cached.write_text(json.dumps({'key':key,'lines':[vars(l) for l in source],'warnings':warnings},ensure_ascii=False,indent=2),encoding='utf-8')
         if not source or any(l.end<=l.start for l in source):
             raise ValueError('Некорректная разметка: проверьте, что сценарий соответствует записи.')
-        start=max(0,math.floor((source[0].start-.15)*30)/30)
+        start=max(math.ceil(source_floor*30)/30,math.floor((source[0].start-.15)*30)/30)
         end=min(math.floor(info['duration']*30)/30,math.ceil((source[-1].end+.15)*30)/30)
         self.log(f'Найден разбор в исходнике: {start:.2f}–{end:.2f} с.')
-        silence_log=run(['-ss',start,'-t',end-start,'-i',p.host,'-vn','-af','silencedetect=noise=-35dB:d=0.30','-f','null','-'],self.cancel)
+        silence_log=run(['-ss',start,'-t',end-start,'-i',audio_source,'-vn','-af','silencedetect=noise=-35dB:d=0.30','-f','null','-'],self.cancel)
         spans=[(float(a),float(b)) for a,b in re.findall(r'silence_start: ([\d.]+).*?silence_end: ([\d.]+)',silence_log,re.S)]
         keep=keep_ranges(end-start,spans,enabled=p.settings.cut_pauses)
         duration=sum(b-a for a,b in keep)
@@ -62,9 +68,14 @@ class Engine:
         meta={c.path:probe(c.path) for c in block.clips}
         if any(not x['video'] for x in meta.values()):raise ValueError('Игровая вставка должна содержать видео.')
         inserts,cards,extra=placements(block,lines,meta,duration,p.settings.insert_frequency)
+        if block.kind!='analysis':
+            from .framing import framing_cards
+            inserts=[];cards,extra=framing_cards(p,block,lines,duration)
         from .orientation import detect_rotation
         rotation=detect_rotation(p.host,self.cache,self.cancel,self.log) if p.settings.auto_rotate else p.settings.rotate
         plan=Plan(start,end,keep,lines,inserts,cards,list(warnings)+extra,duration,rotation)
+        if len(parts)>1 or p.full_video:
+            plan.media=media_ranges(p,plan,parts,self.cache,self.cancel,self.log)
         self.save_plan(plan)
         self.log(f'Разметка готова: {len(lines)} фраз, {len(inserts)} вставок, {duration:.1f} с.')
         return plan
@@ -80,54 +91,61 @@ class Engine:
         from .editing import validate_plan
         validate_plan(plan)
         target=Path(target).resolve();p=self.project;s=p.settings
-        protected=[p.host,p.music]+[c.path for b in p.blocks for c in b.clips]+[m.path for m in p.matches]+list(p.team_logos.values())
+        protected=p.host_paths()+list(p.assets.values())+[p.music]+[c.path for b in p.blocks for c in b.clips]+[m.path for m in p.matches]+list(p.team_logos.values())
         if any(target==Path(f).resolve() for f in protected if f):raise ValueError('Нельзя записывать результат поверх исходного файла.')
         if target.exists():raise ValueError('Файл результата уже существует. Выберите новое имя.')
         target.parent.mkdir(parents=True,exist_ok=True)
         self.log('Готовлю ведущего: паузы, очистка голоса и цвет…')
-        base=self.cache/'host-prepared.mp4';n=len(plan.keep)
-        video="select='"+'+'.join(f'between(n,{round(a*30)},{round(b*30)-1})' for a,b in plan.keep)+"',setpts=N/(30*TB)"
-        # Normalize VFR sources before frame-index selection.
-        video='fps=30,'+video
-        from .orientation import detect_rotation
-        rotation=(plan.rotation if plan.rotation is not None else detect_rotation(p.host,self.cache,self.cancel,self.log)) if s.auto_rotate else s.rotate
-        if rotation==180:video+=',hflip,vflip'
-        elif rotation==90:video+=',transpose=clock'
-        elif rotation==270:video+=',transpose=cclock'
-        video+=',scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1'
-        if s.color:video+=',eq=contrast=1.045:saturation=1.035:brightness=-0.004'
-        fl=[f'[0:v]{video}[video]','[0:a]asplit='+str(n)+''.join(f'[s{i}]' for i in range(n))]
-        for i,(a,b) in enumerate(plan.keep):fl.append(f'[s{i}]atrim=start={a:.6f}:end={b:.6f},asetpts=PTS-STARTPTS[a{i}]')
-        voice=f'concat=n={n}:v=0:a=1,highpass=f=70'
-        if s.denoise:voice+=f',afftdn=nr={s.noise_reduction}:nf=-40:tn=1'
-        voice+=',loudnorm=I=-16:TP=-2:LRA=9,aresample=48000'
-        fl.append(''.join(f'[a{i}]' for i in range(n))+voice+'[voice]')
-        args=['-y','-threads','2','-ss',plan.source_start,'-t',plan.source_end-plan.source_start,'-i',p.host]
-        if p.music:
-            args+=['-stream_loop','-1','-i',p.music]
-            fl.append(f'[1:a]atrim=duration={plan.duration:.6f},asetpts=PTS-STARTPTS,loudnorm=I={s.music_db}:TP=-9:LRA=7,aresample=48000,afade=t=in:d=1,afade=t=out:st={max(0,plan.duration-2)}:d=2[bed]')
-            fl.append('[voice]asplit=2[vmain][vside]')
-            fl.append('[bed][vside]sidechaincompress=threshold=0.03:ratio=4:attack=20:release=350[duck]')
-            fl.append('[vmain][duck]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.85:level=false:latency=true[audio]')
-        else:fl.append('[voice]alimiter=limit=0.85:level=false:latency=true[audio]')
-        graph=self.cache/'base-filter.txt';graph.write_text(';\n'.join(fl),encoding='utf-8')
-        args+=['-filter_complex_threads','2','-filter_complex_script',graph,'-map','[video]','-map','[audio]',
-               '-c:v','libx264','-preset','fast','-crf','19','-threads','4','-pix_fmt','yuv420p','-r','30',
-               '-c:a','aac','-b:a','160k','-ar','48000','-t',plan.duration,base]
-        def media_key(path):
-            if not path:return None
-            st=Path(path).stat();return [str(Path(path).resolve()),st.st_size,st.st_mtime_ns]
-        base_key=hashlib.sha256(json.dumps([media_key(p.host),media_key(p.music),plan.source_start,
-            plan.source_end,plan.keep,fl,s.music_db],ensure_ascii=False).encode()).hexdigest()
-        ready=self.cache/'base-ready.txt'
-        if not (base.is_file() and ready.exists() and ready.read_text()==base_key):
-            ready.unlink(missing_ok=True)
-            run(args,self.cancel,self.cache/'base-render.log',lambda t:self.log(f'Подготовка ведущего: {min(100,int(t/plan.duration*100))}%'))
-            ready.write_text(base_key)
-        else:self.log('Использую подготовленную дорожку ведущего.')
+        base=self.cache/'host-prepared.mp4'
+        if plan.media:
+            from .host_media import prepare_base
+            prepare_base(self,plan,base)
+        else:
+            base=self.cache/'host-prepared.mp4';n=len(plan.keep)
+            video="select='"+'+'.join(f'between(n,{round(a*30)},{round(b*30)-1})' for a,b in plan.keep)+"',setpts=N/(30*TB)"
+            # Normalize VFR sources before frame-index selection.
+            video='fps=30,'+video
+            from .orientation import detect_rotation
+            rotation=(plan.rotation if plan.rotation is not None else detect_rotation(p.host,self.cache,self.cancel,self.log)) if s.auto_rotate else s.rotate
+            if rotation==180:video+=',hflip,vflip'
+            elif rotation==90:video+=',transpose=clock'
+            elif rotation==270:video+=',transpose=cclock'
+            video+=',scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1'
+            if s.color:video+=',eq=contrast=1.045:saturation=1.035:brightness=-0.004'
+            fl=[f'[0:v]{video}[video]','[0:a]asplit='+str(n)+''.join(f'[s{i}]' for i in range(n))]
+            for i,(a,b) in enumerate(plan.keep):fl.append(f'[s{i}]atrim=start={a:.6f}:end={b:.6f},asetpts=PTS-STARTPTS[a{i}]')
+            voice=f'concat=n={n}:v=0:a=1,highpass=f=70'
+            if s.denoise:voice+=f',afftdn=nr={s.noise_reduction}:nf=-40:tn=1'
+            voice+=',loudnorm=I=-16:TP=-2:LRA=9,aresample=48000'
+            fl.append(''.join(f'[a{i}]' for i in range(n))+voice+'[voice]')
+            args=['-y','-threads','2','-ss',plan.source_start,'-t',plan.source_end-plan.source_start,'-i',p.host]
+            if p.music:
+                args+=['-stream_loop','-1','-i',p.music]
+                fl.append(f'[1:a]atrim=duration={plan.duration:.6f},asetpts=PTS-STARTPTS,loudnorm=I={s.music_db}:TP=-9:LRA=7,aresample=48000,afade=t=in:d=1,afade=t=out:st={max(0,plan.duration-2)}:d=2[bed]')
+                fl.append('[voice]asplit=2[vmain][vside]')
+                fl.append('[bed][vside]sidechaincompress=threshold=0.03:ratio=4:attack=20:release=350[duck]')
+                fl.append('[vmain][duck]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.85:level=false:latency=true[audio]')
+            else:fl.append('[voice]alimiter=limit=0.85:level=false:latency=true[audio]')
+            graph=self.cache/'base-filter.txt';graph.write_text(';\n'.join(fl),encoding='utf-8')
+            args+=['-filter_complex_threads','2','-filter_complex_script',graph,'-map','[video]','-map','[audio]',
+                   '-c:v','libx264','-preset','fast','-crf','19','-threads','4','-pix_fmt','yuv420p','-r','30',
+                   '-c:a','aac','-b:a','160k','-ar','48000','-t',plan.duration,base]
+            def media_key(path):
+                if not path:return None
+                st=Path(path).stat();return [str(Path(path).resolve()),st.st_size,st.st_mtime_ns]
+            base_key=hashlib.sha256(json.dumps([media_key(p.host),media_key(p.music),plan.source_start,
+                plan.source_end,plan.keep,fl,s.music_db],ensure_ascii=False).encode()).hexdigest()
+            ready=self.cache/'base-ready.txt'
+            if not (base.is_file() and ready.exists() and ready.read_text()==base_key):
+                ready.unlink(missing_ok=True)
+                run(args,self.cancel,self.cache/'base-render.log',lambda t:self.log(f'Подготовка ведущего: {min(100,int(t/plan.duration*100))}%'))
+                ready.write_text(base_key)
+            else:self.log('Использую подготовленную дорожку ведущего.')
         self.check();self.log('Собираю игровые вставки, наезды до 120% и анимацию…')
         args=['-y','-threads','2','-i',base];fl=[];v='0:v';inputs=1
         windows=zoom_windows(plan.duration,plan.inserts) if s.zoom else []
+        intro_head=next((m['end']-m['start'] for m in plan.media if m.get('kind')=='disclaimer'),0)
+        windows=[w for w in windows if w[0]>=intro_head]
         if windows:
             parts=[]
             for a,b,c,d in windows:
@@ -155,17 +173,22 @@ class Engine:
             if card.title in ('АРХИВНЫЕ КАДРЫ','КАДРЫ МАТЧА'): continue
             length=card.end-card.start
             if length<.15:continue
-            image=self.cache/f'card-{i}.png';x,y=card_image(card,image,p.team_logos)
-            args+=['-loop','1','-framerate','30','-i',image]
-            filt=f'trim=duration={length:.6f},setpts=PTS-STARTPTS,format=rgba'
+            if card.asset:
+                from .framing import asset_filter
+                filt,x,y=asset_filter(card,self.cache,self.cancel)
+                args+=['-threads','1','-ss',card.source_in,'-i',card.asset]
+            else:
+                image=self.cache/f'card-{i}.png';x,y=card_image(card,image,p.team_logos)
+                args+=['-loop','1','-framerate','30','-i',image]
+                filt=f'trim=duration={length:.6f},setpts=PTS-STARTPTS,format=rgba'
             edge=min(.25,length/3)
-            divider=card.title=='СМЕНА МАТЧА'
-            animate=s.transitions if divider else s.animate_cards
+            divider=card.title in ('СМЕНА МАТЧА','ИТОГИ ВЫПУСКА')
+            animate=(s.transitions if divider else s.animate_cards) and card.title!='ПОДПИСКА'
             if animate:filt+=f',fade=t=in:d={edge:.6f}:alpha=1,fade=t=out:st={length-edge:.6f}:d={edge:.6f}:alpha=1'
-            if s.wobble and not divider:filt+=f",rotate='0.00349*sin(2*PI*t/4+{i})':ow=iw:oh=ih:c=none"
+            if s.wobble and not divider and card.title!='ПОДПИСКА':filt+=f",rotate='0.00349*sin(2*PI*t/4+{i})':ow=iw:oh=ih:c=none"
             fl.append(f'[{inputs}:v]{filt},setpts=PTS+{card.start:.6f}/TB[card{i}]');inputs+=1
             xpos=str(x);ypos=str(y)
-            if s.wobble and not divider:
+            if s.wobble and not divider and card.title!='ПОДПИСКА':
                 xpos+=f'+3*sin(2*PI*(t-{card.start:.6f})/3.7+{i})'
                 ypos+=f'+2*sin(2*PI*(t-{card.start:.6f})/4.3+{i})'
             if animate and not divider:ypos+=f'+16*pow(max(0,1-(t-{card.start:.6f})/{edge:.6f}),2)+16*pow(max(0,1-({card.end:.6f}-t)/{edge:.6f}),2)'
