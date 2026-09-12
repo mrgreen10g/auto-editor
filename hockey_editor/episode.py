@@ -115,7 +115,7 @@ def combine(project,plans):
         media.extend(p.media)
         if cursor>0:
             title='ИТОГИ ВЫПУСКА' if block.kind=='outro' else 'СМЕНА МАТЧА'
-            text='Повторим прогнозы' if block.kind=='outro' else block.title
+            text=('Tanlovlarni takrorlaymiz' if block.language=='uz' else 'Повторим прогнозы') if block.kind=='outro' else block.title
             cards.append(Card(cursor,frame(cursor+min(.8,p.duration)),title,text))
         warnings.extend(block.title+': '+v for v in p.warnings)
         cursor=frame(cursor+p.duration)

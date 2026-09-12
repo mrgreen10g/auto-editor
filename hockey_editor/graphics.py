@@ -32,7 +32,7 @@ def block_teams(title):
     return [n.strip() for n in names] if len(names)==2 else [title.strip(), '']
 
 
-def panel(width, height, accent=(70,211,215,255)):
+def panel(width, height, accent=(70,211,215,255), profile='ru_hockey'):
     margin=12
     image=Image.new('RGBA',(width+24,height+24))
     d=ImageDraw.Draw(image)
@@ -43,6 +43,13 @@ def panel(width, height, accent=(70,211,215,255)):
     r.line((width*.78,0,width*.78,height),fill=(62,141,181,38),width=2)
     r.ellipse((width*.78-58,height/2-58,width*.78+58,height/2+58),outline=(89,175,203,35),width=2)
     r.line((width*.94,0,width*.94,height),fill=(229,92,111,38),width=2)
+    if profile=='uz_football':
+        rink=Image.new('RGBA',(width,height));r=ImageDraw.Draw(rink)
+        ink=(89,175,203,38);x=int(width*.78)
+        r.line((x,0,x,height),fill=ink,width=2)
+        r.ellipse((x-45,height/2-45,x+45,height/2+45),outline=ink,width=2)
+        r.rectangle((width-90,height*.18,width+5,height*.82),outline=ink,width=2)
+        r.rectangle((width-34,height*.34,width+5,height*.66),outline=ink,width=2)
     image.alpha_composite(rink,(12,12))
     d=ImageDraw.Draw(image)
     d.rounded_rectangle((12,12,18,height+12),radius=3,fill=accent)
@@ -62,10 +69,10 @@ def logo_image(path, size=120):
     return result
 
 
-def match_card(card, path, logos):
+def match_card(card, path, logos, profile='ru_hockey'):
     width,height=1080,230
-    im=panel(width,height);d=ImageDraw.Draw(im)
-    d.text((44,31),'РАЗБОР МАТЧА',font=font(16,True),fill='#69dbd3')
+    im=panel(width,height,profile=profile);d=ImageDraw.Draw(im)
+    d.text((44,31),'O‘YIN TAHLILI' if profile=='uz_football' else 'РАЗБОР МАТЧА',font=font(16,True),fill='#69dbd3')
     names=block_teams(card.text)
     for i,name in enumerate(names):
         cx=130 if i==0 else 974
@@ -86,7 +93,7 @@ def match_card(card, path, logos):
     im=im.resize((round(im.width*.82),round(im.height*.82)),Image.Resampling.LANCZOS)
     im.save(path);return (1280-im.width)//2,720-im.height-46
 
-def forecast_card(card,path):
+def forecast_card(card,path,profile='ru_hockey'):
     width=760;size=44
     dummy=ImageDraw.Draw(Image.new('RGBA',(1,1)))
     while size>24:
@@ -95,18 +102,18 @@ def forecast_card(card,path):
         size-=1
     height=85+len(lines)*(size+9)
     if height>260:raise ValueError('Сократите текст основной ставки до команды, типа и значения.')
-    im=panel(width,height,(250,190,77,255));d=ImageDraw.Draw(im)
-    d.rounded_rectangle((40,30,228,62),radius=10,fill='#fabe4d')
-    d.text((56,36),'МОЙ ВЫБОР',font=font(17,True),fill='#102b40')
+    im=panel(width,height,(250,190,77,255),profile);d=ImageDraw.Draw(im)
+    d.rounded_rectangle((40,30,260 if profile=='uz_football' else 228,62),radius=10,fill='#fabe4d')
+    d.text((56,36),'MENING TANLOVIM' if profile=='uz_football' else 'МОЙ ВЫБОР',font=font(17,True),fill='#102b40')
     for i,line in enumerate(lines):d.text((48,82+i*(size+9)),line,font=font(size,True),fill='#fff5d9')
     d.line((width-35,35,width-35,height-16),fill='#fabe4d',width=3)
     im.save(path);return (1280-im.width)//2,720-im.height-30
 
-def section_card(card,path):
+def section_card(card,path,profile='ru_hockey'):
     im=Image.new('RGBA',(1280,720),'#0c1b2b');d=ImageDraw.Draw(im)
     d.polygon([(920,0),(1140,0),(640,720),(420,720)],fill='#14334a')
     d.polygon([(1160,0),(1200,0),(700,720),(660,720)],fill='#43ccd0')
-    d.text((100,220),('ИТОГИ ВЫПУСКА' if card.title=='ИТОГИ ВЫПУСКА' else 'СЛЕДУЮЩИЙ МАТЧ'),font=font(22,True),fill='#69dbd3')
+    d.text((100,220),(('YAKUNIY TANLOVLAR' if card.title=='ИТОГИ ВЫПУСКА' else 'KEYINGI O‘YIN') if profile=='uz_football' else ('ИТОГИ ВЫПУСКА' if card.title=='ИТОГИ ВЫПУСКА' else 'СЛЕДУЮЩИЙ МАТЧ')),font=font(22,True),fill='#69dbd3')
     size=52
     while size>28:
         lines=wrap(d,card.text,font(size,True),1060)
@@ -117,11 +124,15 @@ def section_card(card,path):
     im.save(path);return 0,0
 
 
-def card_image(card, path, logos=None):
+def card_image(card, path, logos=None,profile='ru_hockey'):
     logos=logos or {}
-    if card.title=='РАЗБОР МАТЧА': return match_card(card,path,logos)
-    if card.title=='ПРОГНОЗ':return forecast_card(card,path)
-    if card.title in ('СМЕНА МАТЧА','ИТОГИ ВЫПУСКА'):return section_card(card,path)
+    if card.title=='РАЗБОР МАТЧА': return match_card(card,path,logos,profile)
+    if card.title=='ПРОГНОЗ':return forecast_card(card,path,profile)
+    if card.title in ('СМЕНА МАТЧА','ИТОГИ ВЫПУСКА'):return section_card(card,path,profile)
+    label=card.title
+    if profile=='uz_football':
+        from .uzbek import card_label
+        label=card_label(card.title)
     forecast=card.title in ('ПРОГНОЗ','УСЛОВИЯ ПРОГНОЗА','ОЖИДАЕМЫЙ СЧЁТ')
     wide=card.title=='СОСТАВ КОМАНДЫ' and len(card.text)>85
     width=1000 if wide else 430
@@ -130,7 +141,7 @@ def card_image(card, path, logos=None):
     body=card.text
     measure=ImageDraw.Draw(Image.new('RGBA',(1,1)))
     if not wide:
-        width=max(245,min(430,int(max([measure.textlength(s,font=font(size,True)) for s in body.splitlines()]+[measure.textlength(card.title,font=font(15,True))]))+74))
+        width=max(245,min(430,int(max([measure.textlength(s,font=font(size,True)) for s in body.splitlines()]+[measure.textlength(label,font=font(15,True))]))+74))
     dummy=ImageDraw.Draw(Image.new('RGBA',(width,maxheight)))
     while size>=18:
         ft=font(size,True);lines=wrap(dummy,body,ft,width-72)
@@ -140,8 +151,8 @@ def card_image(card, path, logos=None):
         raise ValueError('Плашка слишком длинная. Сократите текст во вкладке «Речь и плашки».')
     height=max(100,65+len(lines)*(size+8))
     accent=(247,182,79,255) if card.title=='ПРОГНОЗ' else (72,211,216,255)
-    im=panel(width,height,accent);d=ImageDraw.Draw(im)
-    d.text((42,29),card.title,font=font(15,True),fill=accent)
+    im=panel(width,height,accent,profile);d=ImageDraw.Draw(im)
+    d.text((42,29),label,font=font(15,True),fill=accent)
     for i,line in enumerate(lines): d.text((42,65+i*(size+8)),line,font=ft,fill='#f5faff')
     im.save(path)
     return (88,720-height-48) if wide else (28,28)

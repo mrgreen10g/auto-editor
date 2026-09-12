@@ -41,6 +41,9 @@ def explicit_reference(text):
     return result_reference(text) or any(w in t for w in ('сыграли','проигр','уступ','обыгр','выигр','побед','поражен','встречалась','предсезон'))
 
 def requests_for(block, matches, use_manual=True):
+    if block.language=='uz':
+        from .uzbek import events
+        return events(block,matches)
     sources = [m for m in matches if m.id in block.match_ids]
     if not sources: return []
     primary = next((m for m in sources if all(team_position(n, block.title) is not None for n in (m.home, m.away))), sources[0])

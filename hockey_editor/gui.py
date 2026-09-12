@@ -135,6 +135,12 @@ class App(EpisodeMixin,MatchMixin):
         ttk.Label(bar, text='РАБОЧАЯ ОБЛАСТЬ', style='Muted.TLabel', font=('Segoe UI', 9, 'bold')).pack(side='left')
         for label, cmd in [('Сохранить проект', self.save), ('Открыть проект', self.load), ('Новый', self.new)]:
             self.button(bar, label, cmd).pack(side='right', padx=(8, 0))
+        profilebar=ttk.Frame(main);profilebar.pack(fill='x',pady=(0,8))
+        ttk.Label(profilebar,text='Шаблон ведущего',style='Muted.TLabel').pack(side='left',padx=(0,8))
+        self.profilebox=ttk.Combobox(profilebar,values=['Хоккей · русский','Футбол · узбекский'],state='readonly',width=28)
+        self.profilebox.pack(side='left');self.controls.append(self.profilebox)
+        self.profilebox.bind('<<ComboboxSelected>>',self.switch_profile)
+        ui.Tooltip(self.profilebox,'Язык речи и плашек, вид спорта и отдельные материалы канала. Футбол: одна очная встреча на каждый разбор.')
         context=ttk.Frame(main);context.pack(fill='x',pady=(0,12))
         ttk.Label(context,text='Разбор',style='Muted.TLabel').pack(side='left',padx=(0,8))
         self.blockbox=ttk.Combobox(context,state='readonly',width=25)
@@ -474,6 +480,7 @@ class App(EpisodeMixin,MatchMixin):
     def refresh(self):
         self.refreshing = True
         p = self.project
+        self.profilebox.current(1 if p.profile=='uz_football' else 0)
         block = p.blocks[self.index]
         self.scope.set("Все разборы" if p.whole_episode else "Текущий разбор")
         self.host.set(p.host)
@@ -561,7 +568,7 @@ class App(EpisodeMixin,MatchMixin):
         if len(self.project.blocks)>=4:return messagebox.showinfo("Разборы","В этой версии можно собрать до четырёх разборов за выпуск.")
         self.collect()
         self.project.whole_episode=True
-        self.project.blocks.append(Block(title=f'Разбор {len(self.project.blocks) + 1}'))
+        self.project.blocks.append(Block(title=f'Разбор {len(self.project.blocks) + 1}',language='uz' if self.project.profile=='uz_football' else 'ru'))
         self.index = len(self.project.blocks) - 1
         self.invalidate()
         self.refresh()
@@ -717,6 +724,15 @@ class App(EpisodeMixin,MatchMixin):
         self.collect();block_index=self.index if block_index is None else block_index
         self.project.team_logos.pop(block_teams(self.project.blocks[block_index].title)[index],None)
         self.invalidate();self.update_summary()
+
+    def switch_profile(self,event=None):
+        if self.busy:return
+        profile='uz_football' if self.profilebox.current()==1 else 'ru_hockey'
+        if profile==self.project.profile:return
+        self.collect()
+        from .profiles import apply_profile
+        apply_profile(self.project,profile)
+        self.scans.clear();self.invalidate();self.refresh()
 
     def new(self):
         if not messagebox.askyesno('Новый проект', 'Создать новый проект? Несохранённые изменения текущего проекта будут потеряны.'):

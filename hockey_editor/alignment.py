@@ -22,7 +22,10 @@ def split_script(text):
     if not result: raise ValueError('Сценарий пуст.')
     return result
 
-def spoken(text):
+def spoken(text,language='ru'):
+    if language=='uz':
+        from .uzbek import spoken_uz
+        return spoken_uz(text)
     from num2words import num2words
     text=text.replace('СКА','ска').replace('ЦСКА','цэ эс ка')
     def ordinal(m):
@@ -34,7 +37,7 @@ def spoken(text):
     text=re.sub(r'\d+',lambda m:num2words(int(m[0]),lang='ru'),text)
     return text
 
-def synthesize(texts,target,cancel):
+def synthesize(texts,target,cancel,language='ru'):
     import espeakng_loader
     with _lock:
         lib=C.CDLL(espeakng_loader.get_library_path())
@@ -43,7 +46,7 @@ def synthesize(texts,target,cancel):
         sr=lib.espeak_Initialize(2,0,espeakng_loader.get_data_path().encode('utf-8'),0)
         if sr<=0:raise RuntimeError('Не удалось запустить локальное сопоставление речи.')
         lib.espeak_SetVoiceByName.argtypes=[C.c_char_p]
-        if lib.espeak_SetVoiceByName(b'ru')!=0:raise RuntimeError('Русский голос для анализа не найден в сборке.')
+        if lib.espeak_SetVoiceByName(language.encode('ascii'))!=0:raise RuntimeError('Голос для анализа не найден в сборке: '+language)
         lib.espeak_SetParameter(1,185,0)
         chunks=[]
         @C.CFUNCTYPE(C.c_int,C.POINTER(C.c_short),C.c_int,C.c_void_p)
@@ -56,7 +59,7 @@ def synthesize(texts,target,cancel):
         try:
             for text in texts:
                 if cancel.is_set():raise Cancelled()
-                chunks.clear();data=spoken(text).encode('utf-8')+b'\0';buf=C.create_string_buffer(data)
+                chunks.clear();data=spoken(text,language).encode('utf-8')+b'\0';buf=C.create_string_buffer(data)
                 if lib.espeak_Synth(buf,len(data),0,1,0,1,None,None):raise RuntimeError('Ошибка подготовки текста для анализа.')
                 lib.espeak_Synchronize()
                 if not chunks:raise ValueError('Не удалось обработать строку сценария: '+text)
@@ -154,11 +157,11 @@ def speech_regions(audio,reference_duration):
     return candidates
 
 
-def align(audio,script,cache,cancel,log):
+def align(audio,script,cache,cancel,log,language='ru'):
     texts=split_script(script)
     log('Подготовка локального сравнения текста и голоса…')
     reference=Path(cache)/'reference.wav'
-    anchors=synthesize(texts,reference,cancel)
+    anchors=synthesize(texts,reference,cancel,language)
     full=features(audio);b=features(reference)
     candidates=speech_regions(audio,len(b)*HOP/SR)
     best=None

@@ -10,8 +10,8 @@ from .model import Block
 from .framing import split_full_script
 
 
-def kit_path():
-    return Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'asset-kit.json'
+def kit_path(profile='ru_hockey'):
+    return Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/('asset-kit-uz-football.json' if profile=='uz_football' else 'asset-kit.json')
 
 
 class EpisodeMixin:
@@ -76,14 +76,24 @@ class EpisodeMixin:
             path=filedialog.askopenfilename(parent=w,title='Полный сценарий',filetypes=[('Текст UTF-8','*.txt')])
             if not path:return
             try:
-                intro,blocks,outro=split_full_script(Path(path).read_text(encoding='utf-8-sig'))
+                text=Path(path).read_text(encoding='utf-8-sig');parsed=None
+                if draft.profile=='uz_football':
+                    from .uzbek import parse_script
+                    start,parsed,end=parse_script(text);intro=start.script;outro=end.script;blocks=[(b.title,b.script) for b in parsed]
+                else:intro,blocks,outro=split_full_script(text)
                 if not messagebox.askyesno('Импорт сценария',f'Найдено разборов: {len(blocks)}. Заменить тексты начала, разборов и завершения?\nМатчи и настройки совпадающих пар сохранятся.',parent=w):return
                 old={b.title.casefold():b for b in draft.blocks};updated=[]
                 for title,script in blocks:
                     b=old.get(title.casefold(),Block(title=title))
                     if b.script!=script:b.events=[];b.edit_plan=None;b.edit_key=''
-                    b.script=script;updated.append(b)
+                    b.script=script
+                    if parsed:
+                        b.language='uz';b.source_hint=parsed[len(updated)].source_hint
+                    updated.append(b)
                 draft.blocks=updated
+                if parsed:
+                    draft.intro.language=draft.outro.language='uz'
+                    draft.intro.source_hint=start.source_hint;draft.outro.source_hint=end.source_hint
                 for key,value in [('intro',intro),('outro',outro)]:fields[key].delete('1.0','end');fields[key].insert('1.0',value)
                 enabled.set(True);messagebox.showinfo('Сценарий разделён','Начало, разборы и завершение заполнены. После сохранения добавьте матчи для новых разборов.',parent=w)
             except Exception as error:messagebox.showerror('Сценарий',str(error),parent=w)
@@ -96,7 +106,7 @@ class EpisodeMixin:
                 draft.whole_episode=True
             if remember.get():
                 try:
-                    path=kit_path();path.parent.mkdir(parents=True,exist_ok=True);tmp=path.with_suffix('.tmp');tmp.write_text(json.dumps(draft.assets,ensure_ascii=False),encoding='utf-8');tmp.replace(path)
+                    path=kit_path(draft.profile);path.parent.mkdir(parents=True,exist_ok=True);tmp=path.with_suffix('.tmp');tmp.write_text(json.dumps(draft.assets,ensure_ascii=False),encoding='utf-8');tmp.replace(path)
                 except OSError as error:return messagebox.showerror('Материалы','Не удалось сохранить набор: '+str(error),parent=w)
             self.project=draft;self.index=min(self.index,len(draft.blocks)-1);self.invalidate();self.refresh();w.destroy()
         ttk.Button(bottom,text='Загрузить полный сценарий .txt',command=import_script).pack(side='left')

@@ -10,6 +10,8 @@ from .timeline import Plan
 
 def project_edit_key(project, index):
     block = asdict(project.blocks[index]); block.pop('edit_plan',None);block.pop('edit_key',None)
+    if block.get('language')=='ru':block.pop('language',None)
+    if not block.get('source_hint'):block.pop('source_hint',None)
     block.pop('kind',None);block.pop('uid',None)  # Preserve the v0.4 per-block edit fingerprint.
     def identity(path):
         if not path: return None
@@ -22,6 +24,7 @@ def project_edit_key(project, index):
         if clip.get('origin_path'):clip['origin_path']=identity(clip['origin_path'])
     data=[block,structural,identity(project.host),
           [(m.id,m.home,m.away,identity(m.path),m.score_box) for m in project.matches if m.id in block['match_ids']]]
+    if project.profile!='ru_hockey':data.append(project.profile)
     if len(project.host_paths())>1:data.append([identity(path) for path in project.host_paths()])
     return hashlib.sha256(json.dumps(data,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
 

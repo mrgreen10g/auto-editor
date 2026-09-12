@@ -154,7 +154,10 @@ def placements(block,lines,clip_meta,duration,frequency='normal'):
     for i,l in enumerate(lines):
         topic=topic_for_phrase(topic,l.text,block.title)
         if norm(l.text).rstrip('.')==norm(block.title):continue
-        title=classify_card(l.text);body=summarize_card(title,l.text,topic) if title else l.text
+        if block.language=='uz':
+            from .uzbek import classify
+            title,body=classify(l.text)
+        else:title=classify_card(l.text);body=summarize_card(title,l.text,topic) if title else l.text
         if str(i) in block.card_overrides:
             body=block.card_overrides[str(i)];title=title or 'ИНФОРМАЦИЯ'
         if title and body.strip() and l.end-l.start>=.15:

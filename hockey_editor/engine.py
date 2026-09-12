@@ -23,6 +23,7 @@ class Engine:
             s=Path(p).stat();return [str(Path(p).resolve()),s.st_size,s.st_mtime_ns]
         from .framing import prepared_script
         data={'version':ALIGNMENT_VERSION,'host':stat(self.project.host) if len(self.project.host_paths())==1 else [stat(v) for v in self.project.host_paths()],'script':prepared_script(self.project.blocks[self.index]),'floor':frame(source_floor)}
+        if self.project.profile!='ru_hockey':data['profile']=self.project.profile
         return hashlib.sha256(json.dumps(data,ensure_ascii=False).encode()).hexdigest()
 
     def analyze(self,source_floor=0):
@@ -52,11 +53,14 @@ class Engine:
             audio=self.cache/'host.wav'
             run(['-y','-ss',source_floor,'-i',audio_source,'-vn','-ac','1','-ar','16000','-c:a','pcm_s16le',audio],self.cancel)
             from .framing import prepared_script
-            source,warnings=align(audio,prepared_script(block),self.cache,self.cancel,self.log)
+            source,warnings=align(audio,prepared_script(block),self.cache,self.cancel,self.log,language=block.language)
             for line in source:line.start+=source_floor;line.end+=source_floor
             cached.write_text(json.dumps({'key':key,'lines':[vars(l) for l in source],'warnings':warnings},ensure_ascii=False,indent=2),encoding='utf-8')
         if not source or any(l.end<=l.start for l in source):
             raise ValueError('Некорректная разметка: проверьте, что сценарий соответствует записи.')
+        warnings=list(warnings)
+        if block.source_hint and (abs(block.source_hint[0]-source[0].start)>3 or block.source_hint[-1]>total+1):
+            warnings.append('Таймкоды сценария не совпадают с записью. Использована проверка по речи, а не отметки из текста.')
         start=max(math.ceil(source_floor*30)/30,math.floor((source[0].start-.15)*30)/30)
         end=min(math.floor(info['duration']*30)/30,math.ceil((source[-1].end+.15)*30)/30)
         self.log(f'Найден разбор в исходнике: {start:.2f}–{end:.2f} с.')
@@ -178,7 +182,7 @@ class Engine:
                 filt,x,y=asset_filter(card,self.cache,self.cancel)
                 args+=['-threads','1','-ss',card.source_in,'-i',card.asset]
             else:
-                image=self.cache/f'card-{i}.png';x,y=card_image(card,image,p.team_logos)
+                image=self.cache/f'card-{i}.png';x,y=card_image(card,image,p.team_logos,p.profile)
                 args+=['-loop','1','-framerate','30','-i',image]
                 filt=f'trim=duration={length:.6f},setpts=PTS-STARTPTS,format=rgba'
             edge=min(.25,length/3)

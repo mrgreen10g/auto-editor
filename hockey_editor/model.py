@@ -22,6 +22,7 @@ class MatchSource:
     date: str = ''
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     score_box: list[float] | None = None
+    sport: str = 'hockey'
 
     @property
     def title(self):
@@ -82,10 +83,12 @@ class Block:
     edit_key: str = ''
     uid: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     kind: str = 'analysis'
+    language: str = 'ru'
+    source_hint: list[float] = field(default_factory=list)
 
 @dataclass
 class Project:
-    version: int = 6
+    version: int = 7
     host: str = ''
     music: str = ''
     blocks: list[Block] = field(default_factory=lambda: [Block()])
@@ -100,6 +103,7 @@ class Project:
     intro: Block = field(default_factory=lambda: Block(title='Начало', uid='intro', kind='intro'))
     outro: Block = field(default_factory=lambda: Block(title='Итоги', uid='outro', kind='outro'))
     assets: dict[str, str] = field(default_factory=dict)
+    profile: str = 'ru_hockey'
 
     def host_paths(self):
         # The legacy first-file field remains compatible with earlier projects.
@@ -112,6 +116,10 @@ class Project:
         if not 0 <= index < len(self.blocks):
             raise ValueError('Выберите разбор.')
         block = self.blocks[index]
+        if self.profile not in ('ru_hockey','uz_football'):raise ValueError('Неизвестный шаблон выпуска.')
+        if self.profile=='uz_football' and len(block.match_ids)>1:raise ValueError('Футбол: оставьте одну очную встречу на разбор.')
+        expected='uz' if self.profile=='uz_football' else 'ru'
+        if block.language!=expected:raise ValueError('Язык блока не совпадает с шаблоном ведущего.')
         if len(block.script.strip()) < 30:
             raise ValueError('Вставьте сценарий выбранного разбора.')
         if self.music and not Path(self.music).is_file():
@@ -196,12 +204,12 @@ class Project:
     def load(cls, filename):
         p = Path(filename).resolve()
         data = json.loads(p.read_text(encoding='utf-8'))
-        if data.get('version') not in (1, 2, 3, 4, 5, 6): raise ValueError('Версия проекта не поддерживается.')
+        if data.get('version') not in (1, 2, 3, 4, 5, 6, 7): raise ValueError('Версия проекта не поддерживается.')
         def resolve(s):
             if not s: return ''
             return str((p.parent / s.replace('\\','/')).resolve())
         blocks = [Block(title=b['title'],script=b['script'],uid=b.get('uid') or uuid.uuid4().hex[:12],
-                  kind=b.get('kind','analysis'), clips=[Clip(**{**c,'path':resolve(c['path']),'origin_path':resolve(c.get('origin_path',''))}) for c in b.get('clips',[])],
+                  kind=b.get('kind','analysis'),language=b.get('language','uz' if data.get('profile')=='uz_football' else 'ru'),source_hint=b.get('source_hint',[]), clips=[Clip(**{**c,'path':resolve(c['path']),'origin_path':resolve(c.get('origin_path',''))}) for c in b.get('clips',[])],
                   card_overrides=b.get('card_overrides',{}), match_ids=b.get('match_ids', []),
                   edit_plan=b.get('edit_plan'), edit_key=b.get('edit_key',''),
                   events=[EventRequest(**{**e, 'selection': EventSelection(**e['selection']) if e.get('selection') else None}) for e in b.get('events', [])]) for b in data['blocks']]
@@ -231,7 +239,7 @@ class Project:
         if data.get('version', 1) < 3:
             settings.setdefault('auto_rotate', settings.get('rotate', 0) == 0)
             settings.setdefault('use_manual_clips', any(b.clips for b in blocks))
-        return cls(host=resolve(data['host']),music=resolve(data.get('music','')),
+        return cls(host=resolve(data['host']),music=resolve(data.get('music','')),profile=data.get('profile','ru_hockey'),
                    hosts=[resolve(v) for v in data.get('hosts',[])],full_video=data.get('full_video',False),
                    intro=framing('intro'),outro=framing('outro'),assets={k:resolve(v) for k,v in data.get('assets',{}).items()},
                    whole_episode=data.get('whole_episode',False),episode_plan=episode,episode_key=data.get('episode_key',''),

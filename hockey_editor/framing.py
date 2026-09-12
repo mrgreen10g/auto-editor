@@ -10,6 +10,9 @@ from .media import probe,ffmpeg
 
 
 def prepared_script(block):
+    if block.language=='uz':
+        from .uzbek import prepared
+        return prepared(block)
     if block.kind=='analysis':return block.script
     # Align team introductions independently even inside a single sentence.
     from .event_rules import TEAMS
@@ -37,6 +40,12 @@ def forecast_text(block):
     if block.edit_plan:
         card=next((c for c in reversed(block.edit_plan.get('cards',[])) if c['title']=='ПРОГНОЗ'),None)
         if card:return card['text']
+    if block.language=='uz':
+        from .uzbek import classify
+        for i,line in reversed(list(enumerate(split_script(block.script)))):
+            title,text=classify(line)
+            if title=='ПРОГНОЗ':return block.card_overrides.get(str(i),text)
+        return ''
     for i,line in reversed(list(enumerate(split_script(block.script)))):
         if classify_card(line)=='ПРОГНОЗ':
             return block.card_overrides.get(str(i),summarize_card('ПРОГНОЗ',line))
@@ -44,6 +53,9 @@ def forecast_text(block):
 
 
 def framing_cards(project,block,lines,duration):
+    if block.language=='uz':
+        from .uzbek import framing_cards_uz
+        return framing_cards_uz(project,block,lines,duration)
     cards=[];warnings=[];seen_pairs=set()
     analyses=[b for b in project.blocks if b.kind=='analysis']
     for i,line in enumerate(lines):

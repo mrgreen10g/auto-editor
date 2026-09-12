@@ -46,8 +46,8 @@ class MatchMixin:
         for label, command in [('+ Записи', self.add_matches), ('Из проекта', self.reuse_match), ('Изменить', self.edit_match), ('Убрать', self.remove_match)]:
             self.button(row, label, command).pack(side='left', padx=(0, 6))
         row = ttk.Frame(box, style='Card.TFrame'); row.pack(fill='x', pady=(8, 0))
-        self.button(row, 'Найти голы', self.search_matches, 'Primary.TButton').pack(side='left')
-        self.button(row, 'Область счёта', self.score_region).pack(side='left', padx=8)
+        self.find_events_button=self.button(row, 'Найти голы', self.search_matches, 'Primary.TButton');self.find_events_button.pack(side='left')
+        self.score_region_button=self.button(row, 'Область счёта', self.score_region);self.score_region_button.pack(side='left', padx=8)
 
     def build_event_review(self, parent):
         ttk.Label(parent, text='Проверьте спорные эпизоды. Двойной щелчок — посмотреть и выбрать.', style='Muted.TLabel', wraplength=660).pack(anchor='w', pady=8)
@@ -59,6 +59,10 @@ class MatchMixin:
 
     def refresh_matches(self):
         block = self.project.blocks[self.index]
+        football=self.project.profile=='uz_football'
+        self.find_events_button.configure(text='Найти игровые вставки' if football else 'Найти голы')
+        if football:self.score_region_button.pack_forget()
+        elif not self.score_region_button.winfo_manager():self.score_region_button.pack(side='left',padx=8)
         self.matchtable.delete(*self.matchtable.get_children())
         for m in self.project.matches:
             if m.id in block.match_ids:
@@ -93,11 +97,16 @@ class MatchMixin:
         from .gui import VIDEO
         self.collect()
         changed = False
+        if self.project.profile=='uz_football' and self.project.blocks[self.index].match_ids:
+            return messagebox.showinfo('Очная встреча','В этом разборе уже есть запись. Уберите её, чтобы выбрать другую.')
         for path in filedialog.askopenfilenames(title='Полные записи исходных матчей', filetypes=VIDEO):
             existing = next((m for m in self.project.matches if Path(m.path).resolve() == Path(path).resolve()), None)
             if existing is None:
                 names = suggested_names(Path(path).stem) + ['', '']
-                source = MatchSource(path, names[0], names[1])
+                if self.project.profile=='uz_football':
+                    from .graphics import block_teams
+                    names=block_teams(Path(path).stem)
+                source = MatchSource(path, names[0], names[1],sport='football' if self.project.profile=='uz_football' else 'hockey')
                 dialog = SourceDialog(self.root, source)
                 if not dialog.result: continue
                 source.home, source.away, source.date = dialog.result
@@ -106,12 +115,14 @@ class MatchMixin:
             block = self.project.blocks[self.index]
             if source.id not in block.match_ids:
                 block.match_ids.append(source.id); changed = True
+            if self.project.profile=='uz_football':break
         if changed:
             self.project.blocks[self.index].events = []
             self.invalidate(); self.refresh()
 
     def reuse_match(self):
         self.collect(); block = self.project.blocks[self.index]
+        if self.project.profile=='uz_football' and block.match_ids:return messagebox.showinfo('Очная встреча','Уберите текущую запись перед выбором другой.')
         sources = [m for m in self.project.matches if m.id not in block.match_ids]
         if not sources:
             return messagebox.showinfo('Записи проекта', 'Других записей пока нет. Добавьте файл кнопкой «+ Записи».')
