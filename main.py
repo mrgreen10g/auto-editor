@@ -33,7 +33,7 @@ def self_test(report):
         import cv2
         for name in ('haarcascade_frontalface_default.xml','haarcascade_eye_tree_eyeglasses.xml'):
             assert not cv2.CascadeClassifier(str(Path(cv2.data.haarcascades)/name)).empty(), name
-    Path(report).write_text(json.dumps({'status':'ok','checks':['espeak-ru','audio-alignment','ffmpeg-h264-aac','pillow']+(['bundled-score-ocr'] if sys.platform == 'win32' else [])},indent=2),encoding='utf-8')
+    Path(report).write_text(json.dumps({'status':'ok','checks':['espeak-ru','espeak-uz','audio-alignment','ffmpeg-h264-aac','pillow','whisper-runtime','ctranslate2-cpu-int8']+(['bundled-score-ocr'] if sys.platform == 'win32' else [])},indent=2),encoding='utf-8')
 
 if __name__=='__main__':
     try:
