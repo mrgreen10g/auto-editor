@@ -18,7 +18,7 @@ def recording_key(project):
     return hashlib.sha256(json.dumps([MODEL_REV,data]).encode()).hexdigest()
 
 def speech_key(project):
-    return hashlib.sha256(json.dumps(['uz-speech-2',recording_key(project),[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['uz-speech-3',recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
 
 def model_path(cancel,log):
     folder=Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'Models'/'uzbek-turbo'
@@ -68,7 +68,9 @@ def transcribe(project,cache,cancel,log):
     temp=saved.with_suffix('.tmp');temp.write_text(json.dumps(result,ensure_ascii=False),encoding='utf-8');temp.replace(saved)
     return result
 
-def token(text):return re.sub(r'[^a-z0-9]','',norm(text))
+def token(text):
+    value=re.sub(r'[^a-z0-9]','',norm(text))
+    return {'padedborn':'paderborn','paddeboron':'paderborn','padiboron':'paderborn','padeborn':'paderborn','borussiya':'borussia','borusya':'borussia'}.get(value,value)
 def similar(a,b):
     a=token(a);b=token(b)
     return SequenceMatcher(None,a,b,autojunk=False).ratio() if a and b else 0
@@ -113,6 +115,9 @@ def telegram_spans(words):
 
 def sections(project,segments):
     words=[w for s in segments for w in s['words']];tg=telegram_spans(words);starts=[]
+    if project.recording_times.strip():
+        from .recording_times import recording_bounds
+        return recording_bounds(project,segments),tg,words
     early=[w for w in words if w['start']<60];floor=0
     for b in project.blocks:
         hits=pair_hits(b.title,early)
@@ -143,7 +148,7 @@ def make_lines(segments,lo,hi,annotations):
     for a,b,_,_ in annotations:boundaries.update((max(lo,a),min(hi,b)))
     # Do not split authored Telegram overlays on ASR sentence boundaries.
     for a,b,title,_ in annotations:
-        if title=='ТЕЛЕГРАМ':boundaries={v for v in boundaries if not a<v<b}
+        boundaries={v for v in boundaries if not a<v<b}
     values=sorted(boundaries);words=[w for s in segments for w in s['words'] if w['end']>lo and w['start']<hi];lines=[];cards={}
     for a,b in zip(values,values[1:]):
         selected=[w for w in words if a<=((w['start']+w['end'])/2)<b]
@@ -163,10 +168,31 @@ def prepare(project,segments):
         lo,hi=bounds[index:index+2];annotations=[];local=[s for s in segments if lo<=s['start']<hi]
         if b.kind=='intro':
             subset=[w for w in words if lo<=w['start']<hi]
+            matched=[];uncertain=set()
             for owner in project.blocks:
                 hits=pair_hits(owner.title,subset)
-                if not hits:raise ValueError('Не найдена пара в представлении: '+owner.title)
-                a,z=hits[0];annotations.append((subset[a]['start'],subset[z]['end'],'РАЗБОР МАТЧА',owner.title))
+                if hits:
+                    a,z=hits[0];matched.append((subset[a]['start'],subset[z]['end']))
+                else:
+                    # One clearly spoken team can anchor a known script fixture.
+                    teams=block_teams(owner.title)
+                    single=[hit for team in teams for hit in name_hits(team,subset) if hit[2]>=.85]
+                    if single:
+                        a,z,_=max(single,key=lambda hit:hit[2]);matched.append((subset[a]['start'],subset[min(len(subset)-1,z+2)]['end']))
+                    else:matched.append(None)
+                    uncertain.add(owner.title)
+            for j,owner in enumerate(project.blocks):
+                span=matched[j]
+                if span is None:
+                    # Bounded by neighbouring known fixtures; keep the result reviewable.
+                    a=next((matched[k][1] for k in range(j-1,-1,-1) if matched[k]),lo)
+                    z=next((matched[k][0] for k in range(j+1,len(matched)) if matched[k]),min(hi,tg[0][0] if tg else hi))
+                    remaining=sum(matched[k] is None for k in range(j,len(matched)) if all(matched[n] is None for n in range(j,k+1)))
+                    span=(a,a+(z-a)/max(1,remaining));matched[j]=span
+                a,z=span
+                next_start=next((matched[k][0] for k in range(j+1,len(matched)) if matched[k]),hi)
+                z=min(z,next_start)
+                if z-a>=.15:annotations.append((a,z,'РАЗБОР МАТЧА',owner.title))
         elif b.kind=='analysis':
             scored=[(bet_score(s['text'],picks[b.uid]),s) for s in local if bet_cue(s['text'])]
             if not scored or max(v for v,_ in scored)<4:raise ValueError('Не удалось привязать озвученную ставку: '+b.title)
@@ -191,6 +217,9 @@ def prepare(project,segments):
         for a,z in tg:
             if lo<=a<z<=hi:annotations.append((a,z,'ТЕЛЕГРАМ','Telegram'))
         b.asr_lines,b.speech_cards=make_lines(segments,lo,hi,annotations);b.speech_key=key
+        if b.kind=='intro':
+            for card in b.speech_cards.values():
+                if card['title']=='РАЗБОР МАТЧА' and card['text'] in uncertain:card['needs_review']=True
         if b.kind=='outro':
             ids=sorted([i for i,c in b.speech_cards.items() if c['title']=='ПРОГНОЗ'],key=int)
             for owner,i in zip(project.blocks,ids):b.speech_cards[i]['forecast_id']=owner.uid
@@ -203,6 +232,8 @@ def synchronize(project,cache,cancel,log):
     if not all(b.speech_key==key and b.asr_lines for b in [project.intro,*project.blocks,project.outro]):
         bounds=prepare(project,transcribe(project,cache,cancel,log))
         log('Разделы по речи: '+', '.join(f'{v//60:02.0f}:{v%60:05.2f}' for v in bounds))
+        for card in project.intro.speech_cards.values():
+            if card.get('needs_review'):log('Проверьте плашку во вступлении: '+card['text']+'. Одно из названий распознано неуверенно; сборка продолжена.')
     from .uzbek import events
     from .goals import GoalScanner,propose
     for b in project.blocks:

@@ -72,6 +72,14 @@ class EpisodeMixin:
             ttk.Button(row,text='Выбрать',command=choose).pack(side='left',padx=(8,0))
         ttk.Label(page,text='MOV с прозрачностью поддерживается. Звук Telegram и подписки отключён; звук дисклеймера сохранён. Для новых проектов можно сохранить этот набор.',wraplength=720).pack(anchor='w',pady=22)
         remember=tk.BooleanVar(value=True);ttk.Checkbutton(page,text='Запомнить эти материалы для новых проектов',variable=remember).pack(anchor='w')
+        timing_field=None
+        if draft.profile=='uz_football':
+            timing_page=ttk.Frame(tabs,padding=12);tabs.add(timing_page,text='Таймкоды записи')
+            ttk.Label(timing_page,text='Необязательно. Вставьте проверенное время исходного видео: начало, разборы в порядке проекта, итоги и прощание. Пустое поле — автоматический поиск.',wraplength=710).pack(anchor='w',pady=(0,10))
+            ttk.Label(timing_page,text='Пример: 00:32 02:08 Augsburg Bayer\nНазвания — подписи для удобства. Итоги и концовку можно указать одной или двумя строками.\nОкруглённые границы уточняются по ближайшей речи в пределах 2,5 секунды.',wraplength=710).pack(anchor='w',pady=(0,10))
+            timing_field=tk.Text(timing_page,wrap='word',font=('Segoe UI',11),undo=True,height=9,padx=10,pady=10)
+            timing_field.pack(fill='both',expand=True);timing_field.insert('1.0',draft.recording_times)
+            ttk.Button(timing_page,text='Очистить · искать автоматически',command=lambda:timing_field.delete('1.0','end')).pack(anchor='w',pady=10)
         def import_script():
             path=filedialog.askopenfilename(parent=w,title='Полный сценарий',filetypes=[('Текст UTF-8','*.txt')])
             if not path:return
@@ -98,11 +106,20 @@ class EpisodeMixin:
                 enabled.set(True);messagebox.showinfo('Сценарий разделён','Начало, разборы и завершение заполнены. После сохранения добавьте матчи для новых разборов.',parent=w)
             except Exception as error:messagebox.showerror('Сценарий',str(error),parent=w)
         def apply():
+            if timing_field is not None:
+                draft.recording_times=timing_field.get('1.0','end').strip()
+                if draft.recording_times:
+                    try:
+                        from .recording_times import parse_times
+                        parse_times(draft.recording_times,len(draft.blocks))
+                    except ValueError as error:return messagebox.showerror('Таймкоды записи',str(error),parent=w)
             for key,field in fields.items():getattr(draft,key).script=field.get('1.0','end').strip()
             draft.assets={k:v.get().strip() for k,v in asset_vars.items()};draft.full_video=enabled.get()
             if draft.full_video:
                 if any(len(getattr(draft,k).script)<30 for k in fields):return messagebox.showerror('Тексты','Заполните начало и завершение.',parent=w)
-                if any(not v or not Path(v).is_file() for v in draft.assets.values()):return messagebox.showerror('Материалы','Выберите дисклеймер, Telegram и подписку.',parent=w)
+                required=('disclaimer',) if draft.profile=='uz_football' else ('disclaimer','telegram','subscribe')
+                if any(not draft.assets.get(k) or not Path(draft.assets[k]).is_file() for k in required):return messagebox.showerror('Материалы','Выберите дисклеймер.' if draft.profile=='uz_football' else 'Выберите дисклеймер, Telegram и подписку.',parent=w)
+                if any(v and not Path(v).is_file() for v in draft.assets.values()):return messagebox.showerror('Материалы','Один из выбранных файлов не найден.',parent=w)
                 draft.whole_episode=True
             if remember.get():
                 try:
@@ -113,5 +130,5 @@ class EpisodeMixin:
         ttk.Button(bottom,text='Сохранить',command=apply).pack(side='right')
         ttk.Button(bottom,text='Отмена',command=w.destroy).pack(side='right',padx=8)
         self.framing_window=w;self.framing_fields=fields;self.framing_assets=asset_vars;self.framing_enabled=enabled;self.apply_framing=apply
+        self.framing_times=timing_field
         w.grab_set()
-

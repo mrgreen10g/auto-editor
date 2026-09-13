@@ -36,6 +36,39 @@ def project(host):
     return p
 
 class SpeechTests(unittest.TestCase):
+    def test_intro_missing_opponent_continues_with_review_card(self):
+        with tempfile.TemporaryDirectory() as d:
+            host=Path(d)/'host.mp4';host.touch();p=project(host);data=sample()
+            data[0]=segment(2,8,'Augsburg Bayer, Borussia Dortmund noma nom, Mays Eintraxt.')
+            prepare(p,data)
+            cards=list(p.intro.speech_cards.values())
+            card=next(c for c in cards if c['text']==p.blocks[1].title)
+            self.assertTrue(card['needs_review'])
+            self.assertEqual(len([c for c in cards if c['title']=='РАЗБОР МАТЧА']),3)
+
+    def test_recording_times_override_missing_names_and_roundtrip(self):
+        with tempfile.TemporaryDirectory() as d:
+            host=Path(d)/'host.mp4';host.touch();p=project(host);data=sample()
+            data[4]=segment(90,97,"Ikkinchi uchrashuvda vaziyat boshqacha.")
+            p.recording_times='00:02 00:30 Начало\n00:32 01:29 Augsburg Bayer\n01:30 02:09 Borussia Padedborn\n02:10 02:49 Mayns Ayntraxt\n02:50 03:14 Итоги\n03:15 03:24 Концовка'
+            bounds=prepare(p,data)
+            self.assertEqual(bounds,[2,30,90,130,170,204])
+            p.save(Path(d)/'p.json');q=Project.load(Path(d)/'p.json')
+            self.assertEqual(q.recording_times,p.recording_times)
+            key=speech_key(q);q.recording_times='';self.assertNotEqual(key,speech_key(q))
+
+    def test_recording_times_validate_order_count_and_duration(self):
+        from hockey_editor.recording_times import parse_times,recording_bounds
+        for value in ('00:02 00:01 Начало','00:02 00:30 Начало\n00:20 01:00 Матч','00:02 00:80 Начало'):
+            with self.assertRaises(ValueError):parse_times(value,1)
+        p=project('host.mp4');p.recording_times='00:00 01:00 Начало\n01:00 03:00 Первый\n03:00 05:00 Второй\n05:00 07:00 Третий\n07:00 09:00 Итоги'
+        with self.assertRaisesRegex(ValueError,'выходят за запись'):recording_bounds(p,sample())
+
+    def test_pair_card_crossing_asr_sentence_boundary_stays_whole(self):
+        from hockey_editor.uz_speech import make_lines
+        data=[segment(0,1,'Borussia Dortmund'),segment(1,2,'Paderborn')]
+        lines,cards=make_lines(data,0,2,[(0,2,'РАЗБОР МАТЧА','Dortmund — Paderborn')])
+        self.assertEqual(len(lines),1);self.assertEqual(cards['0']['text'],'Dortmund — Paderborn')
     def test_unspoken_subscription_does_not_require_asset(self):
         from hockey_editor.episode import EpisodeEngine
         with tempfile.TemporaryDirectory() as d:

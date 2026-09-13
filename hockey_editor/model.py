@@ -107,6 +107,7 @@ class Project:
     outro: Block = field(default_factory=lambda: Block(title='Итоги', uid='outro', kind='outro'))
     assets: dict[str, str] = field(default_factory=dict)
     profile: str = 'ru_hockey'
+    recording_times: str = ''
 
     def host_paths(self):
         # The legacy first-file field remains compatible with earlier projects.
@@ -242,7 +243,7 @@ class Project:
         if data.get('version', 1) < 3:
             settings.setdefault('auto_rotate', settings.get('rotate', 0) == 0)
             settings.setdefault('use_manual_clips', any(b.clips for b in blocks))
-        return cls(host=resolve(data['host']),music=resolve(data.get('music','')),profile=data.get('profile','ru_hockey'),
+        return cls(host=resolve(data['host']),music=resolve(data.get('music','')),profile=data.get('profile','ru_hockey'),recording_times=data.get('recording_times',''),
                    hosts=[resolve(v) for v in data.get('hosts',[])],full_video=data.get('full_video',False),
                    intro=framing('intro'),outro=framing('outro'),assets={k:resolve(v) for k,v in data.get('assets',{}).items()},
                    whole_episode=data.get('whole_episode',False),episode_plan=episode,episode_key=data.get('episode_key',''),

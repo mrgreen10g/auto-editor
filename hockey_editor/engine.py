@@ -51,6 +51,8 @@ class Engine:
         if block.language=='uz' and block.asr_lines:
             source=[Line(**l) for l in block.asr_lines]
             warnings=['Узбекская речь распознана автоматически. Проверьте предпросмотр и написание текста. Тайминги документа не использованы.']
+            if p.recording_times.strip():warnings.append('Границы разделов заданы таймкодами записи и уточнены по ближайшей речи (до 2,5 с).')
+            warnings.extend('Проверьте время плашки во вступлении: '+c['text'] for c in block.speech_cards.values() if c.get('needs_review'))
             if source[0].start<source_floor-.3:raise ValueError('Границы распознанных разделов пересекаются.')
         elif saved.get('key')==key:
             self.log('Использую сохраненную разметку речи.')

@@ -325,6 +325,12 @@ def check():
         assert app.find_events_button.cget('text')=='Найти игровые вставки'
         assert not app.score_region_button.winfo_ismapped()
         assert app.profilebox.winfo_ismapped()
+        app.edit_framing();root.update();assert app.framing_times is not None
+        app.framing_times.insert('1.0','00:02 00:30 Начало\n00:31 01:30 Первый\n01:31 02:30 Второй\n02:31 03:00 Итоги')
+        for var in app.framing_assets.values():var.set(str(clip))
+        with patch('hockey_editor.episode_ui.kit_path',return_value=tmp/'uz-kit.json'):app.apply_framing()
+        root.update();assert '00:31 01:30' in app.project.recording_times
+        app.edit_framing();root.update();assert '00:31 01:30' in app.framing_times.get('1.0','end');app.framing_window.destroy()
         app.project.save(tmp/'uz.hockeyproj');assert Project.load(tmp/'uz.hockeyproj').profile=='uz_football'
         app.profilebox.current(0)
         with patch('hockey_editor.profiles.kit_path',return_value=tmp/'ru-kit.json'):app.switch_profile()

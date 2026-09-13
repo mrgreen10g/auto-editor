@@ -26,7 +26,7 @@ def project_edit_key(project, index):
         if clip.get('origin_path'):clip['origin_path']=identity(clip['origin_path'])
     data=[block,structural,identity(project.host),
           [(m.id,m.home,m.away,identity(m.path),m.score_box) for m in project.matches if m.id in block['match_ids']]]
-    if project.profile!='ru_hockey':data.append(project.profile)
+    if project.profile!='ru_hockey':data.append([project.profile,project.recording_times])
     if len(project.host_paths())>1:data.append([identity(path) for path in project.host_paths()])
     return hashlib.sha256(json.dumps(data,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
 

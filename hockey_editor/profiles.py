@@ -10,7 +10,7 @@ def kit_path(profile='ru_hockey'):
 def apply_profile(project,profile):
     if profile not in ('ru_hockey','uz_football'):raise ValueError('Неизвестный шаблон.')
     if project.profile==profile:return
-    project.profile=profile;project.episode_plan=None;project.episode_key=''
+    project.profile=profile;project.episode_plan=None;project.episode_key='';project.recording_times=''
     language='uz' if profile=='uz_football' else 'ru'
     for block in [project.intro,*project.blocks,project.outro]:
         block.language=language;block.events=[];block.edit_plan=None;block.edit_key='';block.card_overrides={};block.source_hint=[];block.asr_lines=[];block.speech_key='';block.speech_cards={}
