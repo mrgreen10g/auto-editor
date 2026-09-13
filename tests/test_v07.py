@@ -2,6 +2,7 @@
 import copy,tempfile,threading,unittest
 from pathlib import Path
 from unittest.mock import patch
+from types import SimpleNamespace
 from PIL import Image,ImageDraw
 from hockey_editor.model import Project,Block,MatchSource
 from hockey_editor.profiles import apply_profile,kit_path
@@ -39,6 +40,22 @@ Barchangizga omad!
 Keyingi videoda ko'rishguncha!
 """
 class V07Tests(unittest.TestCase):
+ def test_incomplete_clip_cache_is_rebuilt_before_use(self):
+  from hockey_editor.goals import cut_candidate
+  with tempfile.TemporaryDirectory() as d:
+   root=Path(d);source=MatchSource(str(root/'source.mp4'),'Roma','Milan',sport='football')
+   selected=SimpleNamespace(source_signature='key',source_start=1,event_time=3,source_end=5)
+   def metadata(path):
+    if str(path)==source.path:return {'duration':20,'video':True}
+    if Path(path).read_bytes()!=b'complete':raise ValueError('Incomplete MP4')
+    return {'duration':4,'video':True}
+   def render(args,cancel):Path(args[-1]).write_bytes(b'complete')
+   with patch('hockey_editor.goals.source_signature',return_value='key'),patch('hockey_editor.goals.probe',side_effect=metadata),patch('hockey_editor.goals.run',side_effect=render) as run:
+    path=cut_candidate(source,selected,root,threading.Event());self.assertEqual(run.call_count,1)
+    path.write_bytes(b'interrupted')
+    self.assertEqual(cut_candidate(source,selected,root,threading.Event()),path);self.assertEqual(run.call_count,2)
+    self.assertEqual(cut_candidate(source,selected,root,threading.Event()),path);self.assertEqual(run.call_count,2)
+    self.assertEqual(path.read_bytes(),b'complete')
  def test_timecodes_are_metadata_not_speech(self):
   intro,blocks,outro=parse_script(SCRIPT)
   self.assertEqual(len(blocks),2);self.assertEqual(blocks[0].source_hint,[60,200]);self.assertEqual(outro.source_hint,[340,450]);self.assertEqual(outro.language,'uz')
@@ -100,4 +117,3 @@ class V07Tests(unittest.TestCase):
     i=count[0];count[0]+=1;return np.ones((2,2))*((i%2)*10),states[i][1],1,5
    with patch('hockey_editor.football.frame_features',side_effect=features):ranges=gameplay_ranges(list(range(41)),10.25,threading.Event())
    self.assertEqual(len(ranges),2);self.assertLess(ranges[0][1],5);self.assertGreater(ranges[1][0],5)
-

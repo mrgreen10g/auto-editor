@@ -328,12 +328,19 @@ def cut_candidate(source, selection, directory, cancel):
     folder = Path(directory); folder.mkdir(parents=True, exist_ok=True)
     key = hashlib.sha256(json.dumps([selection.source_signature, selection.source_start, selection.source_end]).encode()).hexdigest()[:24]
     target = folder/f'goal-{key}.mp4'
-    if target.exists(): return target
+    def complete(path):
+        try:
+            metadata=probe(path)
+            return metadata['video'] and abs(metadata['duration']-duration)<.15
+        except (ValueError,OSError):return False
+    # Interrupted cache files must never be treated as finished game footage.
+    if target.exists() and complete(target): return target
     temp = target.with_suffix('.partial.mp4')
     try:
         run(['-y', '-ss', selection.source_start, '-i', source.path, '-t', duration, '-an', '-vf',
              'fps=30,scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1',
              '-c:v', 'libx264', '-preset', 'fast', '-crf', '19', '-threads', '2', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', temp], cancel)
+        if not complete(temp):raise ValueError('Игровой фрагмент записан не полностью. Повторите подготовку: '+source.title)
         temp.replace(target)
     finally:
         if temp.exists(): temp.unlink()
