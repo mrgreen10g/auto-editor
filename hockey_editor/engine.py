@@ -52,7 +52,12 @@ class Engine:
             source=[Line(**l) for l in block.asr_lines]
             warnings=['Узбекская речь распознана автоматически. Проверьте предпросмотр и написание текста. Тайминги документа не использованы.']
             if p.recording_times.strip():warnings.append('Границы разделов заданы таймкодами записи и уточнены по ближайшей речи (до 2,5 с).')
-            warnings.extend('Проверьте время плашки во вступлении: '+c['text'] for c in block.speech_cards.values() if c.get('needs_review'))
+            warnings.extend(('Проверьте время плашки во вступлении: ' if c['title']=='РАЗБОР МАТЧА' else 'Проверьте распознанную фразу ставки; текст плашки взят из сценария: ')+c['text'] for c in block.speech_cards.values() if c.get('needs_review'))
+            if block.kind=='outro' and source and .15<total-source[-1].end<=2:
+                # A short farewell may be missing from ASR. Retain original A/V,
+                # without extending the Telegram card or inventing spoken text.
+                source.append(Line('',source[-1].end,total,0.))
+                warnings.append('Распознавание не охватило короткий конец записи; последние кадры и звук сохранены для проверки прощания.')
             if source[0].start<source_floor-.3:raise ValueError('Границы распознанных разделов пересекаются.')
         elif saved.get('key')==key:
             self.log('Использую сохраненную разметку речи.')

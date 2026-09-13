@@ -18,7 +18,7 @@ def recording_key(project):
     return hashlib.sha256(json.dumps([MODEL_REV,data]).encode()).hexdigest()
 
 def speech_key(project):
-    return hashlib.sha256(json.dumps(['uz-speech-3',recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['uz-speech-4',recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
 
 def model_path(cancel,log):
     folder=Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'Models'/'uzbek-turbo'
@@ -70,7 +70,7 @@ def transcribe(project,cache,cancel,log):
 
 def token(text):
     value=re.sub(r'[^a-z0-9]','',norm(text))
-    return {'padedborn':'paderborn','paddeboron':'paderborn','padiboron':'paderborn','padeborn':'paderborn','borussiya':'borussia','borusya':'borussia'}.get(value,value)
+    return {'padedborn':'paderborn','paddeboron':'paderborn','padiboron':'paderborn','padiborun':'paderborn','maddiboron':'paderborn','padeborn':'paderborn','borussiya':'borussia','borusya':'borussia'}.get(value,value)
 def similar(a,b):
     a=token(a);b=token(b)
     return SequenceMatcher(None,a,b,autojunk=False).ratio() if a and b else 0
@@ -88,19 +88,27 @@ def name_hits(name,words):
 def pair_hits(title,words):
     a,b=block_teams(title);left=name_hits(a,words);right=name_hits(b,words)
     choices=[(min(i[0],j[0]),max(i[1],j[1]),i[2]+j[2]) for i in left for j in right if abs(i[0]-j[0])<=8 and (i[1]<j[0] or j[1]<i[0])]
-    return [(a,b) for a,b,_ in sorted(choices,key=lambda v:(v[0],-v[2],v[1]-v[0]))]
+    return [(a,b) for a,b,_ in sorted(choices,key=lambda v:(-v[2],v[0],v[1]-v[0]))]
 
 def telegram_spans(words):
     result=[]
     for i,w in enumerate(words):
         direct=similar(w['word'],'telegram')>=.76
         channel=any(similar(v['word'],'kanalimizda')>=.6 for v in words[i+1:i+4])
-        if not direct and not(similar(w['word'],'telegram')>=.62 and channel):continue
+        context=norm(' '.join(v['word'] for v in words[max(0,i-9):i+14]))
+        # A badly transcribed channel name can still be supported by channel,
+        # information and link cues together, never by a generic word alone.
+        channel_link=(similar(w['word'],'kanalimizda')>=.6
+                      and re.search(r'informats|prognoz|ma.lumot',context)
+                      and re.search(r'havola|silqa|silka|tavsif',context))
+        if not direct and not(similar(w['word'],'telegram')>=.62 and channel) and not channel_link:continue
         lo=i
         while lo>0 and i-lo<14:
             previous=words[lo-1]
             if words[lo]['start']-previous['end']>.2 or previous['word'].rstrip().endswith(('.','!','?')):break
             lo-=1
+        for j in range(lo,i):
+            if token(words[j]['word'])=='va' and token(words[j+1]['word']).startswith('shunga'):lo=j
         hi=i
         while hi+1<len(words) and words[hi]['end']-w['start']<14:
             if words[hi]['word'].rstrip().endswith(('.','!','?')):break
@@ -161,11 +169,12 @@ def make_lines(segments,lo,hi,annotations):
 
 def prepare(project,segments):
     from .framing import forecast_text
+    from .uz_forecasts import match_forecasts
     bounds,tg,words=sections(project,segments);key=speech_key(project)
     picks={b.uid:forecast_text(b) for b in project.blocks}
     if any(not v for v in picks.values()):raise ValueError('Укажите основной прогноз в сценарии каждого разбора: Mening tanlovim — …')
     for index,b in enumerate([project.intro,*project.blocks,project.outro]):
-        lo,hi=bounds[index:index+2];annotations=[];local=[s for s in segments if lo<=s['start']<hi]
+        lo,hi=bounds[index:index+2];annotations=[];local=[s for s in segments if lo<=s['start']<hi];forecast_review=[]
         if b.kind=='intro':
             subset=[w for w in words if lo<=w['start']<hi]
             matched=[];uncertain=set()
@@ -194,29 +203,32 @@ def prepare(project,segments):
                 z=min(z,next_start)
                 if z-a>=.15:annotations.append((a,z,'РАЗБОР МАТЧА',owner.title))
         elif b.kind=='analysis':
-            scored=[(bet_score(s['text'],picks[b.uid]),s) for s in local if bet_cue(s['text'])]
-            if not scored or max(v for v,_ in scored)<4:raise ValueError('Не удалось привязать озвученную ставку: '+b.title)
-            _,s=max(scored,key=lambda v:v[0])
+            s=match_forecasts(segments,lo,hi,[b],picks,recap=False)[0]
             spoken_total=re.search(r'(\d+[,.]\d+)\s*(?:ta)?dan',norm(s['text']))
             reference_total=re.search(r'(\d+[,.]\d+)\s+dan',norm(picks[b.uid]))
             if spoken_total and reference_total and spoken_total[1].replace(',','.')!=reference_total[1].replace(',','.'):
                 raise ValueError('Значение ставки в речи отличается от сценария: '+b.title)
             annotations.append((s['start'],s['end'],'ПРОГНОЗ',picks[b.uid]))
+            if s['needs_review']:forecast_review.append((s['start'],s['end']))
             for phrase in local:
-                if phrase is s:continue
+                if phrase['start']<s['end'] and phrase['end']>s['start']:continue
                 t=norm(phrase['text']).replace("go'l",'gol').replace("go'il",'gol')
                 if 'ikkita' in t and 'gol' in t and any(v in t for v in ('kamida','shart','kerak')):
                     body='Kamida 2 gol'
-                    if "mag'lub" in t and 'X2' in picks[b.uid]:
+                    if re.search(r"ma[g']*lub",t) and 'X2' in picks[b.uid]:
                         body=picks[b.uid].splitlines()[0].replace(' X2',' yutadi yoki durang')+'\n'+body
                     annotations.append((phrase['start'],phrase['end'],'УСЛОВИЯ ПРОГНОЗА',body))
         else:
-            recap=[s for s in local if bet_cue(s['text']) and re.search(r"go['‘’]?[li]?l|go.son|alaba|x2|bir yam|bir yom",norm(s['text']))]
-            if len(recap)!=len(project.blocks):raise ValueError('Число распознанных повторов ставок не совпадает с числом разборов. Проверьте состав выпуска.')
-            for owner,s in zip(project.blocks,recap):annotations.append((s['start'],s['end'],'ПРОГНОЗ',picks[owner.uid]))
+            recap=match_forecasts(segments,lo,hi,project.blocks,picks)
+            for owner,s in zip(project.blocks,recap):
+                annotations.append((s['start'],s['end'],'ПРОГНОЗ',picks[owner.uid]))
+                if s['needs_review']:forecast_review.append((s['start'],s['end']))
         for a,z in tg:
             if lo<=a<z<=hi:annotations.append((a,z,'ТЕЛЕГРАМ','Telegram'))
         b.asr_lines,b.speech_cards=make_lines(segments,lo,hi,annotations);b.speech_key=key
+        for i,card in b.speech_cards.items():
+            line=b.asr_lines[int(i)]
+            if card['title']=='ПРОГНОЗ' and (line['start'],line['end']) in forecast_review:card['needs_review']=True
         if b.kind=='intro':
             for card in b.speech_cards.values():
                 if card['title']=='РАЗБОР МАТЧА' and card['text'] in uncertain:card['needs_review']=True
