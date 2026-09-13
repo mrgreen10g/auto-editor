@@ -177,8 +177,13 @@ class EpisodeEngine(Engine):
         if not 1<=len(self.project.blocks)<=4:raise ValueError('В выпуске поддерживается от 1 до 4 разборов.')
         runtime=assembly_project(self.project)
         if self.project.full_video:
-            for key in ('disclaimer','telegram','subscribe'):
+            # Uzbek scripts can contain CTAs omitted in the actual recording.
+            # Spoken overlays validate their assets in asr_framing_cards.
+            required=('disclaimer',) if self.project.profile=='uz_football' else ('disclaimer','telegram','subscribe')
+            for key in required:
                 if not self.project.assets.get(key) or not Path(self.project.assets[key]).is_file():raise ValueError('Добавьте материал полного выпуска: '+{'disclaimer':'дисклеймер','telegram':'Telegram','subscribe':'подписка'}[key])
+            for key,path in self.project.assets.items():
+                if path and not Path(path).is_file():raise ValueError('Не найден материал полного выпуска: '+key)
         for i,b in enumerate(runtime.blocks):
             try:runtime.validate(i)
             except ValueError as error:raise ValueError(b.title+': '+str(error)) from error

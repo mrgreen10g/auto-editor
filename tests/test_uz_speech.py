@@ -1,5 +1,7 @@
 """Speech/section tests independent of neural weights and user recordings."""
 import tempfile,unittest
+import threading
+from unittest.mock import patch
 from pathlib import Path
 from hockey_editor.model import Project,Block
 from hockey_editor.uz_speech import pair_hits,prepare,speech_key
@@ -34,6 +36,22 @@ def project(host):
     return p
 
 class SpeechTests(unittest.TestCase):
+    def test_unspoken_subscription_does_not_require_asset(self):
+        from hockey_editor.episode import EpisodeEngine
+        with tempfile.TemporaryDirectory() as d:
+            host=Path(d)/'host.mp4';host.touch();p=project(host)
+            p.full_video=True;p.assets={'disclaimer':str(host)}
+            engine=EpisodeEngine(p,0,Path(d),threading.Event())
+            with patch.object(Project,'validate'):engine.validate_all()
+            prepare(p,sample())
+            # Telegram is actually spoken and therefore still mandatory.
+            with self.assertRaisesRegex(ValueError,'Telegram'):
+                asr_framing_cards(p,p.outro,[Line(**l) for l in p.outro.asr_lines],204)
+            p.assets['telegram']=str(host)
+            cards,_=asr_framing_cards(p,p.outro,[Line(**l) for l in p.outro.asr_lines],204)
+            self.assertFalse(any(c.title=='ПОДПИСКА' for c in cards))
+            with self.assertRaisesRegex(ValueError,'подписки'):
+                asr_framing_cards(p,Block(kind='outro',language='uz'),[Line("Kanalga obuna bo'ling.",1,4)],10)
     def test_split_names_and_transliterations(self):
         self.assertTrue(pair_hits('Borussiya Dortmund — Paderborn',segment(0,3,'Borussia Dortmund Padi Boron')['words']))
         self.assertTrue(pair_hits('Mayns — Ayntraxt Frankfurt',segment(0,3,'Va Mays Eintraxt uchrashuvda')['words']))
@@ -60,4 +78,3 @@ class SpeechTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             host=Path(d)/'host.mp4';host.touch();p=project(host);p.blocks[2].title='Sevilla — Barcelona'
             with self.assertRaisesRegex(ValueError,'Sevilla'):prepare(p,sample())
-
