@@ -55,6 +55,7 @@ def parse_script(text):
 
 
 def prepared(block):
+    if block.asr_lines:return '\n'.join(l['text'] for l in block.asr_lines)
     values=split_script(block.script);result=[];i=0
     while i<len(values):
         line=values[i];t=norm(line)
@@ -97,7 +98,7 @@ def bet(text):
 
 
 def classify(text):
-    t=norm(text);is_pick='mening tanlovim' in t or 'mening asosiy tanlovim' in t
+    t=norm(text).replace("go'l","gol").replace("go'il","gol");is_pick='mening tanlovim' in t or 'mening asosiy tanlovim' in t
     market=bool(re.search(r"\b(?:x2|1x)\b|g'alab|(?:ta)?dan (?:ko'p|kam) gol|fora|total",t))
     if is_pick or (market and text==text.upper() and re.search('[A-Z]',text)):
         return 'ПРОГНОЗ',bet(text)
@@ -119,10 +120,12 @@ def events(block,matches):
     if len(sources)>1:raise ValueError('Оставьте одну очную встречу на футбольный разбор.')
     if not sources:return []
     result=[]
-    for line in split_script(block.script):
+    speech=[l['text'] for l in block.asr_lines] if block.asr_lines else split_script(block.script)
+    for index,line in enumerate(speech):
         t=norm(line);title,_=classify(line)
+        if str(index) in block.speech_cards:title=block.speech_cards[str(index)]['title']
         if title in ('ПРОГНОЗ','УСЛОВИЯ ПРОГНОЗА','СОСТАВ КОМАНДЫ') or any(v in t for v in ('telegram','obuna','layk')):continue
-        if any(w in t for w in ("o'yn",'hujum','himoya','vaziyat','nazorat','bosim','hisob','uchrashuv','gollar','birinchi gol','ikkinchi gol','mezbon','mehmon','jamoa','safar','maydon')):
+        if len(t.split())>=6 or any(w in t for w in ("o'yn","o'yin",'hujum','himoya','vaziyat','nazorat','bosim','hisob','uchrashuv','gollar','birinchi gol','ikkinchi gol','mezbon','mehmon','jamoa','safar','maydon')):
             result.append(EventRequest(sources[0].id,line,kind='play'))
     return result
 
@@ -132,6 +135,7 @@ def card_label(title):return LABELS.get(title,'MA’LUMOT')
 
 
 def framing_cards_uz(project,block,lines,duration):
+    if block.asr_lines:return asr_framing_cards(project,block,lines,duration)
     from .framing import forecast_text
     from .media import probe
     cards=[];seen=set();owner=None;analyses=[b for b in project.blocks if b.kind=='analysis']
@@ -180,3 +184,34 @@ def framing_cards_uz(project,block,lines,duration):
             card.text=override
         result.append(card)
     return result,[]
+
+
+def asr_framing_cards(project,block,lines,duration):
+    from .media import probe
+    cards=[]
+    for i,line in enumerate(lines):
+        annotation=block.speech_cards.get(str(i))
+        if annotation:
+            title,text=annotation['title'],annotation['text'];asset=''
+            if title=='ТЕЛЕГРАМ':
+                asset=project.assets.get('telegram','')
+                if not asset:raise ValueError('Добавьте запись Telegram узбекского ведущего.')
+            cards.append(Card(line.start,line.end,title,text,i,asset,forecast_id=annotation.get('forecast_id','')))
+            continue
+        t=norm(line.text)
+        if block.kind=='outro':
+            if 'obuna' in t or 'layk bos' in t:
+                asset=project.assets.get('subscribe','')
+                if not asset:raise ValueError('Добавьте анимацию подписки узбекского ведущего.')
+                end=frame(line.start+probe(asset)['duration'])
+                if end>duration+.034:raise ValueError('Анимация подписки не помещается до прощания.')
+                cards.append(Card(line.start,end,'ПОДПИСКА','Obuna bo‘ling',i,asset))
+            if ('izoh' in t or 'komment' in t) and ('yoz' in t or '?' in t):
+                cards.append(Card(line.start,line.end,'ВОПРОС ЗРИТЕЛЯМ',line.text,i))
+        else:
+            title,text=classify(line.text)
+            if title and text:cards.append(Card(line.start,line.end,title,text,i))
+    for card in cards:
+        value=block.card_overrides.get(str(card.line))
+        if value is not None and not card.asset and card.title!='ПРОГНОЗ':card.text=value
+    return [c for c in cards if c.text.strip()],[]

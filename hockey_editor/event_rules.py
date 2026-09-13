@@ -128,3 +128,4 @@ def requests_for(block, matches, use_manual=True):
                                    flexible_source=kind=='play' and not pairs and not known))
         if score: previous[source_id] = score
     return result
+

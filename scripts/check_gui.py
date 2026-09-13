@@ -37,7 +37,7 @@ def check():
             app.load()
         root.update()
         app.collect()
-        assert app.project.version == 6 and app.project.settings.zoom_max == 1.2
+        assert app.project.version == 7 and app.project.settings.zoom_max == 1.2
         assert app.project.settings.denoise and app.project.blocks[0].clips[0].phrase == '2:1'
         assert app.page == 'materials' and 'Разборов: 1' in app.readiness.get()
         initial_script = app.project.blocks[0].script
@@ -318,6 +318,18 @@ def check():
                 assert widget.winfo_ismapped(), (key, str(widget), root.geometry())
                 assert widget.winfo_rootx() + widget.winfo_width() <= root.winfo_rootx() + root.winfo_width() + 1
                 assert widget.winfo_rooty() + widget.winfo_height() <= root.winfo_rooty() + root.winfo_height() + 1
+        app.profilebox.current(1)
+        with patch('hockey_editor.profiles.kit_path',return_value=tmp/'uz-kit.json'):app.switch_profile()
+        root.update();assert app.project.profile=='uz_football' and not app.project.assets
+        assert all(b.language=='uz' for b in [app.project.intro,*app.project.blocks,app.project.outro])
+        assert app.find_events_button.cget('text')=='Найти игровые вставки'
+        assert not app.score_region_button.winfo_ismapped()
+        assert app.profilebox.winfo_ismapped()
+        app.project.save(tmp/'uz.hockeyproj');assert Project.load(tmp/'uz.hockeyproj').profile=='uz_football'
+        app.profilebox.current(0)
+        with patch('hockey_editor.profiles.kit_path',return_value=tmp/'ru-kit.json'):app.switch_profile()
+        root.update();assert app.project.profile=='ru_hockey'
+        assert app.find_events_button.cget('text')=='Найти голы'
         assert not errors, errors
         app.close()
     (out / 'gui-check.json').write_text(json.dumps({'status': 'ok', 'checks': ['v1-project-compatibility', 'block-switching', 'card-editing', 'stale-plan-invalidation', 'busy-control-restoration', 'worker-queue-flow', 'compact-window-layout', 'multiple-source-review-flow', 'v2-project-roundtrip', 'review-retains-custom-trim','episode-editor-roundtrip','seek-after-edit-rebuild-save','source-visual-trim','persistent-block-navigation','all-block-events-own-source','per-block-logo-tabs','ordered-host-sources','full-video-dialog-roundtrip']}, indent=2), encoding='utf-8')

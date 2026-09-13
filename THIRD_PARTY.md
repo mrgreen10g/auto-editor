@@ -1,5 +1,12 @@
 # Third-party components
 
+## Uzbek speech in 0.7
+
+- faster-whisper and CTranslate2: MIT; PyAV, Tokenizers and Hugging Face Hub licenses are copied from installed distributions.
+- Uzbek model: https://huggingface.co/hostmepanda/whisper-large-v3-turbo-uzbek-ct2 ; pinned revision c1122214fcea840e8fab399df10d22ad7c56919f. The model card declares MIT. It converts the Uzbek fine-tune qirol4006/Whisper-3-turbo-uzbek.
+- Tokenizer: https://huggingface.co/openai/whisper-large-v3-turbo ; revision 41f01f3fe87f28c78e2fbf8b568835947dd65ed9, MIT.
+- Model weights are downloaded separately, pinned and SHA-256 checked. User audio/video is not sent to a speech service.
+
 The application bundle includes third-party software with its own license terms. Its build script copies installed distribution license files into `licenses/`.
 
 - Python / tkinter — https://www.python.org/ — PSF and Tcl/Tk licenses.

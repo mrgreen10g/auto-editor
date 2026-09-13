@@ -28,6 +28,9 @@ class Engine:
 
     def analyze(self,source_floor=0):
         p=self.project;p.validate(self.index);self.check()
+        if p.profile=='uz_football' and all(b.kind=='analysis' for b in p.blocks):
+            from .uz_speech import synchronize
+            synchronize(p,self.cache,self.cancel,self.log)
         from .editing import saved_plan
         restored=saved_plan(p,self.index)
         if restored is not None and restored.source_start>=source_floor-.035:
@@ -45,7 +48,11 @@ class Engine:
         if source_floor>=info['duration']-1:raise ValueError('В записи не осталось места для следующего разбора. Проверьте порядок текстов.')
         key=self.signature(source_floor);cached=self.cache/'alignment.json'
         saved=json.loads(cached.read_text(encoding='utf-8')) if cached.exists() else {}
-        if saved.get('key')==key:
+        if block.language=='uz' and block.asr_lines:
+            source=[Line(**l) for l in block.asr_lines]
+            warnings=['Узбекская речь распознана автоматически. Проверьте предпросмотр и написание текста. Тайминги документа не использованы.']
+            if source[0].start<source_floor-.3:raise ValueError('Границы распознанных разделов пересекаются.')
+        elif saved.get('key')==key:
             self.log('Использую сохраненную разметку речи.')
             source=[Line(**l) for l in saved['lines']];warnings=saved['warnings']
         else:

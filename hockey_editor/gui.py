@@ -892,6 +892,10 @@ class App(EpisodeMixin,MatchMixin):
 
         def work():
             try:
+                if engine.project.profile=='uz_football':
+                    from .uz_speech import synchronize
+                    synchronize(engine.project,engine.cache,self.cancel,engine.log)
+                    self.jobs.put(('uz_project',copy.deepcopy(engine.project)))
                 plan = engine.analyze()
                 self.jobs.put(('plan', plan))
                 if render:
@@ -943,6 +947,8 @@ class App(EpisodeMixin,MatchMixin):
                         self.progress.stop()
                         self.progress.configure(mode='indeterminate')
                         self.progress.start(15)
+                elif kind=='uz_project':
+                    self.project=value;self.refresh()
                 elif kind == 'plan':
                     self.display_plan(value)
                 elif kind == 'result':

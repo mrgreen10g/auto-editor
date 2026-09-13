@@ -114,3 +114,4 @@ class EpisodeMixin:
         ttk.Button(bottom,text='Отмена',command=w.destroy).pack(side='right',padx=8)
         self.framing_window=w;self.framing_fields=fields;self.framing_assets=asset_vars;self.framing_enabled=enabled;self.apply_framing=apply
         w.grab_set()
+

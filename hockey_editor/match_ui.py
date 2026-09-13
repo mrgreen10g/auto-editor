@@ -401,3 +401,4 @@ class MatchMixin:
 def propose_events(events, scans, sources=(), allow_other=False):
     from .goals import propose
     return propose(events, scans, sources, allow_other)
+

@@ -7,10 +7,11 @@ from hockey_editor import __version__
 cmd=[sys.executable,'-m','PyInstaller','--noconfirm','--clean','--windowed','--onedir','--name','AutoEditor',
      '--collect-all','espeakng_loader','--collect-all','imageio_ffmpeg','--collect-all','num2words',
      '--collect-all','rapidocr_onnxruntime','--collect-all','onnxruntime','--collect-data','cv2',
+     '--collect-all','faster_whisper','--collect-all','ctranslate2','--collect-all','av','--collect-all','tokenizers',
      '--collect-submodules','scipy.signal','--hidden-import','scipy.special._special_ufuncs','main.py']
 subprocess.run(cmd,check=True)
 dest=root/'dist'/'AutoEditor';licenses=dest/'licenses';licenses.mkdir(exist_ok=True)
-for name in ['numpy','scipy','pillow','espeakng-loader','imageio-ffmpeg','num2words','pyinstaller','docopt','rapidocr-onnxruntime','onnxruntime','opencv-python','shapely','pyclipper','PyYAML','protobuf']:
+for name in ['numpy','scipy','pillow','espeakng-loader','imageio-ffmpeg','num2words','pyinstaller','docopt','rapidocr-onnxruntime','onnxruntime','opencv-python','shapely','pyclipper','PyYAML','protobuf','faster-whisper','ctranslate2','av','tokenizers','huggingface-hub']:
     dist=importlib.metadata.distribution(name)
     for f in dist.files or []:
         if any(term in str(f).lower() for term in ('license','copying','notice')):

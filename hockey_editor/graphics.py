@@ -156,3 +156,4 @@ def card_image(card, path, logos=None,profile='ru_hockey'):
     for i,line in enumerate(lines): d.text((42,65+i*(size+8)),line,font=ft,fill='#f5faff')
     im.save(path)
     return (88,720-height-48) if wide else (28,28)
+

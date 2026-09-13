@@ -185,6 +185,9 @@ class EpisodeEngine(Engine):
 
     def analyze(self):
         self.validate_all();self.check()
+        if self.project.profile=='uz_football':
+            from .uz_speech import synchronize
+            synchronize(self.project,self.cache,self.cancel,self.log)
         restored=saved_episode(self.project)
         if restored:
             self.log('Использую общую дорожку с сохранёнными правками.');return restored

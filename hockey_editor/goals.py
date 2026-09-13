@@ -44,7 +44,7 @@ class Candidate:
 def source_signature(source):
     p = Path(source.path).resolve(); st = p.stat()
     data = [SCAN_VERSION, str(p), st.st_size, st.st_mtime_ns, source.score_box]
-    if source.sport=='football':data.append('football-wide-play-v1')
+    if source.sport=='football':data.append('football-wide-play-v2')
     return hashlib.sha256(json.dumps(data).encode()).hexdigest()
 
 

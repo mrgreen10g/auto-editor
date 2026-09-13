@@ -170,10 +170,23 @@ def prepare(project,segments):
         elif b.kind=='analysis':
             scored=[(bet_score(s['text'],picks[b.uid]),s) for s in local if bet_cue(s['text'])]
             if not scored or max(v for v,_ in scored)<4:raise ValueError('Не удалось привязать озвученную ставку: '+b.title)
-            _,s=max(scored,key=lambda v:v[0]);annotations.append((s['start'],s['end'],'ПРОГНОЗ',picks[b.uid]))
+            _,s=max(scored,key=lambda v:v[0])
+            spoken_total=re.search(r'(\d+[,.]\d+)\s*(?:ta)?dan',norm(s['text']))
+            reference_total=re.search(r'(\d+[,.]\d+)\s+dan',norm(picks[b.uid]))
+            if spoken_total and reference_total and spoken_total[1].replace(',','.')!=reference_total[1].replace(',','.'):
+                raise ValueError('Значение ставки в речи отличается от сценария: '+b.title)
+            annotations.append((s['start'],s['end'],'ПРОГНОЗ',picks[b.uid]))
+            for phrase in local:
+                if phrase is s:continue
+                t=norm(phrase['text']).replace("go'l",'gol').replace("go'il",'gol')
+                if 'ikkita' in t and 'gol' in t and any(v in t for v in ('kamida','shart','kerak')):
+                    body='Kamida 2 gol'
+                    if "mag'lub" in t and 'X2' in picks[b.uid]:
+                        body=picks[b.uid].splitlines()[0].replace(' X2',' yutadi yoki durang')+'\n'+body
+                    annotations.append((phrase['start'],phrase['end'],'УСЛОВИЯ ПРОГНОЗА',body))
         else:
             recap=[s for s in local if bet_cue(s['text']) and re.search(r"go['‘’]?[li]?l|go.son|alaba|x2|bir yam|bir yom",norm(s['text']))]
-            if len(recap)<len(project.blocks):raise ValueError('Распознаны не все повторы ставок в итогах.')
+            if len(recap)!=len(project.blocks):raise ValueError('Число распознанных повторов ставок не совпадает с числом разборов. Проверьте состав выпуска.')
             for owner,s in zip(project.blocks,recap):annotations.append((s['start'],s['end'],'ПРОГНОЗ',picks[owner.uid]))
         for a,z in tg:
             if lo<=a<z<=hi:annotations.append((a,z,'ТЕЛЕГРАМ','Telegram'))

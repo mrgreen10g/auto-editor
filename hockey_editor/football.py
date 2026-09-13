@@ -13,6 +13,9 @@ def frame_features(path):
     roi=rgb[32:121,9:231];hsv=cv2.cvtColor(roi,cv2.COLOR_RGB2HSV)
     grass=((hsv[:,:,0]>=25)&(hsv[:,:,0]<=95)&(hsv[:,:,1]>45)&(hsv[:,:,2]>35)).astype(np.uint8)
     coverage=float(grass.mean());wide=coverage>.53 and (grass.mean(axis=0)>.38).mean()>=.78 and (grass.mean(axis=1)>.5).mean()>=.5
+    _,_,objects,_=cv2.connectedComponentsWithStats(1-grass,8)
+    closeup=any(s[3]>=50 and s[2]<roi.shape[1]*.7 and s[4]>250 for s in objects[1:])
+    wide=wide and not closeup
     filled=cv2.morphologyEx(grass,cv2.MORPH_CLOSE,np.ones((7,7),np.uint8))
     holes=(filled>grass).astype(np.uint8);_,_,stats,_=cv2.connectedComponentsWithStats(holes,8)
     players=sum(2<=s[4]<=95 and 2<=s[3]<=20 and s[2]<=2.5*s[3] for s in stats[1:])

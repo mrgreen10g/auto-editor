@@ -10,6 +10,8 @@ from .timeline import Plan
 
 def project_edit_key(project, index):
     block = asdict(project.blocks[index]); block.pop('edit_plan',None);block.pop('edit_key',None)
+    for field in ('asr_lines','speech_key','speech_cards'):
+        if not block.get(field):block.pop(field,None)
     if block.get('language')=='ru':block.pop('language',None)
     if not block.get('source_hint'):block.pop('source_hint',None)
     block.pop('kind',None);block.pop('uid',None)  # Preserve the v0.4 per-block edit fingerprint.

@@ -189,3 +189,4 @@ def split_full_script(text):
     if not intro:raise ValueError('Перед первым разбором не найден текст начала.')
     return intro,blocks,outro
 
+

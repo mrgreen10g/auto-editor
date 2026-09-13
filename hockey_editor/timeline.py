@@ -157,6 +157,8 @@ def placements(block,lines,clip_meta,duration,frequency='normal'):
         if block.language=='uz':
             from .uzbek import classify
             title,body=classify(l.text)
+            annotation=block.speech_cards.get(str(i))
+            if annotation:title,body=annotation['title'],annotation['text']
         else:title=classify_card(l.text);body=summarize_card(title,l.text,topic) if title else l.text
         if str(i) in block.card_overrides:
             body=block.card_overrides[str(i)];title=title or 'ИНФОРМАЦИЯ'

@@ -18,6 +18,10 @@ def self_test(report):
         run(['-y','-f','lavfi','-i','color=c=blue:s=320x180:r=30:d=0.4','-f','lavfi','-i','anullsrc=r=48000:cl=mono','-t','0.4','-c:v','libx264','-c:a','aac',video])
         assert probe(video)['video']
         Image.new('RGB',(10,10)).save(d/'image.png')
+        synthesize(["O'yinni tahlil qilamiz. Kamida ikkita gol."],d/'uz.wav',threading.Event(),language='uz')
+        from faster_whisper import WhisperModel
+        import ctranslate2,tokenizers,av
+        assert 'int8' in ctranslate2.get_supported_compute_types('cpu')
     if sys.platform == 'win32':
         from hockey_editor.score_ocr import ScoreReader, score_text
         from hockey_editor.graphics import font

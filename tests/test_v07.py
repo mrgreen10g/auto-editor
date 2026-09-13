@@ -100,3 +100,4 @@ class V07Tests(unittest.TestCase):
     i=count[0];count[0]+=1;return np.ones((2,2))*((i%2)*10),states[i][1],1,5
    with patch('hockey_editor.football.frame_features',side_effect=features):ranges=gameplay_ranges(list(range(41)),10.25,threading.Event())
    self.assertEqual(len(ranges),2);self.assertLess(ranges[0][1],5);self.assertGreater(ranges[1][0],5)
+
