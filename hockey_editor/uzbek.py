@@ -45,7 +45,7 @@ def parse_script(text):
         if not line:continue
         key=norm(line)
         kind='intro' if key=='kirish' else 'outro' if key in ('yakuniy tanlovlar','yakuniy cta','yakuniy ekspress','xulosa','yakun') else None
-        pair=re.fullmatch(r"[A-ZА-ЯЁa-zа-яёʻʼ'’ .0-9]+\s+[—–-]\s+[A-ZА-ЯЁa-zа-яёʻʼ'’ .0-9]+",line)
+        pair=re.fullmatch(r"[A-ZА-ЯЁa-zа-яёʻʼ'’ .0-9]+\s+[—–-]\s+[A-ZА-ЯЁa-zа-яёʻʼ'’ .0-9]+",norm(line))
         pair_names=block_teams(line) if pair else []
         known=bool(pair_names) and all(football_identity(n) for n in pair_names)
         pair_heading=pair and not line.endswith('.') and len(line)<100 and (known or line.upper()==line)

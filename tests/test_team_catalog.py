@@ -80,6 +80,13 @@ class TeamCatalogTests(unittest.TestCase):
         self.assertFalse(name_hits('PSG',words('pas')))
         self.assertFalse(football_positions('Real Madrid','Madrid London'))
 
+    def test_typographic_apostrophes_in_headings(self):
+        for mark in ("'",'‘','’','ʻ','ʼ','`'):
+            title='XORAZM URGANCH — SO'+mark+'G'+mark+'DIYONA'
+            _,blocks,_=parse_script('KIRISH\nSalom.\n'+title+'\nTahlil.\nYAKUNIY CTA\nXayr.')
+            self.assertEqual(len(blocks),1)
+            self.assertTrue(pair_hits(blocks[0].title,words("Xorazm Sogdiana")))
+
     def test_city_reference_uses_the_right_historical_match(self):
         a=MatchSource('one.mp4','Металлург','Амур');b=MatchSource('two.mp4','Лада','Амур')
         block=Block(title='Металлург — Амур',match_ids=[a.id,b.id],script='Хабаровчане уступили «Ладе» 1:3.')
