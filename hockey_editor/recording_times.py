@@ -17,13 +17,12 @@ def parse_times(text,count):
         a,b=seconds(match[1]),seconds(match[2])
         if b<=a:raise ValueError('Конец раздела должен быть позже начала.')
         if rows and a<rows[-1][1]:raise ValueError('Разделы таймкодов пересекаются или идут не по порядку.')
-        if rows and a-rows[-1][1]>3:raise ValueError('Между разделами пропуск больше 3 секунд. Укажите непрерывную разметку выпуска.')
         rows.append((a,b,match[3]))
     if len(rows) not in (count+2,count+3):
         raise ValueError(f'Нужно: начало, {count} разбора по порядку и завершение. Итоги и прощание можно указать двумя строками.')
     return rows
 
-def recording_bounds(project,segments):
+def recording_ranges(project,segments):
     rows=parse_times(project.recording_times,len(project.blocks))
     last=max(w['end'] for s in segments for w in s['words'])
     if rows[-1][1]>last+3:raise ValueError('Таймкоды выходят за запись. Укажите время исходного видео, не примерное время из сценария.')
@@ -36,7 +35,18 @@ def recording_bounds(project,segments):
         nearby=[v for v in starts if abs(v-anchor)<=2.5]
         bounds.append(min(nearby,key=lambda v:abs(v-anchor)) if nearby else anchor)
     ends=[w['end'] for s in segments for w in s['words']]
-    anchor=rows[-1][1];nearby=[v for v in ends if abs(v-anchor)<=2.5]
-    bounds.append(max(nearby) if nearby else min(anchor,last))
-    if any(b-a<3 for a,b in zip(bounds,bounds[1:])):raise ValueError('Уточнённые разделы пересекаются. Проверьте таймкоды записи.')
-    return bounds
+    ranges=[]
+    for i,start in enumerate(bounds):
+        # Keep supplied ends: the next start may follow a long recording break.
+        # Recap and farewell remain one logical outro.
+        anchor=rows[i][1] if i<len(bounds)-1 else rows[-1][1]
+        limit=bounds[i+1] if i+1<len(bounds) else last
+        nearby=[v for v in ends if abs(v-anchor)<=2.5 and start<v<=limit]
+        end=max(nearby) if nearby else min(anchor,limit)
+        if end-start<3:raise ValueError('Уточнённые разделы пересекаются или слишком короткие. Проверьте таймкоды записи.')
+        ranges.append((start,end))
+    return ranges
+
+def recording_bounds(project,segments):
+    ranges=recording_ranges(project,segments)
+    return [a for a,b in ranges]+[ranges[-1][1]]

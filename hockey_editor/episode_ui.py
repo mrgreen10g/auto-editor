@@ -76,7 +76,7 @@ class EpisodeMixin:
         if draft.profile=='uz_football':
             timing_page=ttk.Frame(tabs,padding=12);tabs.add(timing_page,text='Таймкоды записи')
             ttk.Label(timing_page,text='Необязательно. Вставьте проверенное время исходного видео: начало, разборы в порядке проекта, итоги и прощание. Пустое поле — автоматический поиск.',wraplength=710).pack(anchor='w',pady=(0,10))
-            ttk.Label(timing_page,text='Пример: 00:32 02:08 Augsburg Bayer\nНазвания — подписи для удобства. Итоги и концовку можно указать одной или двумя строками.\nОкруглённые границы уточняются по ближайшей речи в пределах 2,5 секунды.',wraplength=710).pack(anchor='w',pady=(0,10))
+            ttk.Label(timing_page,text='Пример: 00:32 02:08 Augsburg Bayer\nНазвания — подписи для удобства. Итоги и концовку можно указать одной или двумя строками.\nПромежутки между разделами допустимы: укажите начало и конец каждого нужного блока.\nОкруглённые границы уточняются по ближайшей речи в пределах 2,5 секунды.',wraplength=710).pack(anchor='w',pady=(0,10))
             timing_field=tk.Text(timing_page,wrap='word',font=('Segoe UI',11),undo=True,height=9,padx=10,pady=10)
             timing_field.pack(fill='both',expand=True);timing_field.insert('1.0',draft.recording_times)
             ttk.Button(timing_page,text='Очистить · искать автоматически',command=lambda:timing_field.delete('1.0','end')).pack(anchor='w',pady=10)

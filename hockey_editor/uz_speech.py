@@ -20,7 +20,7 @@ def recording_key(project):
     return hashlib.sha256(json.dumps([MODEL_REV,data]).encode()).hexdigest()
 
 def speech_key(project):
-    return hashlib.sha256(json.dumps(['uz-speech-5',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['uz-speech-6-gaps-recaps',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
 
 def model_path(cancel,log):
     folder=Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'Models'/'uzbek-turbo'
@@ -142,10 +142,13 @@ def sections(project,segments):
     if project.recording_times.strip():
         from .recording_times import recording_bounds
         return recording_bounds(project,segments),tg,words
-    early=[w for w in words if w['start']<60];floor=0
+    # A clearer repetition in the first analysis must not move the intro floor.
+    intro_limit=tg[0][0] if tg and tg[0][0]<60 else 60
+    early=[w for w in words if w['start']<intro_limit];floor=0
     for b in project.blocks:
         hits=pair_hits(b.title,early)
-        if hits:floor=max(floor,early[hits[0][1]]['end'])
+        if hits:
+            first=min(hits,key=lambda hit:hit[0]);floor=max(floor,early[first[1]]['end'])
     if tg and tg[0][0]<60:floor=max(floor,tg[0][1])
     for b in project.blocks:
         choices=[s['start'] for s in segments if s['start']>=floor-.1 and pair_hits(b.title,s['words'])]
@@ -178,8 +181,13 @@ def make_lines(segments,lo,hi,annotations):
         selected=[w for w in words if a<=((w['start']+w['end'])/2)<b]
         if not selected or b-a<.15:continue
         text=' '.join(w['word'].strip() for w in selected)
+        annotated=False
         for x,y,title,body in annotations:
-            if abs(x-a)<.05 and abs(y-b)<.05:cards[str(len(lines))]={'title':title,'text':body}
+            if abs(x-a)<.05 and abs(y-b)<.05:
+                cards[str(len(lines))]={'title':title,'text':body};annotated=True
+        if not annotated:
+            a=max(a,selected[0]['start']);b=min(b,selected[-1]['end'])
+            if b-a<.15:continue
         lines.append({'text':text,'start':a,'end':b,'agreement':0.})
     return lines,cards
 
@@ -187,10 +195,14 @@ def prepare(project,segments):
     from .framing import forecast_text
     from .uz_forecasts import match_forecasts
     bounds,tg,words=sections(project,segments);key=speech_key(project)
+    ranges=list(zip(bounds,bounds[1:]))
+    if project.recording_times.strip():
+        from .recording_times import recording_ranges
+        ranges=recording_ranges(project,segments)
     picks={b.uid:forecast_text(b) for b in project.blocks}
     if any(not v for v in picks.values()):raise ValueError('Укажите основной прогноз в сценарии каждого разбора: Mening tanlovim — …')
     for index,b in enumerate([project.intro,*project.blocks,project.outro]):
-        lo,hi=bounds[index:index+2];annotations=[];local=[s for s in segments if lo<=s['start']<hi];forecast_review=[]
+        lo,hi=ranges[index];annotations=[];local=[s for s in segments if lo<=s['start']<hi];forecast_review=[];forecast_owners={}
         if b.kind=='intro':
             subset=[w for w in words if lo<=w['start']<hi]
             matched=[];uncertain=set()
@@ -238,6 +250,7 @@ def prepare(project,segments):
             recap=match_forecasts(segments,lo,hi,project.blocks,picks)
             for owner,s in zip(project.blocks,recap):
                 annotations.append((s['start'],s['end'],'ПРОГНОЗ',picks[owner.uid]))
+                forecast_owners[(s['start'],s['end'])]=owner.uid
                 if s['needs_review']:forecast_review.append((s['start'],s['end']))
         for a,z in tg:
             if lo<=a<z<=hi:annotations.append((a,z,'ТЕЛЕГРАМ','Telegram'))
@@ -249,8 +262,10 @@ def prepare(project,segments):
             for card in b.speech_cards.values():
                 if card['title']=='РАЗБОР МАТЧА' and card['text'] in uncertain:card['needs_review']=True
         if b.kind=='outro':
-            ids=sorted([i for i,c in b.speech_cards.items() if c['title']=='ПРОГНОЗ'],key=int)
-            for owner,i in zip(project.blocks,ids):b.speech_cards[i]['forecast_id']=owner.uid
+            for i,card in b.speech_cards.items():
+                if card['title']=='ПРОГНОЗ':
+                    line=b.asr_lines[int(i)]
+                    card['forecast_id']=forecast_owners[(line['start'],line['end'])]
         b.events=[];b.edit_plan=None;b.edit_key=''
     project.episode_plan=None;project.episode_key=''
     return bounds

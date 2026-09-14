@@ -8,9 +8,10 @@ def features(text):
     t=norm(text);c=compact(text)
     double=bool(re.search(r'x2|[ei]ks?ikki|sikki',c))
     winner=bool(re.search(r'[gq]alab',c)) and not double
-    total=bool(re.search(r'g[ou]i?l',c) or ('umumiy' in c and ("ko'p" in t or 'son' in c)))
     cue=bool(re.search(r'tanlo|varia|qildik|qilaqold',c))
-    ordinal=next((n for pattern,n in ((r'\bbirinchi',0),(r'\b(?:ikkinchi|ikinchi|kinchi|ekin(?:chi|ji))',1),(r'\buchinchi',2),(r'\b(?:tortinchi|to.rt.inchi)',3),(r'\boxirgi',-1)) if re.search(pattern,t)),None)
+    phonetic_total=bool(cue and re.search(r"\bko'l\b",t) and ("ko'p" in t or re.search(r'\bkam\b',t)))
+    total=bool(re.search(r'g[ou]i?l',c) or ('umumiy' in c and ("ko'p" in t or 'son' in c)) or phonetic_total)
+    ordinal=next((n for pattern,n in ((r'\bbirinchi',0),(r'\b(?:ikkinchi|ikinchi|kinchi|ekin(?:chi|ji))',1),(r'\buch(?:i|ri)nchi',2),(r'\b(?:tortinchi|to.rt.inchi)',3),(r'\boxirgi',-1)) if re.search(pattern,t)),None)
     value=re.search(r"\b(\d+(?:[,.]\d+)?)\s*(?:ta)?dan\s+(?:ko'p|kam)\b",t)
     if value:value=float(value[1].replace(',','.'))
     else:
@@ -51,6 +52,10 @@ def score(candidate,owner,reference,index,owners,recap=True):
     ordinal=f['ordinal'];ordinal=len(owners)-1 if ordinal==-1 else ordinal
     if others and not own:return None
     if ordinal is not None and ordinal!=index:return None
+    if recap and len(owners)>1:
+        ordinals={features(w['word'])['ordinal'] for w in candidate['words']}-{None}
+        ordinals={len(owners)-1 if n==-1 else n for n in ordinals}
+        if len(ordinals)>1 or not (own or ordinal is not None):return None
     if not (f['cue'] or own or ordinal is not None):return None
     if not recap and not f['cue']:return None
     if expected['value'] is not None and f['value'] is not None and expected['value']!=f['value']:return None
@@ -64,6 +69,7 @@ def score(candidate,owner,reference,index,owners,recap=True):
     matched=sum(bool(f[key]) for key in required)
     if not required or not matched:return None
     strength=matched*6+(4 if own and recap else 0)+(2 if ordinal is not None else 0)+(1 if f['cue'] else 0)
+    if not recap and re.search(r'varia|qildik|qila qold',norm(candidate['text'])):strength+=3
     if others:strength-=9
     strength-=.035*(candidate['end']-candidate['start'])
     review=matched<len(required) or (expected['value'] is not None and f['value'] is None)
@@ -74,7 +80,7 @@ def match_forecasts(segments,lo,hi,owners,references,recap=True):
     if not recap:
         # One analysis has its own known fixture; ordinals describe episode position.
         for c in candidates:c['features']['ordinal']=None
-    states=[(0.,-1.,[])]
+    scored_choices=[]
     for index,owner in enumerate(owners):
         choices=[]
         for c in candidates:
@@ -93,11 +99,26 @@ def match_forecasts(segments,lo,hi,owners,references,recap=True):
                     foreign=any(name_hits(team,longer['words']) for k,b in enumerate(owners) if k!=index for team in block_teams(b.title))
                     if not foreign and f['ordinal'] in (None,index):conflict=True;break
                 if conflict:continue
-            eligible=[s for s in states if s[1]<=c['start']+.001]
-            if not eligible:continue
-            previous=max(eligible,key=lambda s:s[0]);value,review=scored
-            choices.append((previous[0]+value,c['end'],previous[2]+[{**c,'needs_review':review,'forecast_id':owner.uid}]))
+            value,review=scored
+            choices.append((value,{**c,'needs_review':review,'forecast_id':owner.uid}))
         if not choices:
             raise ValueError('Не удалось связать '+('повтор прогноза' if recap else 'прогноз')+' «'+owner.title+'» с распознанной речью. Проверьте фразу ставки и границы раздела; количество разборов само по себе не является ошибкой.')
-        states=choices
-    return max(states,key=lambda s:s[0])[2]
+        scored_choices.append(choices)
+    # One disjoint spoken interval per fixture, in any spoken order.
+    states={0:[(0.,-1.,{})]};full=(1<<len(owners))-1
+    for mask in range(full+1):
+        frontier=[];best=float('-inf')
+        for state in sorted(states.get(mask,[]),key=lambda s:(s[1],-s[0])):
+            if state[0]>best:frontier.append(state);best=state[0]
+        states[mask]=frontier
+        for index,choices in enumerate(scored_choices):
+            if mask&(1<<index):continue
+            for value,c in choices:
+                eligible=[s for s in frontier if s[1]<=c['start']+.001]
+                if not eligible:continue
+                previous=max(eligible,key=lambda s:s[0])
+                states.setdefault(mask|(1<<index),[]).append((previous[0]+value,c['end'],{**previous[2],index:c}))
+    if not states.get(full):
+        raise ValueError('Не удалось разнести повторы ставок по времени без пересечений. Проверьте речь в итогах и выбранные границы.')
+    chosen=max(states[full],key=lambda s:s[0])[2]
+    return [chosen[i] for i in range(len(owners))]

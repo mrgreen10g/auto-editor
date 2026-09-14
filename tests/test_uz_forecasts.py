@@ -63,9 +63,13 @@ class ForecastTests(unittest.TestCase):
   data=[segment(10,13,'Mening tanlovim Bayer X2.'),segment(13,17,"Va 2,5 dan ko'p gol.")]
   with self.assertRaises(ValueError):match_forecasts(data,0,20,[owner],refs,False)
 
- def test_wrong_team_or_order_is_not_assigned_by_count(self):
+ def test_reordered_recap_keeps_fixture_ownership(self):
   p=project('host.mp4');refs={b.uid:forecast_text(b) for b in p.blocks}
   data=[segment(10,14,"Borussiya g'alabasi va 1,5 dan ko'p gol variant."),segment(15,19,"Bayer X2 va 1,5 dan ko'p gol variant."),segment(20,24,"Oxirgi o'yinda 1,5 dan ko'p gol variant.")]
+  got=match_forecasts(data,0,30,p.blocks,refs)
+  self.assertEqual([c['start'] for c in got],[15,10,20])
+  self.assertEqual([c['forecast_id'] for c in got],[b.uid for b in p.blocks])
+  data[1]=segment(15,19,"Bayer g'alabasi va 1,5 dan ko'p gol variant.")
   with self.assertRaises(ValueError):match_forecasts(data,0,30,p.blocks,refs)
 
  def test_distorted_telegram_requires_channel_and_link_context(self):
