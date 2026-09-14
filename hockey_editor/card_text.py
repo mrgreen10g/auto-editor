@@ -11,6 +11,7 @@ def teams(text):
 
 
 def numeric(text):
+    text = re.sub(r'\b(?:ноль|нуль)\b', '0', text)
     for word, number in NUMBERS.items(): text = re.sub(r'\b'+word+r'\b', number, text)
     return text
 
@@ -59,6 +60,9 @@ def summarize_card(title, text, subject=None):
     if title == 'ПРОГНОЗ':
         m = re.search(r'фор\w*\s+(плюс|минус)\s+(\d+(?:[.,]\d+)?)', numbers)
         if m: return (names[-1]+'\n' if names else '')+f'Фора ({"+" if m[1] == "плюс" else "−"}{m[2]})'
+        if re.search(r'фор\w*\s+0\b',numbers):return (names[-1]+'\n' if names else '')+'Фора (0)'
+        m=re.search(r'тотал\w*\s+(больше|меньше)\s+(\d+(?:[.,]\d+)?)',numbers)
+        if m:return f'Тотал {m[1]} ({m[2]})'
     if title == 'КОЭФФИЦИЕНТ ИЗ РАЗБОРА':
         coefficient = re.search(r'\b\d[.,]\d{2}\b', t)
         handicap = re.search(r'(плюс|минус)\s+(\d+(?:[.,]\d+)?)', numbers)
@@ -76,7 +80,7 @@ def classify_card(text):
     t=clean(text);n=numeric(t)
     if any(w in t for w in ('по счету жду','ожидаемый счет')):return 'ОЖИДАЕМЫЙ СЧЁТ'
     if any(w in t for w in ('повреждени','травм','недоступен')):return 'СОСТАВ КОМАНДЫ'
-    if 'мой выбор' in t or 'форой плюс' in t:return 'ПРОГНОЗ'
+    if 'мой выбор' in t or 'основной выбор' in t or 'форой плюс' in t:return 'ПРОГНОЗ'
     if any(w in t for w in ('ставка проходит','ставка выигрывает','ставка выиграет','возврат','ставка проигрывает')):return 'УСЛОВИЯ ПРОГНОЗА'
     if re.search(r'\d',n) and any(w in t for w in ('броск','переброс','сейв','отражен','отразил','процент')):return 'СТАТИСТИКА'
     if re.search(r'\b\d{1,2}\s*[:：]\s*\d{1,2}\b',t):return 'РЕЗУЛЬТАТ ВСТРЕЧИ'

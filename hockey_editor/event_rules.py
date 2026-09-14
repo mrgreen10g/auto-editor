@@ -4,12 +4,22 @@ from .model import EventRequest
 
 TEAMS = ('СКА', 'ЦСКА', 'Лада', 'Динамо', 'Северсталь', 'Адмирал', 'Торпедо',
          'Спартак', 'Ак Барс', 'Автомобилист', 'Металлург', 'Сибирь', 'Сочи',
-         'Салават Юлаев', 'Локомотив', 'Авангард', 'Трактор', 'Амур', 'Барыс')
+         'Салават Юлаев', 'Локомотив', 'Авангард', 'Трактор', 'Амур', 'Барыс',
+         'Шанхайские Драконы', 'Нефтехимик')
+
+# Include spoken short forms as well as inflections of the full club name.
+TEAM_ALIASES = {'Шанхайские Драконы': (r'шанха\w*', r'дракон\w*')}
 
 def clean(text):
     return text.lower().replace('ё', 'е')
 
 def team_position(name, text):
+    normalized = clean(name).strip(' «»"')
+    if not normalized:return None
+    for canonical, aliases in TEAM_ALIASES.items():
+        if any(re.fullmatch(p + r'(?:\s+\w+)*', normalized) for p in aliases):
+            match = re.search(r'\b(?:' + '|'.join(aliases) + r')\b', clean(text))
+            return match.start() if match else None
     key = clean(name).split()[0]
     # Short names must not match a suffix (СКА inside ЦСКА).
     pattern = r'\b' + re.escape(key if len(key) <= 4 else key[:6]) + (r'\b' if len(key) <= 4 else r'\w*')
@@ -128,4 +138,3 @@ def requests_for(block, matches, use_manual=True):
                                    flexible_source=kind=='play' and not pairs and not known))
         if score: previous[source_id] = score
     return result
-

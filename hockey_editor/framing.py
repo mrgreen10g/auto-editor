@@ -17,7 +17,9 @@ def prepared_script(block):
     # Align team introductions independently even inside a single sentence.
     from .event_rules import TEAMS
     names='|'.join(re.escape(n) for n in TEAMS)
-    text=re.sub(r'[,：:]\s*(?=(?:а\s+)?(?:московск\w*\s+)?«?(?:'+names+r')\b)', '\n', block.script, flags=re.I)
+    text=block.script
+    if block.kind=='intro':
+        text=re.sub(r'[,：:]\s*(?=(?:а\s+)?(?:московск\w*\s+)?«?(?:'+names+r')\b)', '\n', text, flags=re.I)
     lines=split_script(text);result=[]
     for line in lines:
         if re.search(r'ссылка\s+находится\s+в\s+описании',line,re.I) and result and 'телеграм' in result[-1].lower():
@@ -29,6 +31,11 @@ def prepared_script(block):
 def pair_matches(text,block):
     names=block_teams(block.title)
     def mentioned(name):
+        if team_position(name,text) is not None:return True
+        cities={'Авангард':r'омск\w*','Автомобилист':r'екатеринбург\w*',
+                'Трактор':r'челябинск\w*','Локомотив':r'ярославл\w*'}
+        for team,city in cities.items():
+            if team_position(team,name) is not None and re.search(r'\b'+city,text,re.I):return True
         key=name.lower().split()[0]
         if key in ('ска','цска'):pattern=r'\b'+key+r'\b'
         else:pattern=r'\b'+re.escape(key[:3] if key=='лада' else key[:6])+r'\w*'
@@ -74,7 +81,7 @@ def framing_cards(project,block,lines,duration):
             seen_pairs.add(pairs[0].uid)
             cards.append(Card(line.start,line.end,'РАЗБОР МАТЧА',pairs[0].title,i));continue
         if block.kind=='outro':
-            if pairs and re.search(r'беру|выбираю|вариант|выбор|став',low):
+            if pairs and re.search(r'беру|выбираю|вариант|выбор|став|\bфор\w*|\bтотал\w*',low):
                 owner=pairs[0];text=forecast_text(owner)
                 if not text:raise ValueError('Не найден основной прогноз в разборе: '+owner.title)
                 cards.append(Card(line.start,line.end,'ПРОГНОЗ',text,i,forecast_id=owner.uid));continue
@@ -188,5 +195,3 @@ def split_full_script(text):
     blocks=[(rows[a].strip(),'\n'.join(rows[a:(headers[j+1] if j+1<len(headers) else end)]).strip()) for j,a in enumerate(headers)]
     if not intro:raise ValueError('Перед первым разбором не найден текст начала.')
     return intro,blocks,outro
-
-
