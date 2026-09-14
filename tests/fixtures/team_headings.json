@@ -1,0 +1,238 @@
+[
+  {
+    "file": "02.09.txt",
+    "profile": "ru",
+    "headings": [
+      "Локомотив — Трактор",
+      "Автомобилист — Динамо Москва",
+      "Ак Барс — Сибирь"
+    ]
+  },
+  {
+    "file": "Лонг 03.09.txt",
+    "profile": "ru",
+    "headings": [
+      "СКА — Лада",
+      "Спартак — Торпедо",
+      "Северсталь — Салават Юлаев"
+    ]
+  },
+  {
+    "file": "Лонг 04.09.txt",
+    "profile": "ru",
+    "headings": [
+      "Металлург Магнитогорск — Амур",
+      "Нефтехимик — Шанхайские Драконы"
+    ]
+  },
+  {
+    "file": "Лонг 05.09.txt",
+    "profile": "ru",
+    "headings": [
+      "Авангард — Салават Юлаев",
+      "Автомобилист — Трактор",
+      "Барыс — Сибирь"
+    ]
+  },
+  {
+    "file": "Лонг 06.09.txt",
+    "profile": "ru",
+    "headings": [
+      "СКА — Динамо Москва",
+      "ЦСКА — Спартак"
+    ]
+  },
+  {
+    "file": "Лонг 07.09.txt",
+    "profile": "ru",
+    "headings": [
+      "Металлург — Амур",
+      "Нефтехимик — Сочи",
+      "Локомотив — Шанхайские Драконы"
+    ]
+  },
+  {
+    "file": "Лонг 08.09.txt",
+    "profile": "ru",
+    "headings": [
+      "Динамо Москва — Адмирал",
+      "СКА — Лада",
+      "ЦСКА — Торпедо"
+    ]
+  },
+  {
+    "file": "Лонг 09.09.txt",
+    "profile": "ru",
+    "headings": [
+      "Авангард — Сочи",
+      "Локомотив — Северсталь",
+      "Динамо Минск — Шанхайские Драконы",
+      "Спартак — СКА"
+    ]
+  },
+  {
+    "file": "Лонг 10.09.txt",
+    "profile": "ru",
+    "headings": [
+      "Лада — Торпедо",
+      "Ак Барс — Металлург",
+      "Нефтехимик — Автомобилист",
+      "ЦСКА — Адмирал"
+    ]
+  },
+  {
+    "file": "Лонг 11.09.txt",
+    "profile": "ru",
+    "headings": [
+      "Барыс — Амур",
+      "Динамо Москва — Динамо Минск",
+      "Сочи — СКА",
+      "Спартак — Северсталь"
+    ]
+  },
+  {
+    "file": "Лонг 12.09.txt",
+    "profile": "ru",
+    "headings": [
+      "Сибирь — Автомобилист",
+      "Авангард — Металлург",
+      "Нефтехимик — Адмирал",
+      "ЦСКА — Локомотив"
+    ]
+  },
+  {
+    "file": "Лонг 13.09.txt",
+    "profile": "ru",
+    "headings": [
+      "Лада — Динамо Минск",
+      "Северсталь — Динамо Москва",
+      "Торпедо — Ак Барс"
+    ]
+  },
+  {
+    "file": "Лонг 14.09.txt",
+    "profile": "ru",
+    "headings": [
+      "Авангард — Автомобилист",
+      "Трактор — Локомотив",
+      "СКА — Шанхайские Драконы"
+    ]
+  },
+  {
+    "file": "Лонг 07.09.txt",
+    "profile": "uz",
+    "headings": [
+      "OKMK — PAXTAKOR",
+      "NEFTCHI — SURXON",
+      "NASAF — BUNYODKOR"
+    ]
+  },
+  {
+    "file": "Лонг 08.09.txt",
+    "profile": "uz",
+    "headings": [
+      "XORAZM URGANCH — SO'G'DIYONA",
+      "BUXORO — NAVBAHOR",
+      "LOKOMOTIV TOSHKENT — MASH'AL"
+    ]
+  },
+  {
+    "file": "Лонг 09.09.txt",
+    "profile": "uz",
+    "headings": [
+      "UNION BERLIN — SHALKE",
+      "AUGSBURG — BAYER",
+      "BORUSSIYA DORTMUND — PADERBORN"
+    ]
+  },
+  {
+    "file": "Лонг 10.09.txt",
+    "profile": "uz",
+    "headings": [
+      "AUGSBURG — BAYER",
+      "BORUSSIYA DORTMUND — PADERBORN",
+      "MAYNS — AYNTRAXT FRANKFURT"
+    ]
+  },
+  {
+    "file": "Лонг 11.09.txt",
+    "profile": "uz",
+    "headings": [
+      "LIVERPUL — FULHEM",
+      "CHELSI — HALL",
+      "TOTTENXEM — EVERTON"
+    ]
+  },
+  {
+    "file": "Лонг 12.09.txt",
+    "profile": "uz",
+    "headings": [
+      "SANDERLEND — ARSENAL",
+      "KOVENTRI SITI — BRAYTON",
+      "MANCHESTER YUNAYTED — MANCHESTER SITI"
+    ]
+  },
+  {
+    "file": "Лонг 13.09.txt",
+    "profile": "uz",
+    "headings": [
+      "KOMO — PARMA",
+      "TORINO — ROMA",
+      "INTER — UDINEZE"
+    ]
+  },
+  {
+    "file": "Лонг 14.09.txt",
+    "profile": "uz",
+    "headings": [
+      "RAYO VALYEKANO — ESPANYOL",
+      "ALAVES — VALENSIYA",
+      "ELCHE — REAL MADRID"
+    ]
+  },
+  {
+    "file": "Лонг 28.08.txt",
+    "profile": "uz",
+    "headings": [
+      "LIVERPOOL — NOTTINGHAM FOREST",
+      "BOURNEMOUTH — EVERTON",
+      "TOTTENHAM — NEWCASTLE UNITED"
+    ]
+  },
+  {
+    "file": "Лонг 29.08.txt",
+    "profile": "uz",
+    "headings": [
+      "CHELSEA — BRIGHTON",
+      "MANCHESTER UNITED — IPSWICH TOWN",
+      "ASTON VILLA — ARSENAL"
+    ]
+  },
+  {
+    "file": "Лонг 30.08.txt",
+    "profile": "uz",
+    "headings": [
+      "CELTA — ATHLETIC",
+      "OSASUNA — GETAFE",
+      "BARCELONA — RAYO VALLECANO"
+    ]
+  },
+  {
+    "file": "Лонг 31.08.txt",
+    "profile": "uz",
+    "headings": [
+      "TOULOUSE — LILLE",
+      "LYON — AUXERRE",
+      "PSG — MONACO"
+    ]
+  },
+  {
+    "file": "лонг 01.09.txt",
+    "profile": "uz",
+    "headings": [
+      "OKMK — XORAZM URGANCH",
+      "BUNYODKOR — SURXON",
+      "NAVBAHOR — LOKOMOTIV TOSHKENT"
+    ]
+  }
+]

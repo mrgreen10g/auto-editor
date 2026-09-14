@@ -1,10 +1,12 @@
 """Local Uzbek ASR and script-guided section detection. Written times are hints."""
 import copy, gc, hashlib, json, os, re, urllib.request
+from functools import lru_cache
 from pathlib import Path
 from difflib import SequenceMatcher
 from .media import Cancelled, run
 from .uzbek import norm
 from .graphics import block_teams
+from .team_names import football_aliases, football_identity, normalize, compact, CATALOG_VERSION
 
 MODEL_REPO='hostmepanda/whisper-large-v3-turbo-uzbek-ct2'
 MODEL_REV='c1122214fcea840e8fab399df10d22ad7c56919f'
@@ -18,7 +20,7 @@ def recording_key(project):
     return hashlib.sha256(json.dumps([MODEL_REV,data]).encode()).hexdigest()
 
 def speech_key(project):
-    return hashlib.sha256(json.dumps(['uz-speech-4',recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['uz-speech-5',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
 
 def model_path(cancel,log):
     folder=Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'Models'/'uzbek-turbo'
@@ -68,25 +70,39 @@ def transcribe(project,cache,cancel,log):
     temp=saved.with_suffix('.tmp');temp.write_text(json.dumps(result,ensure_ascii=False),encoding='utf-8');temp.replace(saved)
     return result
 
+@lru_cache(maxsize=8192)
 def token(text):
-    value=re.sub(r'[^a-z0-9]','',norm(text))
+    value=compact(text)
     return {'padedborn':'paderborn','paddeboron':'paderborn','padiboron':'paderborn','padiborun':'paderborn','maddiboron':'paderborn','padeborn':'paderborn','borussiya':'borussia','borusya':'borussia'}.get(value,value)
+@lru_cache(maxsize=32768)
 def similar(a,b):
     a=token(a);b=token(b)
     return SequenceMatcher(None,a,b,autojunk=False).ratio() if a and b else 0
 
-def name_hits(name,words):
-    names=[token(v) for v in name.split() if len(token(v))>=4];hits=[]
+def name_hits(name,words,context=()):
+    names=[token(v) for v in football_aliases(name,context)];hits=[]
+    club=football_identity(name)
     for i in range(len(words)):
         for count in (1,2,3):
             if i+count>len(words):break
             text=''.join(token(w['word']) for w in words[i:i+count])
-            score=max([similar(n,text) for n in names]+[0])
+            # Strip only Uzbek grammatical suffixes, never arbitrary word tails.
+            variants=[text]+[text[:-len(s)] for s in ('ning','dan','ga','da','ni','mi') if text.endswith(s)]
+            score=max([similar(n,v) if min(len(n),len(v))>=4 else float(n==v)
+                       for n in names for v in variants]+[0])
+            if club in ('Manchester United','Manchester City','Coventry City'):
+                # Shared city/name words must not pass fuzzy matching alone.
+                if text in ('manchester','city','siti','united'):score=0
+                required={'Manchester United':('united','yunayted','юнайтед'),
+                          'Manchester City':('city','siti','сити'),
+                          'Coventry City':('coventry','koventri','ковентри')}[club]
+                if not any(similar(token(w['word']),v)>=.78 for w in words[i:i+count] for v in required):score=0
+                if club=='Manchester City' and i>0 and any(similar(words[i-1]['word'],v)>=.8 for v in ('koventri','coventry','hull','hall')):score=0
             if score>=.74:hits.append((i,i+count-1,score))
     return hits
 
 def pair_hits(title,words):
-    a,b=block_teams(title);left=name_hits(a,words);right=name_hits(b,words)
+    a,b=block_teams(title);left=name_hits(a,words,(a,b));right=name_hits(b,words,(a,b))
     choices=[(min(i[0],j[0]),max(i[1],j[1]),i[2]+j[2]) for i in left for j in right if abs(i[0]-j[0])<=8 and (i[1]<j[0] or j[1]<i[0])]
     return [(a,b) for a,b,_ in sorted(choices,key=lambda v:(-v[2],v[0],v[1]-v[0]))]
 

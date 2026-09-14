@@ -30,17 +30,8 @@ def prepared_script(block):
 
 def pair_matches(text,block):
     names=block_teams(block.title)
-    def mentioned(name):
-        if team_position(name,text) is not None:return True
-        cities={'Авангард':r'омск\w*','Автомобилист':r'екатеринбург\w*',
-                'Трактор':r'челябинск\w*','Локомотив':r'ярославл\w*'}
-        for team,city in cities.items():
-            if team_position(team,name) is not None and re.search(r'\b'+city,text,re.I):return True
-        key=name.lower().split()[0]
-        if key in ('ска','цска'):pattern=r'\b'+key+r'\b'
-        else:pattern=r'\b'+re.escape(key[:3] if key=='лада' else key[:6])+r'\w*'
-        return re.search(pattern,text.lower()) is not None
-    return len(names)==2 and all(mentioned(n) for n in names if n)
+    positions=[team_position(name,text,names) for name in names]
+    return bool(names[1]) and all(p is not None for p in positions) and len(set(positions))==2
 
 
 def forecast_text(block):

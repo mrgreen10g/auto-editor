@@ -102,10 +102,13 @@ class MatchMixin:
         for path in filedialog.askopenfilenames(title='Полные записи исходных матчей', filetypes=VIDEO):
             existing = next((m for m in self.project.matches if Path(m.path).resolve() == Path(path).resolve()), None)
             if existing is None:
-                names = suggested_names(Path(path).stem) + ['', '']
+                from .team_names import ru_file_names
+                names = ru_file_names(Path(path).stem) + ['', '']
                 if self.project.profile=='uz_football':
                     from .graphics import block_teams
-                    names=block_teams(Path(path).stem)
+                    from .team_names import football_names
+                    found=football_names(Path(path).stem)
+                    names=found if len(found)==2 else block_teams(Path(path).stem)
                 source = MatchSource(path, names[0], names[1],sport='football' if self.project.profile=='uz_football' else 'hockey')
                 dialog = SourceDialog(self.root, source)
                 if not dialog.result: continue
@@ -401,4 +404,3 @@ class MatchMixin:
 def propose_events(events, scans, sources=(), allow_other=False):
     from .goals import propose
     return propose(events, scans, sources, allow_other)
-

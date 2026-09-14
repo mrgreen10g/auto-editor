@@ -1,41 +1,37 @@
 """Conservative script requests: source identity is separate from score order."""
 import re
 from .model import EventRequest
+from .team_names import RU, ru_position, ru_identity
 
 TEAMS = ('СКА', 'ЦСКА', 'Лада', 'Динамо', 'Северсталь', 'Адмирал', 'Торпедо',
          'Спартак', 'Ак Барс', 'Автомобилист', 'Металлург', 'Сибирь', 'Сочи',
          'Салават Юлаев', 'Локомотив', 'Авангард', 'Трактор', 'Амур', 'Барыс',
-         'Шанхайские Драконы', 'Нефтехимик')
-
-# Include spoken short forms as well as inflections of the full club name.
-TEAM_ALIASES = {'Шанхайские Драконы': (r'шанха\w*', r'дракон\w*')}
+         'Шанхайские Драконы', 'Нефтехимик', 'Динамо Минск', 'СКА-ВМФ', 'Нефтяник')
 
 def clean(text):
     return text.lower().replace('ё', 'е')
 
-def team_position(name, text):
-    normalized = clean(name).strip(' «»"')
-    if not normalized:return None
-    for canonical, aliases in TEAM_ALIASES.items():
-        if any(re.fullmatch(p + r'(?:\s+\w+)*', normalized) for p in aliases):
-            match = re.search(r'\b(?:' + '|'.join(aliases) + r')\b', clean(text))
-            return match.start() if match else None
+def team_position(name, text, context=()):
+    if not name.strip():return None
+    if ru_identity(name):return ru_position(name,text,context)
     key = clean(name).split()[0]
     # Short names must not match a suffix (СКА inside ЦСКА).
     pattern = r'\b' + re.escape(key if len(key) <= 4 else key[:6]) + (r'\b' if len(key) <= 4 else r'\w*')
     match = re.search(pattern, clean(text))
     return match.start() if match else None
 
-def suggested_names(filename):
-    found = [(team_position(n, filename), n) for n in TEAMS]
+def suggested_names(filename, context=()):
+    found = [(team_position(n, filename,context), n) for n in TEAMS]
     found = sorted((p, n) for p, n in found if p is not None)
     return [n for _, n in found[:2]]
 
 def topic_for_phrase(topic,phrase,block_title):
     text=clean(phrase)
     if re.match(r'^(?:сначала|затем)\s+\d',text):return topic
-    names=[n for n in suggested_names(block_title) if team_position(n,phrase) is not None]
-    if names:return min(names,key=lambda n:team_position(n,phrase))
+    from .graphics import block_teams
+    candidates=block_teams(block_title)
+    names=[n for n in candidates if team_position(n,phrase,candidates) is not None]
+    if names:return min(names,key=lambda n:team_position(n,phrase,candidates))
     if 'владивосток' in text:return 'Адмирал'
     if 'тольяттин' in text:return 'Лада'
     return topic

@@ -4,6 +4,7 @@ from .model import Block,EventRequest
 from .timeline import Card,frame
 from .alignment import split_script
 from .graphics import block_teams
+from .team_names import football_positions, football_identity
 
 
 def norm(text):
@@ -29,16 +30,28 @@ def spoken_uz(text):
 
 HINT=re.compile(r'^\s*(\d{1,2}):(\d{2})\s*[—–-]\s*(\d{1,2}):(\d{2})\s*$')
 
+def display_title(line):
+    return ' '.join(w.upper() if w.upper() in ('PSG','PSJ','OKMK','AGMK')
+                    else w[:1].upper()+w[1:].lower() for w in line.split())
+
 def parse_script(text):
     sections=[];current=None
-    for raw in text.splitlines():
+    rows=text.splitlines()
+    # Authors supply an unspoken title and fixture index before KIRISH.
+    start=next((i for i,l in enumerate(rows) if norm(l.strip().lstrip('\ufeff'))=='kirish'),None)
+    if start is None:raise ValueError('Начните узбекский сценарий с заголовка KIRISH.')
+    for raw in rows[start:]:
         line=raw.strip().lstrip('\ufeff')
         if not line:continue
         key=norm(line)
-        kind='intro' if key=='kirish' else 'outro' if key in ('yakuniy tanlovlar','yakuniy cta','xulosa','yakun') else None
+        kind='intro' if key=='kirish' else 'outro' if key in ('yakuniy tanlovlar','yakuniy cta','yakuniy ekspress','xulosa','yakun') else None
         pair=re.fullmatch(r"[A-ZА-ЯЁa-zа-яёʻʼ'’ .0-9]+\s+[—–-]\s+[A-ZА-ЯЁa-zа-яёʻʼ'’ .0-9]+",line)
-        if kind or (pair and line.upper()==line and not line.endswith('.') and len(line)<100):
-            current={'kind':kind or 'analysis','title':line.title() if not kind else 'Boshlanish' if kind=='intro' else 'Yakun','lines':[],'hint':[]};sections.append(current);continue
+        pair_names=block_teams(line) if pair else []
+        known=bool(pair_names) and all(football_identity(n) for n in pair_names)
+        pair_heading=pair and not line.endswith('.') and len(line)<100 and (known or line.upper()==line)
+        if current and current['kind']=='outro':pair_heading=False
+        if kind or pair_heading:
+            current={'kind':kind or 'analysis','title':display_title(line) if not kind else 'Boshlanish' if kind=='intro' else 'Yakun','lines':[],'hint':[]};sections.append(current);continue
         hint=HINT.match(line)
         if hint:
             if current:current['hint']=[int(hint[1])*60+int(hint[2]),int(hint[3])*60+int(hint[4])]
@@ -75,8 +88,9 @@ def prepared(block):
 
 
 def mentions(title,text):
-    names=block_teams(title);words=norm(text)
-    return bool(names[1]) and all(any(re.search(r'\b'+re.escape(w)+r'\w*',words) for w in norm(name).split() if len(w)>2) for name in names)
+    names=block_teams(title)
+    hits=[football_positions(name,text,names) for name in names]
+    return bool(names[1]) and any(a[1]<=b[0] or b[1]<=a[0] for a in hits[0] for b in hits[1])
 
 
 def core(text):
