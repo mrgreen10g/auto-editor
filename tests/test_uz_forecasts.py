@@ -22,10 +22,10 @@ class ForecastTests(unittest.TestCase):
   from hockey_editor.engine import Engine
   with tempfile.TemporaryDirectory() as d:
    root=Path(d);host=root/'host.mp4'
-   run(['-y','-f','lavfi','-i','color=c=blue:s=320x180:r=30:d=8','-f','lavfi','-i','sine=f=650:r=48000:d=8','-t','8','-c:v','libx264','-c:a','aac',host])
+   run(['-y','-f','lavfi','-i','color=c=blue:s=320x180:r=30:d=8','-f','lavfi','-i','sine=f=650:r=48000:d=8','-t','8','-af','afade=t=out:st=6.5:d=0.1','-c:v','libx264','-c:a','aac',host])
    b=Block(kind='outro',language='uz',script='Telegram kanalimizda yangiliklar. Havola tavsifda.',asr_lines=[{'text':'Telegram kanalimizda yangiliklar. Havola tavsifda.','start':3,'end':6.8,'agreement':0}],speech_cards={'0':{'title':'ТЕЛЕГРАМ','text':'Telegram'}})
    p=Project(profile='uz_football',host=str(host),blocks=[b],assets={'telegram':str(host)})
-   p.settings.auto_rotate=False;p.settings.cut_pauses=False
+   p.settings.auto_rotate=False;p.settings.cut_pauses=True
    e=Engine(p,0,root/'cache',threading.Event());plan=e.analyze()
    self.assertAlmostEqual(plan.source_end,8,delta=.04);self.assertEqual(plan.lines[-1].text,'')
    card=next(c for c in plan.cards if c.title=='ТЕЛЕГРАМ');self.assertGreater(plan.duration-card.end,1)

@@ -48,6 +48,7 @@ class Engine:
         if source_floor>=info['duration']-1:raise ValueError('В записи не осталось места для следующего разбора. Проверьте порядок текстов.')
         key=self.signature(source_floor);cached=self.cache/'alignment.json'
         saved=json.loads(cached.read_text(encoding='utf-8')) if cached.exists() else {}
+        protected_tail=None
         if block.language=='uz' and block.asr_lines:
             source=[Line(**l) for l in block.asr_lines]
             warnings=['Узбекская речь распознана автоматически. Проверьте предпросмотр и написание текста. Тайминги документа не использованы.']
@@ -56,7 +57,8 @@ class Engine:
             if block.kind=='outro' and source and .15<total-source[-1].end<=2:
                 # A short farewell may be missing from ASR. Retain original A/V,
                 # without extending the Telegram card or inventing spoken text.
-                source.append(Line('',source[-1].end,total,0.))
+                protected_tail=source[-1].end
+                source.append(Line('',protected_tail,total,0.))
                 warnings.append('Распознавание не охватило короткий конец записи; последние кадры и звук сохранены для проверки прощания.')
             if source[0].start<source_floor-.3:raise ValueError('Границы распознанных разделов пересекаются.')
         elif saved.get('key')==key:
@@ -80,6 +82,9 @@ class Engine:
         self.log(f'Найден разбор в исходнике: {start:.2f}–{end:.2f} с.')
         silence_log=run(['-ss',start,'-t',end-start,'-i',audio_source,'-vn','-af','silencedetect=noise=-35dB:d=0.30','-f','null','-'],self.cancel)
         spans=[(float(a),float(b)) for a,b in re.findall(r'silence_start: ([\d.]+).*?silence_end: ([\d.]+)',silence_log,re.S)]
+        if protected_tail is not None:
+            limit=protected_tail-start
+            spans=[(a,min(b,limit)) for a,b in spans if a<limit and min(b,limit)>a]
         keep=keep_ranges(end-start,spans,enabled=p.settings.cut_pauses)
         duration=sum(b-a for a,b in keep)
         lines=[Line(l.text,frame(map_time(l.start-start,keep)),frame(map_time(l.end-start,keep)),l.agreement) for l in source]
