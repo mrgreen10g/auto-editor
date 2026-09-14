@@ -1,5 +1,10 @@
 # Third-party components
 
+## Russian fallback speech in 0.7.5
+
+- Systran/faster-whisper-small: https://huggingface.co/Systran/faster-whisper-small ; pinned revision 536b0662742c02347bc0e980a01041f333bce120. The model metadata declares MIT. The converted multilingual Whisper small model is used locally via the existing faster-whisper/CTranslate2 dependencies.
+- The four model files are SHA-256 checked and downloaded separately on demand (~460 MiB). No user recordings are sent to a speech service. Existing Uzbek weights are unchanged.
+
 ## Uzbek speech in 0.7
 
 - faster-whisper and CTranslate2: MIT; PyAV, Tokenizers and Hugging Face Hub licenses are copied from installed distributions.

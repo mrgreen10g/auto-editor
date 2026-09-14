@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 from .engine import Engine
+from .alignment import AlignmentError
 from .editing import project_edit_key,store_plan,saved_plan,validate_plan
 from .timeline import Plan,Card,frame
 
@@ -196,12 +197,28 @@ class EpisodeEngine(Engine):
         restored=saved_episode(self.project)
         if restored:
             self.log('Использую общую дорожку с сохранёнными правками.');return restored
-        plans=[];previous=0;runtime=assembly_project(self.project)
+        runtime=assembly_project(self.project)
+        snapshot=[(copy.deepcopy(b.edit_plan),b.edit_key) for b in runtime.blocks]
+        try:return self._assemble(runtime)
+        except AlignmentError:
+            for block,(plan,key) in zip(runtime.blocks,snapshot):block.edit_plan=plan;block.edit_key=key
+            if self.project.profile!='ru_hockey' or not self.project.full_video:raise
+            from .ru_speech import prepare
+            self.log('Обычная разметка неустойчива. Проверяю весь выпуск по словам и порядку частей…')
+            speech=prepare(self.project,runtime.blocks,self.cache,self.cancel,self.log)
+            try:return self._assemble(runtime,speech)
+            except Exception:
+                for block,(plan,key) in zip(runtime.blocks,snapshot):block.edit_plan=plan;block.edit_key=key
+                raise
+
+    def _assemble(self,runtime,speech=None):
+        plans=[];previous=0
         for i,block in enumerate(runtime.blocks):
             self.check();self.log(f'Разбор {i+1}/{len(runtime.blocks)}: {block.title}')
             engine=Engine(runtime,i,self.cache/block.uid,self.cancel,self.log)
-            existing=saved_plan(runtime,i)
-            p=engine.analyze(source_floor=max(0,previous-(.15 if self.project.full_video else 1)))
+            existing=saved_plan(runtime,i) if speech is None else None
+            kwargs={'speech':speech[block.uid]} if speech is not None else {}
+            p=engine.analyze(source_floor=max(0,previous-(.15 if self.project.full_video else 1)),**kwargs)
             if p.source_start<previous-1.01:
                 raise ValueError('Порядок разборов не совпадает с записью: '+block.title)
             # Refresh intro/outro overlays from current assets and shared bets, even when speech is cached.

@@ -3,12 +3,12 @@ from pathlib import Path
 import hashlib,json,re,math,os,shutil
 from . import __version__
 from .media import probe,run,audio_extract,Cancelled
-from .alignment import align
+from .alignment import align,AlignmentError
 from .timeline import Plan,Line,Card,keep_ranges,map_time,placements,zoom_windows,frame
 from .graphics import card_image
 
-# Speech alignment is unchanged in 0.5.1; retain the accepted 0.5 audio cache.
-ALIGNMENT_VERSION = '0.5.0-align2'
+# Recompute raw acoustic caches after adding section search bounds.
+ALIGNMENT_VERSION = '0.7.5-align-limits'
 
 class Engine:
     def __init__(self,project,index,cache,cancel,log=lambda _:None):
@@ -26,14 +26,14 @@ class Engine:
         if self.project.profile!='ru_hockey':data['profile']=self.project.profile
         return hashlib.sha256(json.dumps(data,ensure_ascii=False).encode()).hexdigest()
 
-    def analyze(self,source_floor=0):
+    def analyze(self,source_floor=0,speech=None):
         p=self.project;p.validate(self.index);self.check()
         if p.profile=='uz_football' and all(b.kind=='analysis' for b in p.blocks):
             from .uz_speech import synchronize
             synchronize(p,self.cache,self.cancel,self.log)
         from .editing import saved_plan
         restored=saved_plan(p,self.index)
-        if restored is not None and restored.source_start>=source_floor-.035:
+        if restored is not None and speech is None and restored.source_start>=source_floor-.035 and not (p.blocks[self.index].kind=='intro' and restored.source_end>120):
             self.log('Использую сохранённую монтажную дорожку с вашими правками.')
             if (len(p.host_paths())>1 or p.full_video) and not restored.media:
                 from .host_media import sources,media_ranges
@@ -45,11 +45,14 @@ class Engine:
         audio_source,total,parts=analysis_source(p,self.cache,self.cancel,self.log)
         info={'duration':total}
         if info['duration']>1800:raise ValueError('Поддерживается запись ведущего длительностью до 30 минут.')
-        if source_floor>=info['duration']-1:raise ValueError('В записи не осталось места для следующего разбора. Проверьте порядок текстов.')
+        if source_floor>=info['duration']-1:raise AlignmentError('В записи не осталось места для следующего разбора. Требуется проверка порядка частей.')
         key=self.signature(source_floor);cached=self.cache/'alignment.json'
         saved=json.loads(cached.read_text(encoding='utf-8')) if cached.exists() else {}
         protected_tail=None
-        if block.language=='uz' and block.asr_lines:
+        if speech is not None:
+            source,warnings=speech
+            source=[Line(**vars(line)) for line in source];warnings=list(warnings)
+        elif block.language=='uz' and block.asr_lines:
             source=[Line(**l) for l in block.asr_lines]
             warnings=['Узбекская речь распознана автоматически. Проверьте предпросмотр и написание текста. Тайминги документа не использованы.']
             if p.recording_times.strip():warnings.append('Границы разделов заданы таймкодами записи и уточнены по ближайшей речи (до 2,5 с).')
@@ -67,13 +70,16 @@ class Engine:
         else:
             self.log('Извлекаю голос ведущего…')
             audio=self.cache/'host.wav'
-            run(['-y','-ss',source_floor,'-i',audio_source,'-vn','-ac','1','-ar','16000','-c:a','pcm_s16le',audio],self.cancel)
+            limit=['-t',min(120,info['duration'])] if block.kind=='intro' else []
+            run(['-y','-ss',source_floor,'-i',audio_source,*limit,'-vn','-ac','1','-ar','16000','-c:a','pcm_s16le',audio],self.cancel)
             from .framing import prepared_script
             source,warnings=align(audio,prepared_script(block),self.cache,self.cancel,self.log,language=block.language)
             for line in source:line.start+=source_floor;line.end+=source_floor
             cached.write_text(json.dumps({'key':key,'lines':[vars(l) for l in source],'warnings':warnings},ensure_ascii=False,indent=2),encoding='utf-8')
         if not source or any(l.end<=l.start for l in source):
             raise ValueError('Некорректная разметка: проверьте, что сценарий соответствует записи.')
+        if block.kind=='intro' and source[-1].end>120:
+            raise AlignmentError('Начало оказалось за пределами первых двух минут. Требуется проверка по словам.')
         warnings=list(warnings)
         if block.source_hint and (abs(block.source_hint[0]-source[0].start)>3 or block.source_hint[-1]>total+1):
             warnings.append('Таймкоды сценария не совпадают с записью. Использована проверка по речи, а не отметки из текста.')

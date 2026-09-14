@@ -13,6 +13,10 @@ SR=16000
 HOP=640
 _lock=threading.Lock()
 
+class AlignmentError(ValueError):
+    """Acoustic timing is unsafe; a lexical check may recover it."""
+    pass
+
 def split_script(text):
     result=[]
     for line in text.splitlines():
@@ -194,7 +198,7 @@ def align(audio,script,cache,cancel,log,language='ru'):
                 float(abs(bounds[0][i]-bounds[1][i]))) for i,t in enumerate(texts)]
     disagreements=[i for i,l in enumerate(lines) if l.agreement>.8 or l.end-l.start<.25]
     if any(l.agreement>3 for l in lines) or len(disagreements)>max(3,len(lines)//4):
-        raise ValueError('Не удалось надежно совместить сценарий с записью. Проверьте соответствие текста речи и отсутствие повторных дублей. Неточная разметка не будет отправлена на экспорт.')
+        raise AlignmentError('Локальное сравнение звучания дало неустойчивые тайминги. Требуется дополнительная проверка по словам; это не обязательно означает ошибку сценария или повторы ведущего.')
     warnings=[]
     if disagreements:warnings.append('Проверьте фразы с неустойчивой разметкой: '+', '.join(str(i+1) for i in disagreements))
     if max(quality)>.65:warnings.append('Слабое совпадение текста и голоса. Проверьте сценарий и предпросмотр перед экспортом.')
@@ -205,4 +209,3 @@ def bounded_dtw(a,b,cancel=None,free=True,limit=180_000_000):
     path,score=subsequence_dtw(a[::stride],b[::stride],cancel,free=free)
     if stride>1:path=np.interp(np.arange(len(b)),np.arange(len(path))*stride,path*stride)
     return path,score
-
