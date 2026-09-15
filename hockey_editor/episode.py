@@ -175,7 +175,9 @@ class EpisodeEngine(Engine):
         super().__init__(project,0,cache,cancel,log)
 
     def validate_all(self):
-        if not 1<=len(self.project.blocks)<=4:raise ValueError('В выпуске поддерживается от 1 до 4 разборов.')
+        if not self.project.blocks:raise ValueError('Добавьте хотя бы один разбор.')
+        if self.project.profile=='uz_football' and len(self.project.blocks)>4:
+            raise ValueError('В узбекском шаблоне пока поддерживается до 4 разборов.')
         runtime=assembly_project(self.project)
         if self.project.full_video:
             # Uzbek scripts can contain CTAs omitted in the actual recording.

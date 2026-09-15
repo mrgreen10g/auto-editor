@@ -20,6 +20,7 @@ def prepared_script(block):
     text=block.script
     if block.kind=='intro':
         text=re.sub(r'[,：:]\s*(?=(?:а\s+)?(?:московск\w*\s+)?«?(?:'+names+r')\b)', '\n', text, flags=re.I)
+        text=re.sub(r',\s*(?=(?:а\s+)?в\s+)', '\n', text, flags=re.I)
     lines=split_script(text);result=[]
     for line in lines:
         if re.search(r'ссылка\s+находится\s+в\s+описании',line,re.I) and result and 'телеграм' in result[-1].lower():
@@ -65,6 +66,13 @@ def framing_cards(project,block,lines,duration):
             cards.append(Card(line.start,line.end,'ТЕЛЕГРАМ','Telegram · канал автора',i,asset))
             continue
         pairs=[b for b in analyses if pair_matches(line.text,b)]
+        if block.kind=='intro' and not pairs:
+            # A city can identify a single fixture in this episode. Ambiguous
+            # cities never choose between multiple fixtures on their own.
+            candidates=[b for b in analyses if any(team_position(n,line.text,block_teams(b.title)) is not None for n in block_teams(b.title))]
+            if re.search(r'зел[её]н\w*\s+дерби',low):
+                candidates=[b for b in analyses if pair_matches('Салават Юлаев — Ак Барс',b)]
+            if len(candidates)==1:pairs=candidates
         if block.kind=='intro' and pairs and pairs[0].uid not in seen_pairs:
             # Normally prepared_script splits the spoken pairs; fail visibly if
             # a custom sentence still contains several rather than guess timing.
@@ -72,7 +80,7 @@ def framing_cards(project,block,lines,duration):
             seen_pairs.add(pairs[0].uid)
             cards.append(Card(line.start,line.end,'РАЗБОР МАТЧА',pairs[0].title,i));continue
         if block.kind=='outro':
-            if pairs and re.search(r'беру|выбираю|вариант|выбор|став|\bфор\w*|\bтотал\w*',low):
+            if pairs and 'комментари' not in low and re.search(r'беру|выбираю|вариант|выбор|став|побед|\b[xх]2\b|\bфор(?:а|ой|у|ы|е)\b|\bтотал\w*',low):
                 owner=pairs[0];text=forecast_text(owner)
                 if not text:raise ValueError('Не найден основной прогноз в разборе: '+owner.title)
                 cards.append(Card(line.start,line.end,'ПРОГНОЗ',text,i,forecast_id=owner.uid));continue
@@ -110,7 +118,7 @@ def framing_cards(project,block,lines,duration):
             raise ValueError('В конце сценария укажите полное прощание ведущего.')
     if block.kind=='intro':
         missing=[b.title for b in analyses if b.uid not in seen_pairs]
-        if missing:raise ValueError('В начале не найдены представления пар: '+', '.join(missing))
+        if missing:warnings.append('Во вступлении не названы однозначно: '+', '.join(missing)+'. Плашки этих пар появятся в самих разборах; проверьте начало.')
     updated=[]
     for card in cards:
         override=block.card_overrides.get(str(card.line))
@@ -180,7 +188,7 @@ def split_full_script(text):
             pair=block_teams(line.strip())
             if all(any(team_position(team,name) is not None for team in TEAMS) for name in pair):headers.append(i)
     end=next((i for i,l in enumerate(rows) if re.match(r'\s*Итак[, ]',l,re.I)),None)
-    if not 1<=len(headers)<=4 or end is None or end<=headers[-1]:
+    if not headers or end is None or end<=headers[-1]:
         raise ValueError('Нужны отдельные строки с названиями пар и завершение со слова «Итак». Можно заполнить тексты вручную.')
     intro='\n'.join(rows[:headers[0]]).strip();outro='\n'.join(rows[end:]).strip()
     blocks=[(rows[a].strip(),'\n'.join(rows[a:(headers[j+1] if j+1<len(headers) else end)]).strip()) for j,a in enumerate(headers)]

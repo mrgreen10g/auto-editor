@@ -292,6 +292,22 @@ def check():
         assert loaded.assets['telegram']==str(clip.resolve()) and 'Всем привет' in loaded.intro.script
         app.edit_framing();root.update();assert 'Всем привет' in app.framing_fields['intro'].get('1.0','end');app.framing_window.destroy()
         app.project=previous;app.index=0;app.invalidate();app.refresh()
+        # Add and reopen five RU analyses; logo controls must address the fifth.
+        five_previous=copy.deepcopy(app.project)
+        app.project=Project(host=str(host));app.index=0;app.scope.set('Все разборы');app.invalidate();app.refresh()
+        for _ in range(4):app.add_block()
+        titles=['Сибирь — Нефтехимик','Металлург — Спартак','Салават Юлаев — Ак Барс','Лада — Барыс','Сочи — ЦСКА']
+        for b,title in zip(app.project.blocks,titles):b.title=title
+        app.refresh();app.show_page('settings');root.update()
+        assert len(app.logo_tabs.tabs())==5 and len(app.logo_select['values'])==5
+        app.logo_select.current(4);app.logo_select.event_generate('<<ComboboxSelected>>');root.update()
+        assert app.logo_tabs.select()==str(app.logo_frames[4])
+        with patch.object(app,'choose_logo') as choose:
+            next(w for w in descendants(app.logo_frames[4]) if w.winfo_class()=='TButton' and w.cget('text')=='Выбрать логотип').invoke()
+            choose.assert_called_once_with(0,4)
+        app.project.save(tmp/'five.hockeyproj');app.project=Project.load(tmp/'five.hockeyproj');app.refresh();root.update()
+        assert len(app.project.blocks)==5 and app.project.blocks[-1].title=='Сочи — ЦСКА'
+        app.project=five_previous;app.index=0;app.invalidate();app.refresh()
         # Screenshots contain synthetic data only, never user files or scripts.
         root.geometry(f'{min(1220, root.winfo_screenwidth()-60)}x{min(860, root.winfo_screenheight()-100)}+20+20')
         app.show_page('materials')

@@ -58,6 +58,11 @@ def summarize_card(title, text, subject=None):
     if title == 'ОЖИДАЕМЫЙ СЧЁТ' and scores:
         return ' или '.join(scores)+(' · '+names[-1] if names else '')
     if title == 'ПРОГНОЗ':
+        m=re.search(r'индивидуальн\w*\s+тотал\w*.*?\b(больше|меньше)\s+(\d+(?:[.,]\d+)?)',numbers)
+        if m:return (names[-1]+'\n' if names else '')+f'Индивидуальный тотал {m[1]} ({m[2]})'
+        if re.search(r'\b[xх]2\b',numbers):return (names[-1]+'\n' if names else '')+'X2 · основное время'
+        if 'побед' in t and ('овертайм' in t or 'итогов' in t):
+            return (names[-1]+'\n' if names else '')+'Победа с ОТ и буллитами'
         m = re.search(r'фор\w*\s+(плюс|минус)\s+(\d+(?:[.,]\d+)?)', numbers)
         if m: return (names[-1]+'\n' if names else '')+f'Фора ({"+" if m[1] == "плюс" else "−"}{m[2]})'
         if re.search(r'фор\w*\s+0\b',numbers):return (names[-1]+'\n' if names else '')+'Фора (0)'
@@ -80,8 +85,8 @@ def classify_card(text):
     t=clean(text);n=numeric(t)
     if any(w in t for w in ('по счету жду','ожидаемый счет')):return 'ОЖИДАЕМЫЙ СЧЁТ'
     if any(w in t for w in ('повреждени','травм','недоступен')):return 'СОСТАВ КОМАНДЫ'
-    if 'мой выбор' in t or 'основной выбор' in t or 'форой плюс' in t:return 'ПРОГНОЗ'
-    if any(w in t for w in ('ставка проходит','ставка выигрывает','ставка выиграет','возврат','ставка проигрывает')):return 'УСЛОВИЯ ПРОГНОЗА'
+    if 'мой выбор' in t or 'основной выбор' in t or 'основной прогноз' in t or 'форой плюс' in t:return 'ПРОГНОЗ'
+    if any(w in t for w in ('ставка проходит','ставка выигрывает','ставка выиграет','возврат','ставка проигрывает')) or ('проигрыш' in t and re.search(r'\d',n)):return 'УСЛОВИЯ ПРОГНОЗА'
     if re.search(r'\d',n) and any(w in t for w in ('броск','переброс','сейв','отражен','отразил','процент')):return 'СТАТИСТИКА'
     if re.search(r'\b\d{1,2}\s*[:：]\s*\d{1,2}\b',t):return 'РЕЗУЛЬТАТ ВСТРЕЧИ'
     if re.search(r'\b\d+[.,]\d{2}\b',t):return 'КОЭФФИЦИЕНТ ИЗ РАЗБОРА'
