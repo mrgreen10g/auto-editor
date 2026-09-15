@@ -20,7 +20,7 @@ def recording_key(project):
     return hashlib.sha256(json.dumps([MODEL_REV,data]).encode()).hexdigest()
 
 def speech_key(project):
-    return hashlib.sha256(json.dumps(['uz-speech-7-spoken-x2',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['uz-speech-8-contextual-recaps',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
 
 def model_path(cancel,log):
     folder=Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'Models'/'uzbek-turbo'
@@ -137,10 +137,24 @@ def telegram_spans(words):
         if not result or span[0]>result[-1][1]:result.append(span)
     return result
 
+def contextual_telegram_spans(block,segments,lo,hi):
+    """A script-confirmed promo can survive an unrecognized Telegram name."""
+    if block.kind not in ('intro','outro') or 'telegram' not in norm(block.script):return []
+    result=[]
+    for segment in segments:
+        words=[w for w in segment['words'] if lo<=w['start'] and w['end']<=hi]
+        text=norm(' '.join(w['word'] for w in words))
+        if not re.search(r'\bkanal',text) or not re.search(r'informats|prognoz|ma.lumot|tahlil',text):continue
+        stop=next((i for i,w in enumerate(words) if re.search(r"obuna|layk|like|xayr|ko'rish",norm(w['word']))),len(words))
+        words=words[:stop]
+        if words and .3<=words[-1]['end']-words[0]['start']<=20:result.append((words[0]['start'],words[-1]['end']))
+    return result
+
+
 def recap_cue(text):
     t=norm(text)
     return bool(re.search(r'qaytar|takror|yakun|xulosa|jaml',t) or
-                (re.search(r'eslat',t) and re.search(r'tanlovlar|variantlar',t) and re.search(r'yana|oxir|qisqacha',t)))
+                (re.search(r'eslat|isatib',t) and re.search(r'tanlovlar|variantlar',t) and re.search(r'yana|oxir|qisqacha',t)))
 
 def sections(project,segments):
     words=[w for s in segments for w in s['words']];tg=telegram_spans(words);starts=[]
@@ -263,12 +277,16 @@ def prepare(project,segments):
                 annotations.append((s['start'],s['end'],'ПРОГНОЗ',picks[owner.uid]))
                 forecast_owners[(s['start'],s['end'])]=owner.uid
                 if s['needs_review']:forecast_review.append((s['start'],s['end']))
-        for a,z in tg:
-            if lo<=a<z<=hi:annotations.append((a,z,'ТЕЛЕГРАМ','Telegram'))
+        promos=[(a,z) for a,z in tg if lo<=a<z<=hi]
+        promo_review=[]
+        if not promos:
+            promo_review=contextual_telegram_spans(b,segments,lo,hi);promos=promo_review
+        for a,z in promos:
+            if not any(a<end and z>start for start,end,_,_ in annotations):annotations.append((a,z,'ТЕЛЕГРАМ','Telegram'))
         b.asr_lines,b.speech_cards=make_lines(segments,lo,hi,annotations);b.speech_key=key
         for i,card in b.speech_cards.items():
             line=b.asr_lines[int(i)]
-            if card['title']=='ПРОГНОЗ' and (line['start'],line['end']) in forecast_review:card['needs_review']=True
+            if (card['title']=='ПРОГНОЗ' and (line['start'],line['end']) in forecast_review) or (card['title']=='ТЕЛЕГРАМ' and (line['start'],line['end']) in promo_review):card['needs_review']=True
         if b.kind=='intro':
             for card in b.speech_cards.values():
                 if card['title']=='РАЗБОР МАТЧА' and card['text'] in uncertain:card['needs_review']=True
@@ -288,6 +306,12 @@ def synchronize(project,cache,cancel,log):
         log('Разделы по речи: '+', '.join(f'{v//60:02.0f}:{v%60:05.2f}' for v in bounds))
         for card in project.intro.speech_cards.values():
             if card.get('needs_review'):log('Проверьте плашку во вступлении: '+card['text']+'. Одно из названий распознано неуверенно; сборка продолжена.')
+    for block in [*project.blocks,project.outro]:
+        for i,card in block.speech_cards.items():
+            if card.get('needs_review'):
+                line=block.asr_lines[int(i)]
+                from .timeline import format_time
+                log(f"Проверьте плашку {format_time(line['start'])}–{format_time(line['end'])}: {card['text']}. Текст взят из сценария; часть слов распознана неуверенно.")
     from .uzbek import events
     from .goals import GoalScanner,propose
     for b in project.blocks:

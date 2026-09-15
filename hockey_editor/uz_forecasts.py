@@ -6,7 +6,8 @@ def compact(text):return re.sub(r'[^a-z0-9]','',norm(text))
 
 def features(text):
     t=norm(text);c=compact(text)
-    double=bool(re.search(r'x(?:2|ikki)|[ei]ks?ik{1,2}i|sikki',c))
+    chance='x2' if re.search(r'x(?:2|ikki)|[ei]ks?ik{1,2}i|sikki',c) else '1x' if re.search(r"\b1\s*x\b|\bbir\s*(?:iks|eks)\b",t) else '12' if re.search(r"\b12(?=\s+(?:va|variant)\b|$)",t) else None
+    double=chance is not None
     winner=bool(re.search(r'[gq]alab',c)) and not double
     cue=bool(re.search(r'tanlo|varia|qildik|qilaqold',c))
     phonetic_total=bool(cue and re.search(r"\bko'l\b",t) and ("ko'p" in t or re.search(r'\bkam\b',t)))
@@ -17,7 +18,7 @@ def features(text):
     else:
         value=next((n+.5 for word,n in [('bir',1),('ikki',2),('uch',3),('to.rt',4)] if re.search(r'\b'+word+r'\s+yarim',t)),None)
     direction='under' if re.search(r'\bkam\b',t) else 'over' if "ko'p" in t else None
-    return dict(double=double,winner=winner,total=total,cue=cue,ordinal=ordinal,value=value,direction=direction)
+    return dict(chance=chance,double=double,winner=winner,total=total,cue=cue,ordinal=ordinal,value=value,direction=direction)
 
 def clauses(segments,lo,hi):
     words=[dict(w) for s in segments for w in s['words'] if lo<=w['start']<hi]
@@ -43,13 +44,27 @@ def windows(segments,lo,hi):
             result.append({'start':words[0]['start'],'end':words[-1]['end'],'text':text,'words':words[:],'features':features(text)})
     return result
 
+def active_name_hits(team,words):
+    """Ignore names explicitly rejected with emas, including fuzzy multiword hits."""
+    from .uz_speech import name_hits
+    result=[]
+    for start,end,strength in name_hits(team,words):
+        context=norm(' '.join(w['word'] for w in words[start:min(len(words),end+3)]))
+        if re.search(r"\bemas\b",context):continue
+        result.append((start,end,strength))
+    return result
+
+
 def score(candidate,owner,reference,index,owners,recap=True):
     from .uz_speech import name_hits
     from .graphics import block_teams
     f=candidate['features'];expected=features(reference)
-    team_hits=[bool(any(h[2]>=.78 for team in block_teams(b.title) for h in name_hits(team,candidate['words']))) for b in owners]
-    own=team_hits[index];others=any(v for k,v in enumerate(team_hits) if k!=index)
     ordinal=f['ordinal'];ordinal=len(owners)-1 if ordinal==-1 else ordinal
+    strengths=[max([h[2] for team in block_teams(b.title) for h in active_name_hits(team,candidate['words'])]+[0.]) for b in owners]
+    own=strengths[index]>=.78 or (ordinal==index and strengths[index]>=.74)
+    # Weak phonetic resemblance to another club cannot overrule an explicit
+    # episode ordinal. Clear foreign names still reject a different owner.
+    others=any(v>=.9 for k,v in enumerate(strengths) if k!=index)
     if others and not own:return None
     if ordinal is not None and ordinal!=index:return None
     if recap and len(owners)>1:
@@ -61,6 +76,7 @@ def score(candidate,owner,reference,index,owners,recap=True):
     if expected['value'] is not None and f['value'] is not None and expected['value']!=f['value']:return None
     if expected['direction'] and f['direction'] and expected['direction']!=f['direction']:return None
     # An explicit different market must not be silently turned into the scripted bet.
+    if f['chance'] and expected['chance'] and f['chance']!=expected['chance']:return None
     if f['double'] and expected['winner']:return None
     if f['winner'] and expected['double'] and not f['double']:return None
     if f['double'] and not expected['double']:return None
@@ -72,7 +88,7 @@ def score(candidate,owner,reference,index,owners,recap=True):
     if not recap and re.search(r'varia|qildik|qila qold',norm(candidate['text'])):strength+=3
     if others:strength-=9
     strength-=.035*(candidate['end']-candidate['start'])
-    review=matched<len(required) or (expected['value'] is not None and f['value'] is None)
+    review=matched<len(required) or (expected['value'] is not None and f['value'] is None) or strengths[index]<.85
     return strength,review
 
 def match_forecasts(segments,lo,hi,owners,references,recap=True):
