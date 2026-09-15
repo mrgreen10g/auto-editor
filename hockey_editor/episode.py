@@ -238,6 +238,8 @@ class EpisodeEngine(Engine):
                         elif card.forecast_id:
                             owner=next((b for b in runtime.blocks if b.uid==card.forecast_id),None)
                             if owner:card.text=forecast_text(owner)
+            from .framing import optional_subscription
+            p.cards,extra=optional_subscription(p.cards,p.duration);p.warnings+=extra
             store_plan(runtime,i,p)
             plans.append(p);previous=p.source_end
         plan=combine(runtime,plans)

@@ -27,7 +27,9 @@ class V06Tests(unittest.TestCase):
   bets=[c for c in cards if c.title=='ПРОГНОЗ'];self.assertEqual([c.forecast_id for c in bets],['0','1','2']);self.assertIn('правка',bets[0].text)
   sub=next(c for c in cards if c.title=='ПОДПИСКА');self.assertEqual(sub.end-sub.start,4);self.assertLessEqual(sub.end,ls[-1].end);self.assertTrue(all(c.title in ('ПРОГНОЗ','ТЕЛЕГРАМ','ПОДПИСКА') for c in cards))
   with patch('hockey_editor.framing.probe',return_value={'duration':30}):
-   with self.assertRaisesRegex(ValueError,'длиннее'):framing_cards(assembly_project(p),p.outro,ls,ls[-1].end)
+   cards,warnings=framing_cards(assembly_project(p),p.outro,ls,ls[-1].end)
+  self.assertFalse(any(c.title=='ПОДПИСКА' for c in cards));self.assertTrue(warnings)
+  self.assertEqual(len([c for c in cards if c.title=='ПРОГНОЗ']),3)
  def test_import_heading_not_statistics(self):
   text=INTRO+'\nДинамо Москва — Адмирал\nДва матча — две победы.\nМой выбор — «Адмирал» с форой плюс два.\nСКА — Лада\nСчёт — 3:2.\n'+OUTRO
   intro,blocks,outro=split_full_script(text);self.assertEqual(len(blocks),2);self.assertEqual(intro,INTRO);self.assertEqual(outro,OUTRO);self.assertIn('Два матча',blocks[0][1])

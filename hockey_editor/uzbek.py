@@ -181,7 +181,6 @@ def framing_cards_uz(project,block,lines,duration):
                 asset=project.assets.get('subscribe','')
                 if not asset:raise ValueError('Добавьте анимацию подписки узбекского ведущего.')
                 end=frame(line.start+probe(asset)['duration'])
-                if end>duration+.034:raise ValueError('Анимация подписки не помещается до прощания. Выберите более короткую анимацию.')
                 cards.append(Card(line.start,end,'ПОДПИСКА','Obuna bo‘ling',i,asset))
             if 'izoh' in t or 'komment' in t:
                 question=re.split(r'[:—]',line.text,maxsplit=1)[-1].strip()
@@ -197,7 +196,8 @@ def framing_cards_uz(project,block,lines,duration):
             if not override.strip():continue
             card.text=override
         result.append(card)
-    return result,[]
+    from .framing import optional_subscription
+    return optional_subscription(result,duration)
 
 
 def asr_framing_cards(project,block,lines,duration):
@@ -218,7 +218,6 @@ def asr_framing_cards(project,block,lines,duration):
                 asset=project.assets.get('subscribe','')
                 if not asset:raise ValueError('Добавьте анимацию подписки узбекского ведущего.')
                 end=frame(line.start+probe(asset)['duration'])
-                if end>duration+.034:raise ValueError('Анимация подписки не помещается до прощания.')
                 cards.append(Card(line.start,end,'ПОДПИСКА','Obuna bo‘ling',i,asset))
             if ('izoh' in t or 'komment' in t) and ('yoz' in t or '?' in t):
                 cards.append(Card(line.start,line.end,'ВОПРОС ЗРИТЕЛЯМ',line.text,i))
@@ -228,4 +227,5 @@ def asr_framing_cards(project,block,lines,duration):
     for card in cards:
         value=block.card_overrides.get(str(card.line))
         if value is not None and not card.asset and card.title!='ПРОГНОЗ':card.text=value
-    return [c for c in cards if c.text.strip()],[]
+    from .framing import optional_subscription
+    return optional_subscription([c for c in cards if c.text.strip()],duration)

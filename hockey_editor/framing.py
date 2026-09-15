@@ -51,6 +51,13 @@ def forecast_text(block):
     return ''
 
 
+def optional_subscription(cards,duration):
+    """Keep authored animation whole, or omit it without extending the ending."""
+    kept=[c for c in cards if c.title!='ПОДПИСКА' or c.end<=duration+.034]
+    warnings=['Подписка пропущена: анимация не помещается до конца прощания.'] if len(kept)<len(cards) else []
+    return kept,warnings
+
+
 def framing_cards(project,block,lines,duration):
     if block.language=='uz':
         from .uzbek import framing_cards_uz
@@ -88,7 +95,6 @@ def framing_cards(project,block,lines,duration):
                 asset=project.assets.get('subscribe','')
                 if not asset:raise ValueError('Добавьте анимацию подписки для призыва ведущего.')
                 end=frame(line.start+probe(asset)['duration'])
-                if end>duration+.034:raise ValueError('Анимация подписки длиннее оставшегося завершения. Нужна более короткая анимация, чтобы сохранить её целиком и закончить на прощании.')
                 cards.append(Card(line.start,end,'ПОДПИСКА','Подписка и лайк',i,asset))
             if 'комментари' in low:
                 question=re.split(r'комментари\w*\s*:\s*',line.text,maxsplit=1,flags=re.I)[-1]
@@ -126,7 +132,8 @@ def framing_cards(project,block,lines,duration):
             if not override.strip():continue
             card.text=override
         updated.append(card)
-    return updated,warnings
+    updated,extra=optional_subscription(updated,duration)
+    return updated,warnings+extra
 
 
 def disclaimer_plan(path):
