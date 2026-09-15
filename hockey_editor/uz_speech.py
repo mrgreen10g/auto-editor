@@ -20,7 +20,7 @@ def recording_key(project):
     return hashlib.sha256(json.dumps([MODEL_REV,data]).encode()).hexdigest()
 
 def speech_key(project):
-    return hashlib.sha256(json.dumps(['uz-speech-6-gaps-recaps',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['uz-speech-7-spoken-x2',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
 
 def model_path(cancel,log):
     folder=Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'Models'/'uzbek-turbo'
@@ -73,7 +73,7 @@ def transcribe(project,cache,cancel,log):
 @lru_cache(maxsize=8192)
 def token(text):
     value=compact(text)
-    return {'padedborn':'paderborn','paddeboron':'paderborn','padiboron':'paderborn','padiborun':'paderborn','maddiboron':'paderborn','padeborn':'paderborn','borussiya':'borussia','borusya':'borussia'}.get(value,value)
+    return {'asosuna':'osasuna','padedborn':'paderborn','paddeboron':'paderborn','padiboron':'paderborn','padiborun':'paderborn','maddiboron':'paderborn','padeborn':'paderborn','borussiya':'borussia','borusya':'borussia'}.get(value,value)
 @lru_cache(maxsize=32768)
 def similar(a,b):
     a=token(a);b=token(b)
@@ -137,6 +137,11 @@ def telegram_spans(words):
         if not result or span[0]>result[-1][1]:result.append(span)
     return result
 
+def recap_cue(text):
+    t=norm(text)
+    return bool(re.search(r'qaytar|takror|yakun|xulosa|jaml',t) or
+                (re.search(r'eslat',t) and re.search(r'tanlovlar|variantlar',t) and re.search(r'yana|oxir|qisqacha',t)))
+
 def sections(project,segments):
     words=[w for s in segments for w in s['words']];tg=telegram_spans(words);starts=[]
     if project.recording_times.strip():
@@ -150,11 +155,17 @@ def sections(project,segments):
         if hits:
             first=min(hits,key=lambda hit:hit[0]);floor=max(floor,early[first[1]]['end'])
     if tg and tg[0][0]<60:floor=max(floor,tg[0][1])
-    for b in project.blocks:
-        choices=[s['start'] for s in segments if s['start']>=floor-.1 and pair_hits(b.title,s['words'])]
+    from .uz_forecasts import features
+    for index,b in enumerate(project.blocks):
+        def is_start(segment):
+            if pair_hits(b.title,segment['words']):return True
+            ordinal=features(segment['text'])['ordinal']
+            if ordinal==-1:ordinal=len(project.blocks)-1
+            return ordinal==index and any(h[2]>=.85 for team in block_teams(b.title) for h in name_hits(team,segment['words']))
+        choices=[s['start'] for s in segments if s['start']>=floor-.1 and is_start(s)]
         if not choices:raise ValueError('Не удалось найти начало разбора по речи: '+b.title+'. Проверьте названия и состав блоков.')
         starts.append(choices[0]);floor=starts[-1]+10
-    ending=next((s['start'] for s in segments if s['start']>starts[-1]+10 and re.search(r'qaytar|takror|yakun|xulosa|jaml',norm(s['text']))),None)
+    ending=next((s['start'] for s in segments if s['start']>starts[-1]+10 and recap_cue(s['text'])),None)
     if ending is None:raise ValueError('В речи не найден переход к итогам. Таймкоды сценария не использованы.')
     bounds=[words[0]['start'],*starts,ending,words[-1]['end']]
     if any(b-a<3 for a,b in zip(bounds,bounds[1:])):raise ValueError('Неустойчивые границы разделов. Нужна проверка записи.')

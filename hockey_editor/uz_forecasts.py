@@ -6,7 +6,7 @@ def compact(text):return re.sub(r'[^a-z0-9]','',norm(text))
 
 def features(text):
     t=norm(text);c=compact(text)
-    double=bool(re.search(r'x2|[ei]ks?ikki|sikki',c))
+    double=bool(re.search(r'x(?:2|ikki)|[ei]ks?ik{1,2}i|sikki',c))
     winner=bool(re.search(r'[gq]alab',c)) and not double
     cue=bool(re.search(r'tanlo|varia|qildik|qilaqold',c))
     phonetic_total=bool(cue and re.search(r"\bko'l\b",t) and ("ko'p" in t or re.search(r'\bkam\b',t)))
