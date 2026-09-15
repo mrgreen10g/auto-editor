@@ -61,7 +61,7 @@ def summarize_card(title, text, subject=None):
         m=re.search(r'индивидуальн\w*\s+тотал\w*.*?\b(больше|меньше)\s+(\d+(?:[.,]\d+)?)',numbers)
         if m:return (names[-1]+'\n' if names else '')+f'Индивидуальный тотал {m[1]} ({m[2]})'
         if re.search(r'\b[xх]2\b',numbers):return (names[-1]+'\n' if names else '')+'X2 · основное время'
-        if 'побед' in t and ('овертайм' in t or 'итогов' in t):
+        if 'побед' in t and (('с учетом' in t and 'овертайм' in t) or 'итогов' in t):
             return (names[-1]+'\n' if names else '')+'Победа с ОТ и буллитами'
         m = re.search(r'фор\w*\s+(плюс|минус)\s+(\d+(?:[.,]\d+)?)', numbers)
         if m: return (names[-1]+'\n' if names else '')+f'Фора ({"+" if m[1] == "плюс" else "−"}{m[2]})'

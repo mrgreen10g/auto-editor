@@ -54,6 +54,10 @@ class FiveAnalysisTests(unittest.TestCase):
         p=project();p.outro.script='Итак, повторю.\n'+'\n'.join(t+': '+s for t,s in zip(PAIRS[:4],PICKS[:4]))+'\nДо встречи!'
         with self.assertRaisesRegex(ValueError,'Сочи'):cards(p,p.outro)
 
+    def test_exact_overtime_win_is_not_changed_to_overall_win(self):
+        text='Мой выбор — победа Нефтехимика в овертайме.'
+        self.assertNotIn('с ОТ и буллитами',summarize_card('ПРОГНОЗ',text))
+
     def test_seven_sections_survive_combination_and_reopening(self):
         p=project();p.full_video=True;runtime=assembly_project(p);plans=[]
         for i,b in enumerate(runtime.blocks):
