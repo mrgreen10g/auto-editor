@@ -352,6 +352,33 @@ def check():
         with patch('hockey_editor.profiles.kit_path',return_value=tmp/'ru-kit.json'):app.switch_profile()
         root.update();assert app.project.profile=='ru_hockey'
         assert app.find_events_button.cget('text')=='Найти голы'
+        # Review queue: edit timing/text, delete/undo and persist without another ASR run.
+        from hockey_editor.review import attach,pending
+        from hockey_editor.review_ui import ReviewDialog
+        app.project=Project(host=str(host),blocks=[Block(title='Тест',script='Мой прогноз — победа команды. Спасибо за просмотр.')])
+        app.index=0
+        review_plan=Plan(0,12,[(0,12)],[Line('Мой прогноз — победа команды.',0,5,1,'Неуверенная речь','победа команды'),Line('Спасибо.',5,12)],[],[Card(0,5,'ПРОГНОЗ','Победа',0)],[],12)
+        attach(review_plan,app.project.blocks[0],app.project)
+        app.display_plan(review_plan)
+        dialog=ReviewDialog(root,app.project,app.plan,tmp,app.display_plan);root.update()
+        assert len(pending(dialog.plan))==1
+        dialog.start.set('00:01');dialog.end.set('00:04');dialog.text.delete('1.0','end');dialog.text.insert('1.0','Победа команды')
+        dialog.decide('confirmed');root.update();assert not pending(app.plan)
+        assert app.plan.cards[0].start==1 and app.plan.cards[0].text=='Победа команды'
+        dialog.show_all.set(True);dialog.refresh();root.update()
+        dialog.decide('deleted');root.update();assert not app.plan.cards
+        dialog.undo();root.update();assert app.plan.cards
+        dialog.close();root.update()
+        app.project.save(tmp/'review.hockeyproj')
+        from hockey_editor.editing import saved_plan
+        restored=saved_plan(Project.load(tmp/'review.hockeyproj'),0)
+        assert restored and not pending(restored)
+        # Unlimited Uzbek block creation must work through the actual UI too.
+        app.project.profile='uz_football'
+        for b in [app.project.intro,*app.project.blocks,app.project.outro]:b.language='uz'
+        app.refresh()
+        for _ in range(9):app.add_block()
+        root.update();assert len(app.project.blocks)==10
         assert not errors, errors
         app.close()
     (out / 'gui-check.json').write_text(json.dumps({'status': 'ok', 'checks': ['v1-project-compatibility', 'block-switching', 'card-editing', 'stale-plan-invalidation', 'busy-control-restoration', 'worker-queue-flow', 'compact-window-layout', 'multiple-source-review-flow', 'v2-project-roundtrip', 'review-retains-custom-trim','episode-editor-roundtrip','seek-after-edit-rebuild-save','source-visual-trim','persistent-block-navigation','all-block-events-own-source','per-block-logo-tabs','ordered-host-sources','full-video-dialog-roundtrip']}, indent=2), encoding='utf-8')
@@ -360,3 +387,4 @@ def check():
 
 if __name__ == '__main__':
     check()
+

@@ -98,7 +98,8 @@ class RussianSpeechTests(unittest.TestCase):
             (d/'alignment.json').write_text(json.dumps({'key':'old-acoustic-version','lines':[]}),encoding='utf-8')
             late=SimpleNamespace(source_start=387.07,source_end=428.33)
             with patch('hockey_editor.editing.saved_plan',return_value=late),patch('hockey_editor.goals.montage_block',return_value=p.blocks[0]),patch('hockey_editor.host_media.analysis_source',return_value=(str(host),431.33,[])),patch('hockey_editor.engine.run') as run,patch('hockey_editor.engine.align',side_effect=AlignmentError('retry words')):
-                with self.assertRaises(AlignmentError):engine.analyze()
+                with self.assertRaises(AlignmentError):engine.analyze(recover=False)
                 command=run.call_args.args[0]
                 self.assertEqual(command[command.index('-t')+1],120)
                 self.assertEqual(command[command.index('-ss')+1],0)
+

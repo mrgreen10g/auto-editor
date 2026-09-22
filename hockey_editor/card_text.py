@@ -13,6 +13,7 @@ def teams(text):
 def numeric(text):
     text = re.sub(r'\b(?:ноль|нуль)\b', '0', text)
     for word, number in NUMBERS.items(): text = re.sub(r'\b'+word+r'\b', number, text)
+    text = re.sub(r'\b(\d+)\s+с\s+половиной\b',lambda m:str(int(m[1]))+'.5',text)
     return text
 
 
@@ -85,6 +86,8 @@ def classify_card(text):
     t=clean(text);n=numeric(t)
     if any(w in t for w in ('по счету жду','ожидаемый счет')):return 'ОЖИДАЕМЫЙ СЧЁТ'
     if any(w in t for w in ('повреждени','травм','недоступен')):return 'СОСТАВ КОМАНДЫ'
+    if re.match(r'^(?:индивидуальн\w*\s+)?тотал\w*\s+(?:больше|меньше)\b',t):return 'ПРОГНОЗ'
+    if 'мой прогноз' in t:return 'ПРОГНОЗ'
     if 'мой выбор' in t or 'основной выбор' in t or 'основной прогноз' in t or 'форой плюс' in t:return 'ПРОГНОЗ'
     if any(w in t for w in ('ставка проходит','ставка выигрывает','ставка выиграет','возврат','ставка проигрывает')) or ('проигрыш' in t and re.search(r'\d',n)):return 'УСЛОВИЯ ПРОГНОЗА'
     if re.search(r'\d',n) and any(w in t for w in ('броск','переброс','сейв','отражен','отразил','процент')):return 'СТАТИСТИКА'
@@ -93,3 +96,4 @@ def classify_card(text):
     if re.search(r'\b\d+\s+(?:\w+\s+){0,2}(?:побед|поражен|матч|встреч|шайб|гол)',n):
         if not any(w in t for w in ('жду','если','должен','хочется','пусть')):return 'СТАТИСТИКА'
     return ''
+

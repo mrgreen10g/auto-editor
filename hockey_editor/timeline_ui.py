@@ -37,6 +37,7 @@ class TimelineEditor:
         button(top,'↶ Отменить',self.undo);button(top,'↷ Повторить',self.redo)
         button(top,'+ Игра',lambda:self.pick_clip(True));button(top,'+ Плашка',self.add_card)
         button(top,'Удалить',self.delete)
+        button(top,'Проверка речи',self.review_speech)
         self.build_button=button(top,'Собрать предпросмотр',self.build_preview)
         self.cancel_button=ttk.Button(top,text='Остановить',command=self.cancel.set,state='disabled');self.cancel_button.pack(side='right')
         upper=ttk.Frame(w,padding=(12,0));upper.pack(fill='both',expand=True)
@@ -190,6 +191,7 @@ class TimelineEditor:
             delta=max(-item.start,min(delta,item.end-item.start-.2));item.start+=delta
             if self.selected[0]=='insert':item.source_in+=delta
         else:item.end=frame(max(item.start+.2,min(plan.duration,item.end+delta)))
+        if self.selected[0]=='card' and item.title=='ТЕЛЕГРАМ':item.line=-1
         return plan
 
     def motion(self,event):
@@ -202,10 +204,14 @@ class TimelineEditor:
     def change(self,plan):
         try:
             # Forecast text edits are shared with the recap in both directions.
-            for before,after in zip(self.plan.cards,plan.cards):
-                if after.forecast_id and before.text!=after.text:
+            before_by_id={c.review_id:c for c in self.plan.cards if c.review_id}
+            for after in plan.cards:
+                before=before_by_id.get(after.review_id)
+                if before and after.forecast_id and before.text!=after.text:
                     for other in plan.cards:
                         if other.forecast_id==after.forecast_id:other.text=after.text
+            from .review import update_task_times
+            update_task_times(plan)
             self.history.replace(plan)
         except Exception as error:
             self.status.set(str(error));self.draw();return False
@@ -221,7 +227,9 @@ class TimelineEditor:
             item.start=frame(start);item.end=frame(end)
             text=self.text.get('1.0','end').strip()
             if self.selected[0]=='insert':item.source_in=frame(source);item.label=text
-            else:item.text=text
+            else:
+                item.text=text
+                if item.title=='ТЕЛЕГРАМ':item.line=-1
             self.change(plan)
         except ValueError as error:self.status.set('Проверьте числа и текст: '+str(error))
 
@@ -238,13 +246,21 @@ class TimelineEditor:
         self.selected=None;self.dirty=True;self.preview_current=False;self.player.stop();self.build_button.configure(text="Обновить предпросмотр");self.select(None)
         self.status.set('Дорожка изменена. Предпросмотр нужно обновить.')
 
+    def review_speech(self):
+        if self.busy:return
+        from .review_ui import ReviewDialog
+        def apply(plan):
+            self.change(plan)
+            self.apply()
+        ReviewDialog(self.window,self.project,self.plan,self.app.cache_path(),apply)
+
     def add_card(self):
         if self.busy:return
         value=simpledialog.askstring('Новая плашка','Краткий текст:',parent=self.window)
         if not value:return
         plan=copy.deepcopy(self.plan);start=min(self.cursor,max(0,plan.duration-.3))
         section=self.section_at(start);limit=section['end'] if section else plan.duration
-        plan.cards.append(Card(start,min(start+5,limit),'ИНФОРМАЦИЯ',value))
+        plan.cards.append(Card(start,min(start+5,limit),'ИНФОРМАЦИЯ',value,review_id=uuid.uuid4().hex))
         self.selected=('card',len(plan.cards)-1);self.change(plan)
 
     def pick_clip(self,add=False):
@@ -343,3 +359,4 @@ class TimelineEditor:
             if answer is None:return
             if answer:self.apply()
         self.closed=True;self.player.close();self.window.after_cancel(self.poll_id);self.window.grab_release();self.window.destroy()
+

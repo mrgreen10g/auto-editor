@@ -13,6 +13,11 @@ def features(text):
     phonetic_total=bool(cue and re.search(r"\bko'l\b",t) and ("ko'p" in t or re.search(r'\bkam\b',t)))
     total=bool(re.search(r'g[ou]i?l',c) or ('umumiy' in c and ("ko'p" in t or 'son' in c)) or phonetic_total)
     ordinal=next((n for pattern,n in ((r'\bbirinchi',0),(r'\b(?:ikkinchi|ikinchi|kinchi|ekin(?:chi|ji))',1),(r'\buch(?:i|ri)nchi',2),(r'\b(?:tortinchi|to.rt.inchi)',3),(r'\boxirgi',-1)) if re.search(pattern,t)),None)
+    if ordinal is None:
+        ordinal=next((n for n,word in enumerate(['beshinchi','oltinchi','yettinchi','sakkizinchi',"to'qqizinchi", "o'ninchi"],4) if word in t),None)
+    if ordinal is None:
+        numeric=re.search(r'\b(\d+)\s*[- ]?(?:inchi|chi)\b',t)
+        if numeric:ordinal=int(numeric[1])-1
     value=re.search(r"\b(\d+(?:[,.]\d+)?)\s*(?:ta)?dan\s+(?:ko'p|kam)\b",t)
     if value:value=float(value[1].replace(',','.'))
     else:
@@ -120,6 +125,15 @@ def match_forecasts(segments,lo,hi,owners,references,recap=True):
         if not choices:
             raise ValueError('Не удалось связать '+('повтор прогноза' if recap else 'прогноз')+' «'+owner.title+'» с распознанной речью. Проверьте фразу ставки и границы раздела; количество разборов само по себе не является ошибкой.')
         scored_choices.append(choices)
+    if len(owners)>8:
+        # Sparse interval scheduling per owner avoids 2**N states. Ambiguous
+        # collisions go to review instead of exponential memory consumption.
+        chosen={};used=[]
+        for index in sorted(range(len(owners)),key=lambda i:len(scored_choices[i])):
+            feasible=[(v,c) for v,c in scored_choices[index] if all(c['end']<=a+.001 or c['start']>=b-.001 for a,b in used)]
+            if not feasible:raise ValueError('Повторы требуют ручного распределения интервалов.')
+            _,c=max(feasible,key=lambda pair:pair[0]);chosen[index]=c;used.append((c['start'],c['end']))
+        return [chosen[i] for i in range(len(owners))]
     # One disjoint spoken interval per fixture, in any spoken order.
     states={0:[(0.,-1.,{})]};full=(1<<len(owners))-1
     for mask in range(full+1):
@@ -138,3 +152,4 @@ def match_forecasts(segments,lo,hi,owners,references,recap=True):
         raise ValueError('Не удалось разнести повторы ставок по времени без пересечений. Проверьте речь в итогах и выбранные границы.')
     chosen=max(states[full],key=lambda s:s[0])[2]
     return [chosen[i] for i in range(len(owners))]
+

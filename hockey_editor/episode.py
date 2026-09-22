@@ -48,8 +48,8 @@ def trim_overlap(plan,previous_end):
         cut=min(b,max(a,previous_end-p.source_start))
         removed+=cut-a
         if b>cut:keep.append((frame(cut),b))
-    if removed>1.0:raise ValueError('Разборы пересекаются в записи. Проверьте порядок сценариев и соответствие текстов речи.')
-    if not keep:raise ValueError('Разбор целиком пересекается с предыдущим.')
+    if removed>1.0:raise AlignmentError('Разборы пересекаются в записи. Проверьте порядок сценариев и соответствие текстов речи.')
+    if not keep:raise AlignmentError('Разбор целиком пересекается с предыдущим.')
     p.keep=keep;p.duration=frame(sum(b-a for a,b in keep))
     if p.media:
         from .host_media import slice_media
@@ -99,20 +99,25 @@ def combine(project,plans):
     if len(plans)!=len(project.blocks):raise ValueError('Не все разборы подготовлены.')
     plans=[crop_padding_at_next_speech(p,plans[i+1]) if i+1<len(plans) else copy.deepcopy(p) for i,p in enumerate(plans)]
     keep=[];lines=[];inserts=[];cards=[];warnings=[];sections=[];media=[];cursor=0;previous=0
+    review_items=[];baseline={'cards':[],'inserts':[]}
     for block,original in zip(project.blocks,plans):
         p=trim_overlap(original,previous)
-        if not p.lines:raise ValueError('В разборе нет речи: '+block.title)
+        if not p.lines:raise AlignmentError('В разборе нет речи: '+block.title)
         line_start=len(lines)
         absolute=[(frame(p.source_start+a),frame(p.source_start+b)) for a,b in p.keep]
         previous=absolute[-1][1];keep+=absolute
         sections.append({'block_id':block.uid,'title':block.title,'start':cursor,'end':frame(cursor+p.duration),
                          'source_start':p.source_start,'source_end':p.source_end,'keep':p.keep,
-                         'line_start':line_start,'line_count':len(p.lines),'rotation':p.rotation,'kind':block.kind})
+                         'line_start':line_start,'line_count':len(p.lines),'rotation':p.rotation,'kind':block.kind,'input_key':p.input_key})
         for name,target in (('lines',lines),('inserts',inserts),('cards',cards)):
             for item in getattr(p,name):
                 item=copy.deepcopy(item);item.start=frame(item.start+cursor);item.end=frame(item.end+cursor)
                 if name=='cards' and item.line>=0:item.line+=line_start
                 target.append(item)
+        from .review import shifted_metadata
+        tasks,base=shifted_metadata(p,cursor,line_start)
+        review_items.extend(tasks)
+        for name in baseline:baseline[name].extend(base.get(name,[]))
         media.extend(p.media)
         if cursor>0:
             title='ИТОГИ ВЫПУСКА' if block.kind=='outro' else 'СМЕНА МАТЧА'
@@ -121,6 +126,7 @@ def combine(project,plans):
         warnings.extend(block.title+': '+v for v in p.warnings)
         cursor=frame(cursor+p.duration)
     result=Plan(0,max(p.source_end for p in plans),keep,lines,inserts,cards,warnings,cursor,plans[0].rotation,sections,media)
+    result.review_items=review_items;result.edit_baseline=baseline
     return validate_plan(result)
 
 
@@ -155,6 +161,9 @@ def store_episode(project,plan):
         for l in lines:l.start=frame(l.start-s['start']);l.end=frame(l.end-s['start'])
         part=Plan(s['source_start'],s['source_end'],s['keep'],lines,local(plan.inserts),local(plan.cards,True),[],
                   frame(s['end']-s['start']),s['rotation'],[],slice_media(plan.media,s['start'],s['end']) if plan.media else [])
+        part.input_key=s.get('input_key','')
+        from .review import section_metadata
+        section_metadata(plan,part,s)
         store_plan(runtime,i,part)
     project.episode_plan=plan.to_dict();project.episode_key=episode_key(project)
 
@@ -164,6 +173,8 @@ def prepend_disclaimer(plan,path):
     head=disclaimer_plan(path);p=copy.deepcopy(plan);offset=head.duration
     for item in [*p.lines,*p.inserts,*p.cards]:item.start=frame(item.start+offset);item.end=frame(item.end+offset)
     for section in p.sections:section['start']=frame(section['start']+offset);section['end']=frame(section['end']+offset)
+    from .review import shifted_metadata
+    p.review_items,p.edit_baseline=shifted_metadata(plan,offset)
     p.sections.insert(0,{'block_id':'disclaimer','kind':'disclaimer','title':'Дисклеймер','start':0,'end':offset,'line_start':0,'line_count':0})
     p.media=head.media+p.media
     p.keep=[(0,offset)]+p.keep;p.duration=frame(p.duration+offset)
@@ -176,8 +187,6 @@ class EpisodeEngine(Engine):
 
     def validate_all(self):
         if not self.project.blocks:raise ValueError('Добавьте хотя бы один разбор.')
-        if self.project.profile=='uz_football' and len(self.project.blocks)>4:
-            raise ValueError('В узбекском шаблоне пока поддерживается до 4 разборов.')
         runtime=assembly_project(self.project)
         if self.project.full_video:
             # Uzbek scripts can contain CTAs omitted in the actual recording.
@@ -204,7 +213,7 @@ class EpisodeEngine(Engine):
         try:return self._assemble(runtime)
         except AlignmentError:
             for block,(plan,key) in zip(runtime.blocks,snapshot):block.edit_plan=plan;block.edit_key=key
-            if self.project.profile!='ru_hockey' or not self.project.full_video:raise
+            if self.project.profile!='ru_hockey':raise
             from .ru_speech import prepare
             self.log('Обычная разметка неустойчива. Проверяю весь выпуск по словам и порядку частей…')
             speech=prepare(self.project,runtime.blocks,self.cache,self.cancel,self.log)
@@ -220,14 +229,15 @@ class EpisodeEngine(Engine):
             engine=Engine(runtime,i,self.cache/block.uid,self.cancel,self.log)
             existing=saved_plan(runtime,i) if speech is None else None
             kwargs={'speech':speech[block.uid]} if speech is not None else {}
+            engine.recover_speech=False
             p=engine.analyze(source_floor=max(0,previous-(.15 if self.project.full_video else 1)),**kwargs)
             if p.source_start<previous-1.01:
-                raise ValueError('Порядок разборов не совпадает с записью: '+block.title)
+                raise AlignmentError('Порядок разборов не совпадает с записью: '+block.title)
             # Refresh intro/outro overlays from current assets and shared bets, even when speech is cached.
             if block.kind!='analysis':
                 from .framing import framing_cards
                 if existing is None:
-                    p.cards,extra=framing_cards(runtime,block,p.lines,p.duration);p.warnings+=extra
+                    pass  # Engine generated the cards and attached review tasks.
                 else:
                     from .framing import forecast_text
                     for card in p.cards:
@@ -251,3 +261,4 @@ class EpisodeEngine(Engine):
     def render(self,plan,target,draft=False):
         self.validate_all()
         return super().render(plan,target,draft)
+

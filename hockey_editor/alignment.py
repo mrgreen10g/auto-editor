@@ -13,7 +13,11 @@ SR=16000
 HOP=640
 _lock=threading.Lock()
 
-class AlignmentError(ValueError):
+class SpeechIssue(ValueError):
+    """Speech ambiguity that can be represented as a reviewable draft."""
+    pass
+
+class AlignmentError(SpeechIssue):
     """Acoustic timing is unsafe; a lexical check may recover it."""
     pass
 
@@ -109,7 +113,7 @@ def subsequence_dtw(a,b,cancel=None,progress=None,free=True):
     """
     n,m=len(a),len(b)
     if n*m>200_000_000:
-        raise ValueError('Для этой версии запись слишком длинная. Используйте запись до 15 минут и сценарий одного разбора.')
+        raise AlignmentError('Для этой версии запись слишком длинная. Используйте запись до 15 минут и сценарий одного разбора.')
     back=np.zeros((n,m),dtype=np.uint8)
     prev=np.full(m+1,np.inf);prev[0]=0
     best=np.inf;last=0
@@ -129,7 +133,7 @@ def subsequence_dtw(a,b,cancel=None,progress=None,free=True):
         back[i]=np.where(adjusted<=prefixes, np.where(diag<=up,0,1),2)
         if (free and cur[-1]<best) or (not free and i==n-1):best=cur[-1];last=i
         prev=cur
-    if not np.isfinite(best):raise ValueError('Не удалось сопоставить сценарий и речь.')
+    if not np.isfinite(best):raise AlignmentError('Не удалось сопоставить сценарий и речь.')
     i=last;j=m-1;tot=np.zeros(m);counts=np.zeros(m)
     while i>=0 and j>=0:
         tot[j]+=i;counts[j]+=1
@@ -137,7 +141,7 @@ def subsequence_dtw(a,b,cancel=None,progress=None,free=True):
         if step==0:i-=1;j-=1
         elif step==1:i-=1
         else:j-=1
-    if np.any(counts==0):raise ValueError('Сценарий не удалось полностью сопоставить с записью.')
+    if np.any(counts==0):raise AlignmentError('Сценарий не удалось полностью сопоставить с записью.')
     return tot/counts, float(best/(last-i+m))
 
 def speech_regions(audio,reference_duration):
@@ -209,3 +213,4 @@ def bounded_dtw(a,b,cancel=None,free=True,limit=180_000_000):
     path,score=subsequence_dtw(a[::stride],b[::stride],cancel,free=free)
     if stride>1:path=np.interp(np.arange(len(b)),np.arange(len(path))*stride,path*stride)
     return path,score
+

@@ -2,7 +2,7 @@
 import re
 from .model import Block,EventRequest
 from .timeline import Card,frame
-from .alignment import split_script
+from .alignment import split_script,SpeechIssue
 from .graphics import block_teams
 from .team_names import football_positions, football_identity
 
@@ -59,7 +59,7 @@ def parse_script(text):
         if current is None:raise ValueError('Начните узбекский сценарий с заголовка KIRISH.')
         current['lines'].append(line)
     intro=[s for s in sections if s['kind']=='intro'];analyses=[s for s in sections if s['kind']=='analysis'];outro=[s for s in sections if s['kind']=='outro']
-    if len(intro)!=1 or not 1<=len(analyses)<=4 or not outro:raise ValueError('Нужны KIRISH, 1–4 заголовка пар команд и YAKUNIY TANLOVLAR / YAKUNIY CTA.')
+    if len(intro)!=1 or not analyses or not outro:raise ValueError('Нужны KIRISH, один или больше заголовков пар команд и YAKUNIY TANLOVLAR / YAKUNIY CTA.')
     def make(s):return Block(title=s['title'],script='\n'.join(s['lines']),kind=s['kind'],language='uz',source_hint=s['hint'])
     start=make(intro[0]);end=make(outro[0]);end.script='\n'.join('\n'.join(s['lines']) for s in outro)
     if end.source_hint and outro[-1]['hint']:end.source_hint=[end.source_hint[0],outro[-1]['hint'][1]]
@@ -158,11 +158,11 @@ def framing_cards_uz(project,block,lines,duration):
         if 'telegram' in t:
             asset=project.assets.get('telegram','')
             if not asset:raise ValueError('Добавьте Telegram узбекского ведущего.')
-            if 'havola' not in t:raise ValueError('Дополните фразу Telegram словами о ссылке (Havola).')
+            if 'havola' not in t:raise SpeechIssue('Дополните фразу Telegram словами о ссылке (Havola).')
             cards.append(Card(line.start,line.end,'ТЕЛЕГРАМ','Telegram',i,asset));continue
         pairs=[b for b in analyses if mentions(b.title,line.text)]
         if pairs:
-            if len(pairs)>1:raise ValueError('Разделите представления пар команд переносом строки: '+line.text)
+            if len(pairs)>1:raise SpeechIssue('Разделите представления пар команд переносом строки: '+line.text)
             owner=pairs[0]
         if block.kind=='intro':
             if pairs and owner.uid not in seen:
@@ -173,9 +173,9 @@ def framing_cards_uz(project,block,lines,duration):
             title,body=classify(line.text)
             # Recap often names the pair on one line and the bet on the next.
             if title=='ПРОГНОЗ' or (owner and re.search(r"(?:ta)?dan (?:ko'p|kam) gol|\bx2\b|\b1x\b",t)):
-                if owner is None:raise ValueError('Перед повтором ставки укажите пару команд: '+line.text)
+                if owner is None:raise SpeechIssue('Перед повтором ставки укажите пару команд: '+line.text)
                 text=forecast_text(owner)
-                if not text:raise ValueError('Не найден основной прогноз: '+owner.title)
+                if not text:raise SpeechIssue('Не найден основной прогноз: '+owner.title)
                 cards.append(Card(line.start,line.end,'ПРОГНОЗ',text,i,forecast_id=owner.uid));seen.add(owner.uid);continue
             if 'obuna' in t or 'layk bos' in t:
                 asset=project.assets.get('subscribe','')
@@ -186,9 +186,9 @@ def framing_cards_uz(project,block,lines,duration):
                 question=re.split(r'[:—]',line.text,maxsplit=1)[-1].strip()
                 cards.append(Card(line.start,line.end,'ВОПРОС ЗРИТЕЛЯМ',question,i))
     missing=[b.title for b in analyses if b.uid not in seen]
-    if missing:raise ValueError(('В начале не найдены пары: ' if block.kind=='intro' else 'В итогах не найдены повторы ставок: ')+', '.join(missing))
+    if missing:raise SpeechIssue(('В начале не найдены пары: ' if block.kind=='intro' else 'В итогах не найдены повторы ставок: ')+', '.join(missing))
     if block.kind=='outro' and (not lines or not re.search(r"ko'rishguncha|xayr|omon bo'ling",norm(lines[-1].text))):
-        raise ValueError('Последняя строка завершения должна содержать полное прощание ведущего.')
+        raise SpeechIssue('Последняя строка завершения должна содержать полное прощание ведущего.')
     result=[]
     for card in cards:
         override=block.card_overrides.get(str(card.line))
@@ -229,3 +229,4 @@ def asr_framing_cards(project,block,lines,duration):
         if value is not None and not card.asset and card.title!='ПРОГНОЗ':card.text=value
     from .framing import optional_subscription
     return optional_subscription([c for c in cards if c.text.strip()],duration)
+

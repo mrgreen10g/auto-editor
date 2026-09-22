@@ -2,7 +2,7 @@
 from pathlib import Path
 import copy,re,json,hashlib,subprocess,os
 from .timeline import Card,Line,Plan,frame
-from .alignment import split_script
+from .alignment import split_script,SpeechIssue
 from .card_text import classify_card,summarize_card
 from .graphics import block_teams
 from .event_rules import team_position
@@ -69,7 +69,7 @@ def framing_cards(project,block,lines,duration):
         if 'телеграм' in low:
             asset=project.assets.get('telegram','')
             if not asset:raise ValueError('Добавьте запись Telegram для фразы о канале.')
-            if 'ссылка' not in low:raise ValueError('В сценарии после упоминания Telegram должна быть фраза о ссылке в описании.')
+            if 'ссылка' not in low:raise SpeechIssue('В сценарии после упоминания Telegram должна быть фраза о ссылке в описании.')
             cards.append(Card(line.start,line.end,'ТЕЛЕГРАМ','Telegram · канал автора',i,asset))
             continue
         pairs=[b for b in analyses if pair_matches(line.text,b)]
@@ -83,13 +83,13 @@ def framing_cards(project,block,lines,duration):
         if block.kind=='intro' and pairs and pairs[0].uid not in seen_pairs:
             # Normally prepared_script splits the spoken pairs; fail visibly if
             # a custom sentence still contains several rather than guess timing.
-            if len(pairs)>1:raise ValueError('Разделите представления пар в сценарии начала переносом строки: '+line.text)
+            if len(pairs)>1:raise SpeechIssue('Разделите представления пар в сценарии начала переносом строки: '+line.text)
             seen_pairs.add(pairs[0].uid)
             cards.append(Card(line.start,line.end,'РАЗБОР МАТЧА',pairs[0].title,i));continue
         if block.kind=='outro':
             if pairs and 'комментари' not in low and re.search(r'беру|выбираю|вариант|выбор|став|побед|\b[xх]2\b|\bфор(?:а|ой|у|ы|е)\b|\bтотал\w*',low):
                 owner=pairs[0];text=forecast_text(owner)
-                if not text:raise ValueError('Не найден основной прогноз в разборе: '+owner.title)
+                if not text:raise SpeechIssue('Не найден основной прогноз в разборе: '+owner.title)
                 cards.append(Card(line.start,line.end,'ПРОГНОЗ',text,i,forecast_id=owner.uid));continue
             if re.search(r'подписывай|ставьте\s+лайк',low):
                 asset=project.assets.get('subscribe','')
@@ -119,9 +119,9 @@ def framing_cards(project,block,lines,duration):
     if block.kind=='outro':
         for b in analyses:
             if not any(c.forecast_id==b.uid for c in cards):
-                raise ValueError('В итогах не найден повтор прогноза: '+b.title+'. Проверьте сценарий завершения.')
+                raise SpeechIssue('В итогах не найден повтор прогноза: '+b.title+'. Проверьте сценарий завершения.')
         if not lines or not re.search(r'до\s+(?:встречи|свидания)|увидимся|пока',lines[-1].text,re.I):
-            raise ValueError('В конце сценария укажите полное прощание ведущего.')
+            raise SpeechIssue('В конце сценария укажите полное прощание ведущего.')
     if block.kind=='intro':
         missing=[b.title for b in analyses if b.uid not in seen_pairs]
         if missing:warnings.append('Во вступлении не названы однозначно: '+', '.join(missing)+'. Плашки этих пар появятся в самих разборах; проверьте начало.')
@@ -201,3 +201,4 @@ def split_full_script(text):
     blocks=[(rows[a].strip(),'\n'.join(rows[a:(headers[j+1] if j+1<len(headers) else end)]).strip()) for j,a in enumerate(headers)]
     if not intro:raise ValueError('Перед первым разбором не найден текст начала.')
     return intro,blocks,outro
+

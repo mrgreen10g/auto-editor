@@ -244,6 +244,7 @@ class App(EpisodeMixin,MatchMixin):
         self.button(row, 'Изменить плашку', self.edit_card).pack(side='left')
         self.button(row, 'Повторить анализ', lambda: self.start(False)).pack(side='left', padx=8)
         self.button(row, 'Подробности', self.details).pack(side='right')
+        self.button(summary, 'Проверить спорные плашки', self.open_speech_review, 'Primary.TButton').pack(anchor='w',pady=(10,0))
         self.button(summary, 'Открыть монтажную дорожку', self.open_timeline, 'Primary.TButton').pack(anchor='w',pady=(10,0))
         ttk.Label(page, text='Дважды нажмите на фразу, чтобы изменить плашку. Пустой текст отключает её.',
                   style='Muted.TLabel', wraplength=700).pack(anchor='w')
@@ -561,7 +562,6 @@ class App(EpisodeMixin,MatchMixin):
         self.reviewtabs.select(tab)
 
     def add_block(self):
-        if self.project.profile=='uz_football' and len(self.project.blocks)>=4:return messagebox.showinfo("Разборы","В узбекском шаблоне пока поддерживается до четырёх разборов.")
         self.collect()
         self.project.whole_episode=True
         self.project.blocks.append(Block(title=f'Разбор {len(self.project.blocks) + 1}',language='uz' if self.project.profile=='uz_football' else 'ru'))
@@ -759,6 +759,17 @@ class App(EpisodeMixin,MatchMixin):
         self.refresh()
         self.show_page('materials')
 
+    def open_speech_review(self):
+        if self.busy or self.plan is None:return
+        from .review_ui import ReviewDialog
+        def apply(plan):
+            self.display_plan(plan)
+            self.result=None
+            if self.project_path:
+                try:self.project.save(self.project_path)
+                except OSError as error:messagebox.showerror('Сохранение проверки',str(error))
+        ReviewDialog(self.root,self.project,self.plan,self.cache_path(),apply)
+
     def open_timeline(self):
         if self.busy:return
         if self.plan is None:
@@ -912,8 +923,12 @@ class App(EpisodeMixin,MatchMixin):
                     synchronize(engine.project,engine.cache,self.cancel,engine.log)
                     self.jobs.put(('uz_project',copy.deepcopy(engine.project)))
                 plan = engine.analyze()
+                self.jobs.put(('uz_project',copy.deepcopy(engine.project)))
                 self.jobs.put(('plan', plan))
-                if render:
+                from .review import pending
+                if render and pending(plan):
+                    self.jobs.put(('review_required',None))
+                elif render:
                     self.jobs.put(('result', engine.render(plan, target)))
             except Cancelled:
                 self.jobs.put(('log', 'Отменено. Можно изменить настройки и повторить.'))
@@ -927,6 +942,8 @@ class App(EpisodeMixin,MatchMixin):
 
     def display_plan(self, plan):
         self.plan = plan
+        from .review import update_task_times
+        update_task_times(plan)
         from .editing import store_plan
         store_plan(self.project,self.index,plan)
         self.reviewtabs.select(1)
@@ -943,6 +960,9 @@ class App(EpisodeMixin,MatchMixin):
             self.review_note.set(f'Автоматические тайминги: замечаний {uncertain}. Подробности — в журнале. Двойной щелчок редактирует текст плашки.')
         else:
             self.review_note.set('Неустойчивых совпадений не обнаружено. После экспорта проверьте речь и игровые моменты в ролике.')
+        from .review import pending
+        count=len(pending(plan))
+        if count:self.review_note.set(f'Анализ завершён. Плашки сохранены; нужно проверить: {count}. Нажмите «Проверить спорные плашки».')
         self.update_summary()
 
     def poll(self):
@@ -966,6 +986,9 @@ class App(EpisodeMixin,MatchMixin):
                     self.project=value;self.refresh()
                 elif kind == 'plan':
                     self.display_plan(value)
+                elif kind=='review_required':
+                    self.stage='review_required'
+                    self.status.set('Черновая дорожка готова. Проверьте спорные плашки перед экспортом.')
                 elif kind == 'result':
                     self.result = Path(value)
                     self.output_label.set(str(value))
@@ -981,6 +1004,8 @@ class App(EpisodeMixin,MatchMixin):
                     self.set_busy(False)
                     if self.plan is None and self.stage in ('analyze', 'render'):
                         self.review_summary.set('Анализ не завершён. Проверьте журнал и повторите.')
+                    elif self.stage=='review_required':
+                        self.show_page('review');self.root.after_idle(self.open_speech_review)
                     elif self.stage == 'analyze':
                         self.show_page('review')
         except queue.Empty:
@@ -1015,3 +1040,4 @@ def launch():
     root = tk.Tk()
     App(root)
     root.mainloop()
+

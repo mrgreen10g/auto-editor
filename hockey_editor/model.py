@@ -187,6 +187,12 @@ class Project:
             for c in plan.get('cards',[]):
                 if c.get('asset'):c['asset']=relative(c['asset'])
             for c in plan.get('media',[]):c['path']=relative(c['path'])
+            for c in plan.get('edit_baseline',{}).get('cards',[]):
+                if c.get('asset'):c['asset']=relative(c['asset'])
+            for c in plan.get('edit_baseline',{}).get('inserts',[]):c['path']=relative(c['path'])
+            for item in plan.get('review_items',[]):
+                c=item.get('deleted_card',{})
+                if c.get('asset'):c['asset']=relative(c['asset'])
         for b in [*data['blocks'], data['intro'],data['outro']]:plan_paths(b.get('edit_plan'))
         plan_paths(data.get('episode_plan'))
         data['team_logos'] = {name: relative(path) for name, path in self.team_logos.items()}
@@ -226,6 +232,12 @@ class Project:
             for c in plan.get('cards',[]):
                 if c.get('asset'):c['asset']=resolve(c['asset'])
             for c in plan.get('media',[]):c['path']=resolve(c['path'])
+            for c in plan.get('edit_baseline',{}).get('cards',[]):
+                if c.get('asset'):c['asset']=resolve(c['asset'])
+            for c in plan.get('edit_baseline',{}).get('inserts',[]):c['path']=resolve(c['path'])
+            for item in plan.get('review_items',[]):
+                c=item.get('deleted_card',{})
+                if c.get('asset'):c['asset']=resolve(c['asset'])
         def framing(name):
             item=data.get(name)
             if not item:return Block(title='Начало' if name=='intro' else 'Итоги',uid=name,kind=name)
@@ -250,3 +262,4 @@ class Project:
                    blocks=blocks,settings=Settings(**settings),
                    matches=[MatchSource(**{**m, 'path': resolve(m['path'])}) for m in data.get('matches', [])],
                    team_logos={name: resolve(path) for name, path in data.get('team_logos', {}).items()})
+

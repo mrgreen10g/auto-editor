@@ -8,6 +8,9 @@ class Line:
     start: float
     end: float
     agreement: float = 0.0
+    review_reason: str = ""
+    recognized: str = ""
+    review_id: str = ""
 
 @dataclass
 class Insert:
@@ -30,6 +33,8 @@ class Card:
     asset: str = ''
     source_in: float = 0.
     forecast_id: str = ''
+    review_id: str = ""
+    review_reason: str = ""
 
 @dataclass
 class Plan:
@@ -44,6 +49,9 @@ class Plan:
     rotation: int | None = None
     sections: list = field(default_factory=list)
     media: list = field(default_factory=list)
+    review_items: list = field(default_factory=list)
+    edit_baseline: dict = field(default_factory=dict)
+    input_key: str = ""
 
     def to_dict(self): return asdict(self)
     @classmethod
@@ -182,3 +190,4 @@ def zoom_windows(duration,inserts):
             windows.append((t,t+up,t+up+hold,t+span))
             t+=span+1.6
     return windows
+

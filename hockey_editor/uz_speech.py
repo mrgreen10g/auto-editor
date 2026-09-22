@@ -20,7 +20,7 @@ def recording_key(project):
     return hashlib.sha256(json.dumps([MODEL_REV,data]).encode()).hexdigest()
 
 def speech_key(project):
-    return hashlib.sha256(json.dumps(['uz-speech-8-contextual-recaps',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['uz-speech-9-manual-review',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
 
 def model_path(cancel,log):
     folder=Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'Models'/'uzbek-turbo'
@@ -66,7 +66,7 @@ def transcribe(project,cache,cancel,log):
             result.append({'start':words[0]['start'],'end':words[-1]['end'],'text':s.text,'words':words})
             log(f'Распознана речь до {int(s.end)//60:02}:{int(s.end)%60:02}')
     finally:del model;gc.collect()
-    if not result:raise ValueError('Узбекская речь в записи не распознана.')
+    # Empty recognition is converted to a script draft for manual review.
     temp=saved.with_suffix('.tmp');temp.write_text(json.dumps(result,ensure_ascii=False),encoding='utf-8');temp.replace(saved)
     return result
 
@@ -216,7 +216,7 @@ def make_lines(segments,lo,hi,annotations):
         lines.append({'text':text,'start':a,'end':b,'agreement':0.})
     return lines,cards
 
-def prepare(project,segments):
+def _prepare(project,segments):
     from .framing import forecast_text
     from .uz_forecasts import match_forecasts
     bounds,tg,words=sections(project,segments);key=speech_key(project)
@@ -295,14 +295,19 @@ def prepare(project,segments):
                 if card['title']=='ПРОГНОЗ':
                     line=b.asr_lines[int(i)]
                     card['forecast_id']=forecast_owners[(line['start'],line['end'])]
-        b.events=[];b.edit_plan=None;b.edit_key=''
-    project.episode_plan=None;project.episode_key=''
+        b.events=[]  # Previous manual plans remain available for review/rebase.
+    project.episode_key=''  # Keep prior episode as a recoverable edit snapshot.
     return bounds
 
 def synchronize(project,cache,cancel,log):
+    from .review import retain_legacy_edits
+    retain_legacy_edits(project)
     key=speech_key(project)
     if not all(b.speech_key==key and b.asr_lines for b in [project.intro,*project.blocks,project.outro]):
-        bounds=prepare(project,transcribe(project,cache,cancel,log))
+        segments=transcribe(project,cache,cancel,log)
+        from .host_media import sources
+        duration=sum(p['duration'] for p in sources(project))
+        bounds=prepare(project,segments,review=True,duration=duration)
         log('Разделы по речи: '+', '.join(f'{v//60:02.0f}:{v%60:05.2f}' for v in bounds))
         for card in project.intro.speech_cards.values():
             if card.get('needs_review'):log('Проверьте плашку во вступлении: '+card['text']+'. Одно из названий распознано неуверенно; сборка продолжена.')
@@ -321,3 +326,39 @@ def synchronize(project,cache,cancel,log):
         scans={m.id:GoalScanner(cancel=cancel,log=log).scan(m) for m in local}
         actual=copy.deepcopy(b);actual.script='\n'.join(l['text'] for l in b.asr_lines)
         b.events=propose(events(actual,local),scans,local,False)
+
+
+
+def prepare(project,segments,review=False,duration=None):
+    candidate=copy.deepcopy(project)
+    try:
+        if not segments:raise ValueError('Речь не распознана. Все интервалы предварительные.')
+        bounds=_prepare(candidate,segments)
+    except ValueError as error:
+        if not review:raise
+        from .review import draft_alignment,fallback_cards
+        from .timeline import Line
+        if duration is None:duration=segments[-1]['end'] if segments else 1.
+        blocks=[candidate.intro,*candidate.blocks,candidate.outro]
+        recovered=draft_alignment(blocks,segments,duration,str(error))
+        bounds=[]
+        for b in blocks:
+            lines,_=recovered[b.uid];bounds.append(lines[0].start)
+            b.asr_lines=[vars(l) for l in lines];b.speech_key=speech_key(candidate)
+            b.speech_cards={}
+            from .uzbek import classify
+            for i,line in enumerate(lines):
+                title,text=classify(line.text)
+                if title:b.speech_cards[str(i)]={'title':title,'text':text,'needs_review':True,'review_reason':str(error)}
+            # Framing uses authored script semantics for recovered lines.
+            if b.kind!='analysis':
+                local=[Line(l.text,l.start-lines[0].start,l.end-lines[0].start,l.agreement,l.review_reason,l.recognized,l.review_id) for l in lines]
+                cards,_=fallback_cards(candidate,b,local,lines[-1].end-lines[0].start,str(error))
+                for c in cards:
+                    if c.line>=0:b.speech_cards[str(c.line)]={'title':c.title,'text':c.text,'forecast_id':c.forecast_id,'needs_review':True,'review_reason':str(error)}
+        bounds.append(duration)
+    for old,new in zip([project.intro,*project.blocks,project.outro],[candidate.intro,*candidate.blocks,candidate.outro]):
+        old.asr_lines=new.asr_lines;old.speech_cards=new.speech_cards;old.speech_key=new.speech_key
+        old.events=new.events
+    project.episode_key=''
+    return bounds

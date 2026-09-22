@@ -3,7 +3,7 @@ from pathlib import Path
 import hashlib,json,re,math,os,shutil
 from . import __version__
 from .media import probe,run,audio_extract,Cancelled
-from .alignment import align,AlignmentError
+from .alignment import align,AlignmentError,SpeechIssue
 from .timeline import Plan,Line,Card,keep_ranges,map_time,placements,zoom_windows,frame
 from .graphics import card_image
 
@@ -26,8 +26,19 @@ class Engine:
         if self.project.profile!='ru_hockey':data['profile']=self.project.profile
         return hashlib.sha256(json.dumps(data,ensure_ascii=False).encode()).hexdigest()
 
-    def analyze(self,source_floor=0,speech=None):
+    def analyze(self,source_floor=0,speech=None,recover=True):
+        try:return self._analyze(source_floor,speech)
+        except AlignmentError:
+            if not recover or not getattr(self,'recover_speech',True) or speech is not None:raise
+            from .ru_speech import prepare
+            block=self.project.blocks[self.index]
+            found=prepare(self.project,[block],self.cache,self.cancel,self.log)
+            return self._analyze(0,found[block.uid])
+
+    def _analyze(self,source_floor=0,speech=None):
         p=self.project;p.validate(self.index);self.check()
+        from .review import retain_legacy_edits
+        retain_legacy_edits(p)
         if p.profile=='uz_football' and all(b.kind=='analysis' for b in p.blocks):
             from .uz_speech import synchronize
             synchronize(p,self.cache,self.cancel,self.log)
@@ -45,7 +56,7 @@ class Engine:
         audio_source,total,parts=analysis_source(p,self.cache,self.cancel,self.log)
         info={'duration':total}
         if info['duration']>1800:raise ValueError('Поддерживается запись ведущего длительностью до 30 минут.')
-        if source_floor>=info['duration']-1:raise AlignmentError('В записи не осталось места для следующего разбора. Требуется проверка порядка частей.')
+        if speech is None and source_floor>=info['duration']-1:raise AlignmentError('В записи не осталось места для следующего разбора. Требуется проверка порядка частей.')
         key=self.signature(source_floor);cached=self.cache/'alignment.json'
         saved=json.loads(cached.read_text(encoding='utf-8')) if cached.exists() else {}
         protected_tail=None
@@ -77,8 +88,8 @@ class Engine:
             for line in source:line.start+=source_floor;line.end+=source_floor
             cached.write_text(json.dumps({'key':key,'lines':[vars(l) for l in source],'warnings':warnings},ensure_ascii=False,indent=2),encoding='utf-8')
         if not source or any(l.end<=l.start for l in source):
-            raise ValueError('Некорректная разметка: проверьте, что сценарий соответствует записи.')
-        if block.kind=='intro' and source[-1].end>120:
+            raise AlignmentError('Некорректная разметка: требуется ручная проверка границ.')
+        if block.kind=='intro' and source[-1].end>120 and not any(l.review_reason for l in source):
             raise AlignmentError('Начало оказалось за пределами первых двух минут. Требуется проверка по словам.')
         warnings=list(warnings)
         if block.source_hint and (abs(block.source_hint[0]-source[0].start)>3 or block.source_hint[-1]>total+1):
@@ -91,20 +102,24 @@ class Engine:
         if protected_tail is not None:
             limit=protected_tail-start
             spans=[(a,min(b,limit)) for a,b in spans if a<limit and min(b,limit)>a]
-        keep=keep_ranges(end-start,spans,enabled=p.settings.cut_pauses)
+        keep=keep_ranges(end-start,spans,enabled=p.settings.cut_pauses and not any(l.review_reason for l in source))
         duration=sum(b-a for a,b in keep)
-        lines=[Line(l.text,frame(map_time(l.start-start,keep)),frame(map_time(l.end-start,keep)),l.agreement) for l in source]
+        lines=[Line(l.text,frame(map_time(l.start-start,keep)),frame(map_time(l.end-start,keep)),l.agreement,l.review_reason,l.recognized,l.review_id) for l in source]
         meta={c.path:probe(c.path) for c in block.clips}
         if any(not x['video'] for x in meta.values()):raise ValueError('Игровая вставка должна содержать видео.')
         inserts,cards,extra=placements(block,lines,meta,duration,p.settings.insert_frequency)
         if block.kind!='analysis':
             from .framing import framing_cards
-            inserts=[];cards,extra=framing_cards(p,block,lines,duration)
+            from .review import framing_draft
+            inserts=[];cards,extra=framing_draft(p,block,lines,duration)
         from .orientation import detect_rotation
         rotation=detect_rotation(p.host,self.cache,self.cancel,self.log) if p.settings.auto_rotate else p.settings.rotate
         plan=Plan(start,end,keep,lines,inserts,cards,list(warnings)+extra,duration,rotation)
         if len(parts)>1 or p.full_video:
             plan.media=media_ranges(p,plan,parts,self.cache,self.cancel,self.log)
+        from .review import attach,preserve_edits
+        attach(plan,block,p)
+        preserve_edits(p.blocks[self.index].edit_plan,plan)
         self.save_plan(plan)
         self.log(f'Разметка готова: {len(lines)} фраз, {len(inserts)} вставок, {duration:.1f} с.')
         return plan
@@ -245,3 +260,4 @@ class Engine:
         shutil.copy2(self.cache/'edit-plan.json',target.with_suffix('.timing.json'))
         self.log('Готово: '+str(target))
         return target
+

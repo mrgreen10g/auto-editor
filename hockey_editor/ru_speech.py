@@ -64,7 +64,7 @@ def transcribe(project,cache,cancel,log):
             if words:result.append({'text':s.text,'start':words[0]['start'],'end':words[-1]['end'],'words':words})
             log(f'Русская речь: {int(s.end)//60:02}:{int(s.end)%60:02}')
     finally:del model
-    if not result:raise AlignmentError('Не удалось распознать русскую речь в записи.')
+    # Empty ASR is handled by a fully reviewable script draft, not a lost episode.
     temp=saved.with_suffix('.tmp');temp.write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8');temp.replace(saved)
     return result
 
@@ -72,6 +72,9 @@ def tokens(text):
     text=text.lower().replace('ё','е')
     text=re.sub(r'\bcska\b|\bцск\b','цска',text)
     text=re.sub(r'\b(?:ska|sk)\b','ска',text)
+    halves={'одного':'один','одной':'один','двух':'два','трех':'три','четырех':'четыре','пяти':'пять','шести':'шесть','семи':'семь','восьми':'восемь','девяти':'девять'}
+    text=re.sub(r'\b('+ '|'.join(halves) +r')\s+с\s+половиной',lambda m:halves[m[1]]+' половина',text)
+    text=re.sub(r'\b(\d+)[,.]5\b',lambda m:spoken(m[1])+' половина',text)
     text=spoken(text)
     return [w if len(w)<6 else w[:6] for w in re.findall(r'[а-яa-z]+',text)]
 
@@ -134,8 +137,21 @@ def align_episode(blocks,segments):
 
 def prepare(project,blocks,cache,cancel,log):
     segments=transcribe(project,cache,cancel,log)
-    result=align_episode(blocks,segments)
+    try:result=align_episode(blocks,segments)
+    except AlignmentError as error:
+        from .review import draft_alignment
+        from .host_media import sources
+        duration=sum(p['duration'] for p in sources(project))
+        result=draft_alignment(blocks,segments,duration,str(error))
+        log('Создана черновая разметка. Сомнительные фразы сохранены для ручной проверки.')
     for b in blocks:
         lines,_=result[b.uid]
+        for line in lines:
+            line.recognized=' '.join(w['word'].strip() for s in segments for w in s['words'] if line.start<=w['start']<line.end)
+            if line.agreement>.8 and not line.review_reason:line.review_reason='Неуверенное совпадение со сценарием.'
+            from .review import semantic_conflict
+            conflict=semantic_conflict(line.text,line.recognized)
+            if conflict:line.review_reason=conflict;line.agreement=1.
         log(f'Подтверждён раздел «{b.title}»: {lines[0].start:.2f}–{lines[-1].end:.2f} с.')
     return result
+
