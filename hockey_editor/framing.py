@@ -39,8 +39,11 @@ def forecast_text(block):
     if block.edit_plan:
         card=next((c for c in reversed(block.edit_plan.get('cards',[])) if c['title']=='ПРОГНОЗ'),None)
         if card:return card['text']
+    if block.sport=='combat':
+        from .combat import classify
+        if block.forecast:return block.forecast
     if block.language=='uz':
-        from .uzbek import classify
+        if block.sport!='combat':from .uzbek import classify
         for i,line in reversed(list(enumerate(split_script(block.script)))):
             title,text=classify(line)
             if title=='ПРОГНОЗ':return block.card_overrides.get(str(i),text)
@@ -59,6 +62,9 @@ def optional_subscription(cards,duration):
 
 
 def framing_cards(project,block,lines,duration):
+    if project.profile=='uz_combat':
+        from .combat import framing_cards as combat_cards
+        return combat_cards(project,block,lines,duration)
     if block.language=='uz':
         from .uzbek import framing_cards_uz
         return framing_cards_uz(project,block,lines,duration)

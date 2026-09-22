@@ -1,7 +1,7 @@
 name: Windows build
 on:
   push:
-    branches: [main, version-0.2, version-0.3, version-0.4, version-0.5, version-0.5.1, version-0.6, version-0.7]
+    branches: [main, version-0.2, version-0.3, version-0.4, version-0.5, version-0.5.1, version-0.6, version-0.7, work-uz-combat]
   workflow_dispatch:
 permissions:
   contents: read
@@ -51,3 +51,4 @@ jobs:
             build/ocr-check.json
           if-no-files-found: ignore
           retention-days: 14
+

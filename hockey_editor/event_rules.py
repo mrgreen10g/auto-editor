@@ -47,6 +47,9 @@ def explicit_reference(text):
     return result_reference(text) or any(w in t for w in ('сыграли','проигр','уступ','обыгр','выигр','побед','поражен','встречалась','предсезон'))
 
 def requests_for(block, matches, use_manual=True):
+    if block.sport=='combat':
+        from .combat import events
+        return events(block,matches)
     if block.language=='uz':
         from .uzbek import events
         return events(block,matches)
@@ -134,3 +137,4 @@ def requests_for(block, matches, use_manual=True):
                                    flexible_source=kind=='play' and not pairs and not known))
         if score: previous[source_id] = score
     return result
+

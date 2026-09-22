@@ -379,6 +379,23 @@ def check():
         app.refresh()
         for _ in range(9):app.add_block()
         root.update();assert len(app.project.blocks)==10
+        # Combat profile must not inherit football source limits or logo controls.
+        app.profilebox.current(2)
+        with patch('hockey_editor.profiles.kit_path',return_value=tmp/'combat-kit.json'):app.switch_profile()
+        root.update();assert app.project.profile=='uz_combat'
+        assert not app.logos_panel.winfo_manager()
+        assert app.find_events_button.cget('text')=='Найти удары / размены'
+        app.add_block();assert app.project.blocks[-1].sport=='combat'
+        from hockey_editor.match_ui import SourceDialog
+        source=MatchSource(str(host),'','',sport='combat')
+        with patch.object(SourceDialog,'wait_window'):
+            dialog=SourceDialog(root,source,['ALEKSANDR XALZOV','AZAMAT ESPAY'])
+        dialog.fighter.set('ALEKSANDR XALZOV');assert dialog.validate()
+        dialog.apply();assert dialog.result==['ALEKSANDR XALZOV','','']
+        dialog.destroy();root.update()
+        app.profilebox.current(0)
+        with patch('hockey_editor.profiles.kit_path',return_value=tmp/'ru-kit.json'):app.switch_profile()
+        root.update();assert app.logos_panel.winfo_manager()
         assert not errors, errors
         app.close()
     (out / 'gui-check.json').write_text(json.dumps({'status': 'ok', 'checks': ['v1-project-compatibility', 'block-switching', 'card-editing', 'stale-plan-invalidation', 'busy-control-restoration', 'worker-queue-flow', 'compact-window-layout', 'multiple-source-review-flow', 'v2-project-roundtrip', 'review-retains-custom-trim','episode-editor-roundtrip','seek-after-edit-rebuild-save','source-visual-trim','persistent-block-navigation','all-block-events-own-source','per-block-logo-tabs','ordered-host-sources','full-video-dialog-roundtrip']}, indent=2), encoding='utf-8')

@@ -125,6 +125,9 @@ def section_card(card,path,profile='ru_hockey'):
 
 
 def card_image(card, path, logos=None,profile='ru_hockey'):
+    if profile=='uz_combat':
+        from .combat_graphics import card_image as combat_card
+        return combat_card(card,path)
     logos=logos or {}
     if card.title=='РАЗБОР МАТЧА': return match_card(card,path,logos,profile)
     if card.title=='ПРОГНОЗ':return forecast_card(card,path,profile)
@@ -156,4 +159,5 @@ def card_image(card, path, logos=None,profile='ru_hockey'):
     for i,line in enumerate(lines): d.text((42,65+i*(size+8)),line,font=ft,fill='#f5faff')
     im.save(path)
     return (88,720-height-48) if wide else (28,28)
+
 

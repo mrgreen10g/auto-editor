@@ -14,6 +14,8 @@ def project_edit_key(project, index):
         if not block.get(field):block.pop(field,None)
     if block.get('language')=='ru':block.pop('language',None)
     if not block.get('source_hint'):block.pop('source_hint',None)
+    for field in ('sport','forecast','featured_pairs'):
+        if not block.get(field):block.pop(field,None)
     block.pop('kind',None);block.pop('uid',None)  # Preserve the v0.4 per-block edit fingerprint.
     def identity(path):
         if not path: return None
@@ -26,7 +28,8 @@ def project_edit_key(project, index):
         if clip.get('origin_path'):clip['origin_path']=identity(clip['origin_path'])
     data=[block,structural,identity(project.host),
           [(m.id,m.home,m.away,identity(m.path),m.score_box) for m in project.matches if m.id in block['match_ids']]]
-    if project.profile!='ru_hockey':data.append([project.profile,project.recording_times])
+    if project.full_video and project.profile=='ru_hockey':data.append('intro-boundary-v2')
+    if project.profile!='ru_hockey':data.append([project.profile,project.recording_times,[(m.id,m.fighter,m.sport) for m in project.matches if m.id in block['match_ids']]])
     if len(project.host_paths())>1:data.append([identity(path) for path in project.host_paths()])
     return hashlib.sha256(json.dumps(data,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
 
@@ -111,3 +114,4 @@ def saved_plan(project,index):
     if block.edit_plan and block.edit_key==project_edit_key(project,index):
         return validate_plan(Plan.from_dict(copy.deepcopy(block.edit_plan)))
     return None
+

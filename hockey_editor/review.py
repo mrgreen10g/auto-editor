@@ -22,6 +22,19 @@ def draft_alignment(blocks, segments, duration, reason):
         if language=='ru':return tokens(text)
         return re.findall(r"[a-z0-9']+",spoken_uz(norm(text)))
     language=blocks[0].language
+    if blocks[0].language=='ru' and len(blocks)>1 and blocks[0].kind=='intro':
+        from .speech_boundaries import first_analysis_start,slice_segments
+        boundary=first_analysis_start(blocks,segments)
+        if boundary:
+            left=draft_alignment(blocks[:1],slice_segments(segments,0,boundary),boundary,reason)
+            shifted=copy.deepcopy(slice_segments(segments,boundary,float('inf')))
+            for item in shifted:
+                item['start']-=boundary;item['end']-=boundary
+                for w in item['words']:w['start']-=boundary;w['end']-=boundary
+            right=draft_alignment(blocks[1:],shifted,duration-boundary,reason)
+            for lines,_ in right.values():
+                for line in lines:line.start+=boundary;line.end+=boundary
+            return {**left,**right}
     words=[w for s in segments for w in s.get('words',[]) if w['end']>w['start']]
     rows=[];script=[];source=[];stamps=[]
     for block in blocks:
@@ -112,7 +125,8 @@ def attach(plan, block, project):
     """Create stable, persistent tasks after all automatic overlay generation."""
     plan.input_key=input_key(project,block)
     counts={}
-    if block.kind=='analysis' and not any(c.title=='ПРОГНОЗ' for c in plan.cards):
+    from .framing import forecast_text
+    if block.kind=='analysis' and not (block.sport=='combat' and not forecast_text(block)) and not any(c.title=='ПРОГНОЗ' for c in plan.cards):
         from .framing import forecast_text
         text=forecast_text(block) or block.title+' — уточните прогноз'
         a=max(0,plan.duration-5)
@@ -247,7 +261,7 @@ def framing_draft(project,block,lines,duration):
             if any(c.title=='РАЗБОР МАТЧА' and c.text==b.title for c in cards):continue
             a=min(max(0,duration-.2),duration*k/max(1,len(owners)))
             cards.append(Card(a,min(duration,a+3),'РАЗБОР МАТЧА',b.title,review_reason='Пара не найдена во вступлении. Проверьте предварительную плашку или удалите её.'))
-    if block.language=='uz':
+    if block.language=='uz' and block.sport!='combat':
         from .framing import forecast_text
         from .uzbek import norm
         if block.kind=='outro':

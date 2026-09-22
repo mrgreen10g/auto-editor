@@ -45,6 +45,7 @@ def source_signature(source):
     p = Path(source.path).resolve(); st = p.stat()
     data = [SCAN_VERSION, str(p), st.st_size, st.st_mtime_ns, source.score_box]
     if source.sport=='football':data.append('football-wide-play-v2')
+    if source.sport=='combat':data.append('combat-clock-action-v3')
     return hashlib.sha256(json.dumps(data).encode()).hexdigest()
 
 
@@ -148,6 +149,9 @@ class GoalScanner:
             raise Cancelled('Отменено.')
 
     def scan(self, source):
+        if source.sport=='combat':
+            from .combat_scan import scan
+            return scan(source,self)
         if source.sport=='football':
             from .football import scan
             return scan(source,self)
@@ -264,6 +268,10 @@ def propose(requests, scans, sources=(), allow_other=False):
         used.add(candidate.id)
         return candidate
     for event in requests:
+        if (source_map.get(event.source_id) and source_map[event.source_id].sport=='combat') or (sources and all(m.sport=='combat' for m in sources)):
+            from .combat import propose_event
+            propose_event(event,scans,usage)
+            continue
         if event.skipped: continue
         data = scans.get(event.source_id, {})
         candidates = [Candidate(**c) for c in data.get('candidates', []) if c['kind'] == 'goal']
@@ -350,15 +358,16 @@ def cut_candidate(source, selection, directory, cancel):
 def montage_block(project, index, cache, cancel):
     block = copy.deepcopy(project.blocks[index])
     if not project.settings.use_manual_clips: block.clips = []
-    if block.match_ids and not block.events and not block.clips:
+    if block.match_ids and not block.events and not block.clips and block.sport!='combat':
         raise ValueError('Сначала выполните поиск голов в исходных матчах.')
-    if unresolved(block):
+    if unresolved(block) and block.sport!='combat':
         raise ValueError(f'Проверьте найденные эпизоды: {len(unresolved(block))}. Можно оставить ведущего вместо вставки.')
     sources = {m.id: m for m in project.matches}
     for event in block.events:
-        if event.skipped: continue
+        if event.skipped or (block.sport=='combat' and (not event.selection or not event.selection.accepted)): continue
         selection = event.selection
         path = cut_candidate(sources[event.source_id], selection, Path(cache)/'inserts', cancel)
         block.clips.append(Clip(str(path), event.phrase, selection.event_time-selection.source_start, selection.context_label,
                                 sources[event.source_id].path,selection.source_start,event.kind,event.flexible_source))
     return block
+

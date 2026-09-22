@@ -11,7 +11,8 @@ from .framing import split_full_script
 
 
 def kit_path(profile='ru_hockey'):
-    return Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/('asset-kit-uz-football.json' if profile=='uz_football' else 'asset-kit.json')
+    from .profiles import kit_path as profile_kit
+    return profile_kit(profile)
 
 
 class EpisodeMixin:
@@ -73,7 +74,7 @@ class EpisodeMixin:
         ttk.Label(page,text='MOV с прозрачностью поддерживается. Звук Telegram и подписки отключён; звук дисклеймера сохранён. Для новых проектов можно сохранить этот набор.',wraplength=720).pack(anchor='w',pady=22)
         remember=tk.BooleanVar(value=True);ttk.Checkbutton(page,text='Запомнить эти материалы для новых проектов',variable=remember).pack(anchor='w')
         timing_field=None
-        if draft.profile=='uz_football':
+        if draft.profile.startswith('uz_'):
             timing_page=ttk.Frame(tabs,padding=12);tabs.add(timing_page,text='Таймкоды записи')
             ttk.Label(timing_page,text='Необязательно. Вставьте проверенное время исходного видео: начало, разборы в порядке проекта, итоги и прощание. Пустое поле — автоматический поиск.',wraplength=710).pack(anchor='w',pady=(0,10))
             ttk.Label(timing_page,text='Пример: 00:32 02:08 Augsburg Bayer\nНазвания — подписи для удобства. Итоги и концовку можно указать одной или двумя строками.\nПромежутки между разделами допустимы: укажите начало и конец каждого нужного блока.\nОкруглённые границы уточняются по ближайшей речи в пределах 2,5 секунды.',wraplength=710).pack(anchor='w',pady=(0,10))
@@ -85,8 +86,9 @@ class EpisodeMixin:
             if not path:return
             try:
                 text=Path(path).read_text(encoding='utf-8-sig');parsed=None
-                if draft.profile=='uz_football':
-                    from .uzbek import parse_script
+                if draft.profile.startswith('uz_'):
+                    if draft.profile=='uz_combat':from .combat import parse_script
+                    else:from .uzbek import parse_script
                     start,parsed,end=parse_script(text);intro=start.script;outro=end.script;blocks=[(b.title,b.script) for b in parsed]
                 else:intro,blocks,outro=split_full_script(text)
                 if not messagebox.askyesno('Импорт сценария',f'Найдено разборов: {len(blocks)}. Заменить тексты начала, разборов и завершения?\nМатчи и настройки совпадающих пар сохранятся.',parent=w):return
@@ -97,11 +99,14 @@ class EpisodeMixin:
                     b.script=script
                     if parsed:
                         b.language='uz';b.source_hint=parsed[len(updated)].source_hint
+                        b.sport=parsed[len(updated)].sport;b.forecast=parsed[len(updated)].forecast
                     updated.append(b)
                 draft.blocks=updated
                 if parsed:
                     draft.intro.language=draft.outro.language='uz'
                     draft.intro.source_hint=start.source_hint;draft.outro.source_hint=end.source_hint
+                    for old,new in ((draft.intro,start),(draft.outro,end)):
+                        old.sport=new.sport;old.featured_pairs=new.featured_pairs
                 for key,value in [('intro',intro),('outro',outro)]:fields[key].delete('1.0','end');fields[key].insert('1.0',value)
                 enabled.set(True);messagebox.showinfo('Сценарий разделён','Начало, разборы и завершение заполнены. После сохранения добавьте матчи для новых разборов.',parent=w)
             except Exception as error:messagebox.showerror('Сценарий',str(error),parent=w)
@@ -116,9 +121,9 @@ class EpisodeMixin:
             for key,field in fields.items():getattr(draft,key).script=field.get('1.0','end').strip()
             draft.assets={k:v.get().strip() for k,v in asset_vars.items()};draft.full_video=enabled.get()
             if draft.full_video:
-                if any(len(getattr(draft,k).script)<30 for k in fields):return messagebox.showerror('Тексты','Заполните начало и завершение.',parent=w)
-                required=('disclaimer',) if draft.profile=='uz_football' else ('disclaimer','telegram','subscribe')
-                if any(not draft.assets.get(k) or not Path(draft.assets[k]).is_file() for k in required):return messagebox.showerror('Материалы','Выберите дисклеймер.' if draft.profile=='uz_football' else 'Выберите дисклеймер, Telegram и подписку.',parent=w)
+                if any(len(getattr(draft,k).script)<30 for k in fields if not (draft.profile=='uz_combat' and k=='outro' and not draft.outro.script)):return messagebox.showerror('Тексты','Заполните начало и завершение.',parent=w)
+                required=('disclaimer',) if draft.profile.startswith('uz_') else ('disclaimer','telegram','subscribe')
+                if any(not draft.assets.get(k) or not Path(draft.assets[k]).is_file() for k in required):return messagebox.showerror('Материалы','Выберите дисклеймер.' if draft.profile.startswith('uz_') else 'Выберите дисклеймер, Telegram и подписку.',parent=w)
                 if any(v and not Path(v).is_file() for v in draft.assets.values()):return messagebox.showerror('Материалы','Один из выбранных файлов не найден.',parent=w)
                 draft.whole_episode=True
             if remember.get():
@@ -132,3 +137,4 @@ class EpisodeMixin:
         self.framing_window=w;self.framing_fields=fields;self.framing_assets=asset_vars;self.framing_enabled=enabled;self.apply_framing=apply
         self.framing_times=timing_field
         w.grab_set()
+

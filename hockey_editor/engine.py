@@ -39,7 +39,7 @@ class Engine:
         p=self.project;p.validate(self.index);self.check()
         from .review import retain_legacy_edits
         retain_legacy_edits(p)
-        if p.profile=='uz_football' and all(b.kind=='analysis' for b in p.blocks):
+        if p.profile.startswith('uz_') and all(b.kind=='analysis' for b in p.blocks):
             from .uz_speech import synchronize
             synchronize(p,self.cache,self.cancel,self.log)
         from .editing import saved_plan
@@ -132,6 +132,9 @@ class Engine:
 
     def render(self,plan,target,draft=False):
         self.check();self.project.validate(self.index)
+        if not draft and self.project.profile=='uz_combat':
+            from .goals import unresolved
+            if any(unresolved(b) for b in self.project.blocks):raise ValueError('Проверьте боевые вставки или выберите «Оставить ведущего» перед экспортом.')
         from .editing import validate_plan
         validate_plan(plan)
         target=Path(target).resolve();p=self.project;s=p.settings

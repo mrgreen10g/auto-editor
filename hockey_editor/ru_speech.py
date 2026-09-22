@@ -78,7 +78,7 @@ def tokens(text):
     text=spoken(text)
     return [w if len(w)<6 else w[:6] for w in re.findall(r'[а-яa-z]+',text)]
 
-def align_episode(blocks,segments):
+def _align_episode(blocks,segments):
     """One monotone mapping for the whole script, not independent phrase searches."""
     from .framing import prepared_script
     from .team_names import normalize
@@ -134,6 +134,17 @@ def align_episode(blocks,segments):
         previous=lines[-1].end
         warnings[block.uid].insert(0,'Разметка восстановлена по распознанным словам. Текст плашек сохранён из сценария; проверьте предпросмотр.')
     return {uid:(lines,warnings[uid]) for uid,lines in result.items()}
+
+def align_episode(blocks,segments):
+    from .speech_boundaries import first_analysis_start,slice_segments
+    boundary=first_analysis_start(blocks,segments)
+    if boundary is None:return _align_episode(blocks,segments)
+    left=_align_episode(blocks[:1],slice_segments(segments,0,boundary))
+    right=_align_episode(blocks[1:],slice_segments(segments,boundary,float('inf')))
+    right[blocks[1].uid][0][0].start=boundary
+    left[blocks[0].uid][0][-1].end=boundary
+    return {**left,**right}
+
 
 def prepare(project,blocks,cache,cancel,log):
     segments=transcribe(project,cache,cancel,log)

@@ -137,7 +137,7 @@ class App(EpisodeMixin,MatchMixin):
             self.button(bar, label, cmd).pack(side='right', padx=(8, 0))
         profilebar=ttk.Frame(main);profilebar.pack(fill='x',pady=(0,8))
         ttk.Label(profilebar,text='Шаблон ведущего',style='Muted.TLabel').pack(side='left',padx=(0,8))
-        self.profilebox=ttk.Combobox(profilebar,values=['Хоккей · русский','Футбол · узбекский'],state='readonly',width=28)
+        self.profilebox=ttk.Combobox(profilebar,values=['Хоккей · русский','Футбол · узбекский','Бои · узбекский'],state='readonly',width=28)
         self.profilebox.pack(side='left');self.controls.append(self.profilebox)
         self.profilebox.bind('<<ComboboxSelected>>',self.switch_profile)
         ui.Tooltip(self.profilebox,'Язык речи и плашек, вид спорта и отдельные материалы канала. Футбол: одна очная встреча на каждый разбор.')
@@ -297,6 +297,7 @@ class App(EpisodeMixin,MatchMixin):
         self.button(row, 'Убрать музыку', lambda: self.music.set('')).pack(side='right')
         self.option(sound, 'Громкость музыки', self.level, ['Очень тихо', 'Тихо', 'Заметнее'])
         logos = ui.card(page, 'Карточка матча', 'Логотипы команд выбираются отдельно. PNG, JPEG или WebP автоматически вписываются в карточку; детали размытого оригинала не восстанавливаются.')
+        self.logos_panel=logos.master
         self.logo_select=ttk.Combobox(logos,state='readonly');self.logo_select.pack(fill='x',pady=(0,8))
         self.logo_select.bind('<<ComboboxSelected>>',lambda _e:self.logo_tabs.select(self.logo_frames[self.logo_select.current()]))
         self.logo_tabs=ttk.Notebook(logos);self.logo_tabs.pack(fill='x')
@@ -477,7 +478,7 @@ class App(EpisodeMixin,MatchMixin):
     def refresh(self):
         self.refreshing = True
         p = self.project
-        self.profilebox.current(1 if p.profile=='uz_football' else 0)
+        self.profilebox.current(('ru_hockey','uz_football','uz_combat').index(p.profile))
         block = p.blocks[self.index]
         self.scope.set("Все разборы" if p.whole_episode else "Текущий разбор")
         self.host.set(p.host)
@@ -564,7 +565,7 @@ class App(EpisodeMixin,MatchMixin):
     def add_block(self):
         self.collect()
         self.project.whole_episode=True
-        self.project.blocks.append(Block(title=f'Разбор {len(self.project.blocks) + 1}',language='uz' if self.project.profile=='uz_football' else 'ru'))
+        self.project.blocks.append(Block(title=f'Разбор {len(self.project.blocks) + 1}',language='uz' if self.project.profile.startswith('uz_') else 'ru',sport='combat' if self.project.profile=='uz_combat' else ''))
         self.index = len(self.project.blocks) - 1
         self.invalidate()
         self.refresh()
@@ -703,6 +704,9 @@ class App(EpisodeMixin,MatchMixin):
             if str(self.logo_frames[slot])==selected:self.logo_select.current(slot);break
 
     def refresh_logo_tabs(self):
+        if self.project.profile=='uz_combat':
+            self.logos_panel.pack_forget();return
+        if not self.logos_panel.winfo_manager():self.logos_panel.pack(fill='x',pady=8)
         from .graphics import block_teams
         indices=self.selected_indices()
         self.ensure_logo_panels(len(indices))
@@ -742,7 +746,7 @@ class App(EpisodeMixin,MatchMixin):
 
     def switch_profile(self,event=None):
         if self.busy:return
-        profile='uz_football' if self.profilebox.current()==1 else 'ru_hockey'
+        profile=('ru_hockey','uz_football','uz_combat')[self.profilebox.current()]
         if profile==self.project.profile:return
         self.collect()
         from .profiles import apply_profile
@@ -918,7 +922,7 @@ class App(EpisodeMixin,MatchMixin):
 
         def work():
             try:
-                if engine.project.profile=='uz_football':
+                if engine.project.profile.startswith('uz_'):
                     from .uz_speech import synchronize
                     synchronize(engine.project,engine.cache,self.cancel,engine.log)
                     self.jobs.put(('uz_project',copy.deepcopy(engine.project)))
@@ -926,7 +930,10 @@ class App(EpisodeMixin,MatchMixin):
                 self.jobs.put(('uz_project',copy.deepcopy(engine.project)))
                 self.jobs.put(('plan', plan))
                 from .review import pending
-                if render and pending(plan):
+                from .goals import unresolved
+                if render and engine.project.profile=='uz_combat' and any(unresolved(b) for b in engine.project.blocks):
+                    self.jobs.put(('footage_review_required',None))
+                elif render and pending(plan):
                     self.jobs.put(('review_required',None))
                 elif render:
                     self.jobs.put(('result', engine.render(plan, target)))
@@ -986,6 +993,9 @@ class App(EpisodeMixin,MatchMixin):
                     self.project=value;self.refresh()
                 elif kind == 'plan':
                     self.display_plan(value)
+                elif kind=='footage_review_required':
+                    self.stage='footage_review_required'
+                    self.status.set('Дорожка готова. Просмотрите боевые вставки или выберите «Оставить ведущего».')
                 elif kind=='review_required':
                     self.stage='review_required'
                     self.status.set('Черновая дорожка готова. Проверьте спорные плашки перед экспортом.')
@@ -1004,6 +1014,8 @@ class App(EpisodeMixin,MatchMixin):
                     self.set_busy(False)
                     if self.plan is None and self.stage in ('analyze', 'render'):
                         self.review_summary.set('Анализ не завершён. Проверьте журнал и повторите.')
+                    elif self.stage=='footage_review_required':
+                        self.show_page('review');self.reviewtabs.select(self.events_page)
                     elif self.stage=='review_required':
                         self.show_page('review');self.root.after_idle(self.open_speech_review)
                     elif self.stage == 'analyze':

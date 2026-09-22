@@ -11,7 +11,7 @@ from .timeline import Plan,Card,frame
 
 def assembly_project(project):
     runtime=copy.copy(project)
-    runtime.blocks=([project.intro]+project.blocks+[project.outro]) if project.full_video else project.blocks
+    runtime.blocks=([project.intro]+project.blocks+([project.outro] if project.outro.script.strip() or project.profile!='uz_combat' else [])) if project.full_video else project.blocks
     return runtime
 
 
@@ -191,7 +191,7 @@ class EpisodeEngine(Engine):
         if self.project.full_video:
             # Uzbek scripts can contain CTAs omitted in the actual recording.
             # Spoken overlays validate their assets in asr_framing_cards.
-            required=('disclaimer',) if self.project.profile=='uz_football' else ('disclaimer','telegram','subscribe')
+            required=('disclaimer',) if self.project.profile.startswith('uz_') else ('disclaimer','telegram','subscribe')
             for key in required:
                 if not self.project.assets.get(key) or not Path(self.project.assets[key]).is_file():raise ValueError('Добавьте материал полного выпуска: '+{'disclaimer':'дисклеймер','telegram':'Telegram','subscribe':'подписка'}[key])
             for key,path in self.project.assets.items():
@@ -202,7 +202,7 @@ class EpisodeEngine(Engine):
 
     def analyze(self):
         self.validate_all();self.check()
-        if self.project.profile=='uz_football':
+        if self.project.profile.startswith('uz_'):
             from .uz_speech import synchronize
             synchronize(self.project,self.cache,self.cancel,self.log)
         restored=saved_episode(self.project)
@@ -210,7 +210,11 @@ class EpisodeEngine(Engine):
             self.log('Использую общую дорожку с сохранёнными правками.');return restored
         runtime=assembly_project(self.project)
         snapshot=[(copy.deepcopy(b.edit_plan),b.edit_key) for b in runtime.blocks]
-        try:return self._assemble(runtime)
+        try:
+            if self.project.profile=='ru_hockey' and self.project.full_video and runtime.blocks[0].script.strip():
+                from .ru_speech import prepare
+                return self._assemble(runtime,prepare(self.project,runtime.blocks,self.cache,self.cancel,self.log))
+            return self._assemble(runtime)
         except AlignmentError:
             for block,(plan,key) in zip(runtime.blocks,snapshot):block.edit_plan=plan;block.edit_key=key
             if self.project.profile!='ru_hockey':raise

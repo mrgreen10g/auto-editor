@@ -88,9 +88,10 @@ def card(parent, title, subtitle='', number=None):
         Tooltip(help_label,subtitle)
     captions = ttk.Frame(header, style='Card.TFrame')
     captions.pack(side='left', fill='x', expand=True)
-    ttk.Label(captions, text=title, style='CardTitle.TLabel').pack(anchor='w')
+    inner.title_label=ttk.Label(captions,text=title,style='CardTitle.TLabel');inner.title_label.pack(anchor='w')
     if subtitle:
         label = ttk.Label(captions, text=subtitle, style='CardMuted.TLabel', wraplength=620)
+        inner.subtitle_label=label
         label.pack(anchor='w', pady=(4, 0))
         captions.bind('<Configure>', lambda e: label.configure(wraplength=max(150, e.width)))
     return inner
@@ -166,3 +167,4 @@ BUTTON_HELP={
     'save':'Сохраняет настройки, ссылки на исходники и выбранные эпизоды. Сами видео остаются на диске.',
     'primary_action':'Следующий шаг: подбор игры, тайминги речи или экспорт выбранного разбора.',
 }
+

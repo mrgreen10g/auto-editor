@@ -163,7 +163,8 @@ def placements(block,lines,clip_meta,duration,frequency='normal'):
         topic=topic_for_phrase(topic,l.text,block.title)
         if norm(l.text).rstrip('.')==norm(block.title):continue
         if block.language=='uz':
-            from .uzbek import classify
+            if block.sport=='combat':from .combat import classify
+            else:from .uzbek import classify
             title,body=classify(l.text)
             annotation=block.speech_cards.get(str(i))
             if annotation:title,body=annotation['title'],annotation['text']

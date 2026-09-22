@@ -13,12 +13,19 @@ from .media import run, probe, Cancelled
 
 
 class SourceDialog(simpledialog.Dialog):
-    def __init__(self, parent, source):
+    def __init__(self, parent, source, fighters=()):
+        self.fighters=fighters
         self.source = source
-        super().__init__(parent, 'Какая встреча в этой записи?')
+        super().__init__(parent, 'Запись бойца' if source.sport=='combat' else 'Какая встреча в этой записи?')
 
     def body(self, parent):
         ttk.Label(parent, text=Path(self.source.path).name, wraplength=440).grid(row=0, column=0, columnspan=2, pady=10)
+        if self.source.sport=='combat':
+            ttk.Label(parent,text='Чьи архивные бои находятся в этом файле?').grid(row=1,column=0,columnspan=2,pady=6)
+            self.fighter=ttk.Combobox(parent,values=list(self.fighters),state='readonly',width=45)
+            self.fighter.grid(row=2,column=0,columnspan=2,pady=10)
+            if self.source.fighter in self.fighters:self.fighter.set(self.source.fighter)
+            return self.fighter
         ttk.Label(parent, text='Названия в порядке табло: слева → справа.', wraplength=440).grid(row=1, column=0, columnspan=2, pady=6)
         self.values = []
         for i, (label, value) in enumerate((('Команда слева', self.source.home), ('Команда справа', self.source.away), ('Дата · необязательно', self.source.date))):
@@ -28,18 +35,23 @@ class SourceDialog(simpledialog.Dialog):
         return self.values[0]
 
     def validate(self):
+        if self.source.sport=='combat':
+            if not self.fighter.get() or self.fighter.get() not in self.fighters:
+                messagebox.showinfo('Боец','Выберите бойца из пары разбора.',parent=self);return False
+            return True
         if not all(e.get().strip() for e in self.values[:2]):
             messagebox.showinfo('Команды', 'Укажите названия обеих команд.', parent=self)
             return False
         return True
 
     def apply(self):
-        self.result = [e.get().strip() for e in self.values]
+        self.result = [self.fighter.get(),'',''] if self.source.sport=='combat' else [e.get().strip() for e in self.values]
 
 
 class MatchMixin:
     def build_match_materials(self, page):
         box = ui.card(page, 'Исходные матчи', 'Добавьте одну или несколько записей, на которые ссылается ведущий. Таймкоды не нужны.', '03')
+        self.match_materials=box
         self.matchtable = ui.table(box, [('title', 'Встреча', 300), ('file', 'Запись', 280)], 3)
         self.matchtable.bind('<Double-1>', lambda _: self.edit_match() if not self.busy else None)
         row = ttk.Frame(box, style='Card.TFrame'); row.pack(fill='x', pady=(10, 0))
@@ -59,8 +71,13 @@ class MatchMixin:
 
     def refresh_matches(self):
         block = self.project.blocks[self.index]
-        football=self.project.profile=='uz_football'
-        self.find_events_button.configure(text='Найти игровые вставки' if football else 'Найти голы')
+        football=self.project.profile.startswith('uz_')
+        combat=self.project.profile=='uz_combat'
+        self.match_materials.title_label.configure(text='Архивные бои' if combat else 'Исходные матчи')
+        self.match_materials.subtitle_label.configure(text='Добавьте записи и выберите бойца для каждого файла. Удары и размены предлагаются для просмотра.' if combat else 'Добавьте одну или несколько записей, на которые ссылается ведущий. Таймкоды не нужны.')
+        self.matchtable.heading('title',text='Боец' if combat else 'Встреча')
+        self.eventtable.heading('source',text='Боец' if combat else 'Матч')
+        self.find_events_button.configure(text='Найти удары / размены' if combat else 'Найти игровые вставки' if football else 'Найти голы')
         if football:self.score_region_button.pack_forget()
         elif not self.score_region_button.winfo_manager():self.score_region_button.pack(side='left',padx=8)
         self.matchtable.delete(*self.matchtable.get_children())
@@ -110,12 +127,19 @@ class MatchMixin:
                     found=football_names(Path(path).stem)
                     names=found if len(found)==2 else block_teams(Path(path).stem)
                 source = MatchSource(path, names[0], names[1],sport='football' if self.project.profile=='uz_football' else 'hockey')
-                dialog = SourceDialog(self.root, source)
+                if self.project.profile=='uz_combat':source.sport='combat'
+                from .graphics import block_teams
+                dialog = SourceDialog(self.root, source,block_teams(self.project.blocks[self.index].title))
                 if not dialog.result: continue
                 source.home, source.away, source.date = dialog.result
+                if source.sport=='combat':source.fighter=source.home
                 self.project.matches.append(source)
             else: source = existing
             block = self.project.blocks[self.index]
+            if self.project.profile=='uz_combat':
+                from .graphics import block_teams
+                if source.sport!='combat' or source.fighter not in block_teams(block.title):
+                    messagebox.showinfo('Боец','Запись назначена бойцу вне выбранной пары.');continue
             if source.id not in block.match_ids:
                 block.match_ids.append(source.id); changed = True
             if self.project.profile=='uz_football':break
@@ -126,7 +150,7 @@ class MatchMixin:
     def reuse_match(self):
         self.collect(); block = self.project.blocks[self.index]
         if self.project.profile=='uz_football' and block.match_ids:return messagebox.showinfo('Очная встреча','Уберите текущую запись перед выбором другой.')
-        sources = [m for m in self.project.matches if m.id not in block.match_ids]
+        sources = [m for m in self.project.matches if m.id not in block.match_ids and (m.sport=='combat')==(self.project.profile=='uz_combat')]
         if not sources:
             return messagebox.showinfo('Записи проекта', 'Других записей пока нет. Добавьте файл кнопкой «+ Записи».')
         dialog = tk.Toplevel(self.root); dialog.title('Запись из проекта'); dialog.transient(self.root); dialog.grab_set()
@@ -139,9 +163,11 @@ class MatchMixin:
     def edit_match(self):
         source = self.selected_match()
         if not source: return
-        self.collect(); dialog = SourceDialog(self.root, source)
+        self.collect(); from .graphics import block_teams
+        dialog = SourceDialog(self.root, source,block_teams(self.project.blocks[self.index].title))
         if dialog.result:
             source.home, source.away, source.date = dialog.result
+            if source.sport=='combat':source.fighter=source.home
             self.clear_source_events(source.id); self.invalidate(); self.refresh()
 
     def remove_match(self):
@@ -176,7 +202,7 @@ class MatchMixin:
         sources = copy.deepcopy([m for m in self.project.matches if m.id in block.match_ids])
         allow_other = self.project.settings.allow_other_matches
         self.invalidate(); self.show_page('review'); self.reviewtabs.select(self.events_page)
-        self.review_summary.set('Ищем голы в исходных матчах…')
+        self.review_summary.set('Ищем удары и размены…' if self.project.profile=='uz_combat' else 'Ищем голы в исходных матчах…')
         def work():
             scans = {}; errors = []
             for source in sources:
@@ -314,7 +340,7 @@ class MatchMixin:
         event = self.selected_event()
         if event is None: return
         owner=self.selected_event_block()
-        sources = [m for m in self.project.matches if m.id in owner.match_ids]
+        sources = [m for m in self.project.matches if m.id in owner.match_ids and (owner.sport!='combat' or not event.requested_teams or m.fighter in event.requested_teams)]
         if not sources: return
         dialog = tk.Toplevel(self.root); dialog.title('Выбор игрового эпизода'); dialog.geometry('760x580'); dialog.transient(self.root); dialog.grab_set()
         ttk.Label(dialog, text=event.phrase, wraplength=700).pack(anchor='w', padx=20, pady=(16, 8))
@@ -323,7 +349,7 @@ class MatchMixin:
         tree = ui.table(dialog, [('goal', 'Кандидат', 140), ('note', 'Проверка', 450)], 6)
         values = [tk.StringVar() for _ in range(3)]
         row = ttk.Frame(dialog); row.pack(fill='x', padx=20, pady=10)
-        for label, var in zip(('Начало', 'Конец', 'Гол'), values):
+        for label, var in zip(('Начало', 'Конец', 'Удар' if owner.sport=='combat' else 'Гол'), values):
             ttk.Label(row, text=label).pack(side='left', padx=(0, 4)); ttk.Entry(row, textvariable=var, width=9).pack(side='left', padx=(0, 12))
         note = ttk.Label(dialog, text=event.note or 'Выберите подходящий эпизод и посмотрите его. При необходимости поправьте границы.', wraplength=710); note.pack(fill='x', padx=20, pady=6)
         state = {'data': None, 'candidates': [], 'last_choice': None}
@@ -404,3 +430,4 @@ class MatchMixin:
 def propose_events(events, scans, sources=(), allow_other=False):
     from .goals import propose
     return propose(events, scans, sources, allow_other)
+

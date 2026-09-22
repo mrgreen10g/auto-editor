@@ -65,6 +65,9 @@ def transcribe(project,cache,cancel,log):
             if not words:continue
             result.append({'start':words[0]['start'],'end':words[-1]['end'],'text':s.text,'words':words})
             log(f'Распознана речь до {int(s.end)//60:02}:{int(s.end)%60:02}')
+        if project.profile=='uz_combat':
+            from .combat import recover_gaps
+            result=recover_gaps(model,audio,result,cancel,log)
     finally:del model;gc.collect()
     # Empty recognition is converted to a script draft for manual review.
     temp=saved.with_suffix('.tmp');temp.write_text(json.dumps(result,ensure_ascii=False),encoding='utf-8');temp.replace(saved)
@@ -300,6 +303,9 @@ def _prepare(project,segments):
     return bounds
 
 def synchronize(project,cache,cancel,log):
+    if project.profile=='uz_combat':
+        from .combat import synchronize as combat_sync
+        return combat_sync(project,cache,cancel,log)
     from .review import retain_legacy_edits
     retain_legacy_edits(project)
     key=speech_key(project)

@@ -23,9 +23,11 @@ class MatchSource:
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     score_box: list[float] | None = None
     sport: str = 'hockey'
+    fighter: str = ''
 
     @property
     def title(self):
+        if self.sport=='combat':return self.fighter or self.home
         return f'{self.home} — {self.away}' + (f' · {self.date}' if self.date else '')
 
 @dataclass
@@ -88,6 +90,9 @@ class Block:
     asr_lines: list[dict] = field(default_factory=list)
     speech_key: str = ''
     speech_cards: dict = field(default_factory=dict)
+    sport: str = ''
+    forecast: str = ''
+    featured_pairs: list[str] = field(default_factory=list)
 
 @dataclass
 class Project:
@@ -120,9 +125,9 @@ class Project:
         if not 0 <= index < len(self.blocks):
             raise ValueError('Выберите разбор.')
         block = self.blocks[index]
-        if self.profile not in ('ru_hockey','uz_football'):raise ValueError('Неизвестный шаблон выпуска.')
+        if self.profile not in ('ru_hockey','uz_football','uz_combat'):raise ValueError('Неизвестный шаблон выпуска.')
         if self.profile=='uz_football' and len(block.match_ids)>1:raise ValueError('Футбол: оставьте одну очную встречу на разбор.')
-        expected='uz' if self.profile=='uz_football' else 'ru'
+        expected='uz' if self.profile.startswith('uz_') else 'ru'
         if block.language!=expected:raise ValueError('Язык блока не совпадает с шаблоном ведущего.')
         if len(block.script.strip()) < 30:
             raise ValueError('Вставьте сценарий выбранного разбора.')
@@ -143,7 +148,7 @@ class Project:
             if ident not in ids:
                 raise ValueError('Не найдена запись матча в проекте.')
             m = ids[ident]
-            if (ident in used_sources and not Path(m.path).is_file()) or not m.home.strip() or not m.away.strip():
+            if (ident in used_sources and not Path(m.path).is_file()) or (not m.fighter.strip() if m.sport=='combat' else not m.home.strip() or not m.away.strip()):
                 raise ValueError('Проверьте файл и названия команд: ' + m.title)
             box = m.score_box
             if box is not None and (len(box) != 4 or not all(math.isfinite(v) for v in box)
@@ -219,7 +224,7 @@ class Project:
             if not s: return ''
             return str((p.parent / s.replace('\\','/')).resolve())
         blocks = [Block(title=b['title'],script=b['script'],uid=b.get('uid') or uuid.uuid4().hex[:12],
-                  kind=b.get('kind','analysis'),language=b.get('language','uz' if data.get('profile')=='uz_football' else 'ru'),source_hint=b.get('source_hint',[]),asr_lines=b.get('asr_lines',[]),speech_key=b.get('speech_key',''),speech_cards=b.get('speech_cards',{}), clips=[Clip(**{**c,'path':resolve(c['path']),'origin_path':resolve(c.get('origin_path',''))}) for c in b.get('clips',[])],
+                  sport=b.get('sport','combat' if data.get('profile')=='uz_combat' else ''),forecast=b.get('forecast',''),featured_pairs=b.get('featured_pairs',[]),kind=b.get('kind','analysis'),language=b.get('language','uz' if data.get('profile','').startswith('uz_') else 'ru'),source_hint=b.get('source_hint',[]),asr_lines=b.get('asr_lines',[]),speech_key=b.get('speech_key',''),speech_cards=b.get('speech_cards',{}), clips=[Clip(**{**c,'path':resolve(c['path']),'origin_path':resolve(c.get('origin_path',''))}) for c in b.get('clips',[])],
                   card_overrides=b.get('card_overrides',{}), match_ids=b.get('match_ids', []),
                   edit_plan=b.get('edit_plan'), edit_key=b.get('edit_key',''),
                   events=[EventRequest(**{**e, 'selection': EventSelection(**e['selection']) if e.get('selection') else None}) for e in b.get('events', [])]) for b in data['blocks']]
