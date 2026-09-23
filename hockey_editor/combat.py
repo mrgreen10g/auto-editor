@@ -64,12 +64,8 @@ def pair_in(title,text):
 
 
 def classify(text):
-    t=norm(text)
-    if re.search(r'\bprognoz\s*:|\b(?:mening|birinchi|ikkinchi|uchinchi|asosiy)\s+(?:asosiy\s+)?tanlovim\b',t) and re.search(r"g'alab|nokaut|raund|total|ochko",t):
-        return 'ПРОГНОЗ',re.split(r'tanlovim\s*[—–:\-]?\s*|PROGNOZ\s*:\s*',text,flags=re.I)[-1].strip(' .')
-    if re.search(r"rekord|statistika|\bko\b|nokaut|yosh|kilogram|\bcm\b|foiz",t) and (re.search(r'\d',t) or re.search(r'bir|ikki|uch|to.rt|besh',t)):return 'СТАТИСТИКА',text
-    if any(x in t for x in ('jarohat','diskvalifik')):return 'ИНФОРМАЦИЯ',text
-    return None,''
+    from .combat_cards import classify as select_card
+    return select_card(text)
 
 
 def events(block,matches):
@@ -175,6 +171,8 @@ def synchronize(project,cache,cancel,log):
     from .uz_speech import transcribe
     from .host_media import sources
     from .review import retain_legacy_edits
+    from .combat_cards import migrate_project
+    migrate_project(project)
     retain_legacy_edits(project);key=speech_key(project)
     if not all(b.speech_key==key and b.asr_lines for b in active_blocks(project)):
         segments=transcribe(project,Path(cache)/'combat-asr-v2',cancel,log)

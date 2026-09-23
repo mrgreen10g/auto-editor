@@ -260,11 +260,14 @@ class Project:
         if data.get('version', 1) < 3:
             settings.setdefault('auto_rotate', settings.get('rotate', 0) == 0)
             settings.setdefault('use_manual_clips', any(b.clips for b in blocks))
-        return cls(host=resolve(data['host']),music=resolve(data.get('music','')),profile=data.get('profile','ru_hockey'),recording_times=data.get('recording_times',''),
+        project=cls(host=resolve(data['host']),music=resolve(data.get('music','')),profile=data.get('profile','ru_hockey'),recording_times=data.get('recording_times',''),
                    hosts=[resolve(v) for v in data.get('hosts',[])],full_video=data.get('full_video',False),
                    intro=framing('intro'),outro=framing('outro'),assets={k:resolve(v) for k,v in data.get('assets',{}).items()},
                    whole_episode=data.get('whole_episode',False),episode_plan=episode,episode_key=data.get('episode_key',''),
                    blocks=blocks,settings=Settings(**settings),
                    matches=[MatchSource(**{**m, 'path': resolve(m['path'])}) for m in data.get('matches', [])],
                    team_logos={name: resolve(path) for name, path in data.get('team_logos', {}).items()})
-
+        if project.profile=='uz_combat':
+            from .combat_cards import migrate_project
+            migrate_project(project)
+        return project

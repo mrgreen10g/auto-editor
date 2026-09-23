@@ -137,7 +137,7 @@ def attach(plan, block, project):
         annotation=block.speech_cards.get(str(i),{})
         if annotation.get('needs_review') and not line.review_reason:line.review_reason=annotation.get('review_reason','Слова или принадлежность плашки определены неуверенно.')
         if line.agreement>.8 and not line.review_reason:line.review_reason='Неуверенная привязка фразы к записи.'
-        if line.review_reason and not any(c.line==i for c in plan.cards):
+        if block.sport!='combat' and line.review_reason and not any(c.line==i for c in plan.cards):
             plan.cards.append(Card(line.start,line.end,'ИНФОРМАЦИЯ',line.text or block.title,i,review_reason=line.review_reason))
     for card in plan.cards:
         if card.title=='ПРОГНОЗ' and block.kind=='analysis':card.forecast_id=block.uid
@@ -146,7 +146,14 @@ def attach(plan, block, project):
         count=counts.get(seed,0);counts[seed]=count+1
         if not card.review_id:card.review_id=hashlib.sha256((seed+str(count)).encode()).hexdigest()[:20]
         reason=card.review_reason or (line.review_reason if line else '')
-        if block.language=='uz' and line and not line.recognized:line.recognized=line.text
+        if block.sport=='combat':
+            from .combat_cards import confidence
+            # A script/ASR mismatch is not a request for subtitles. Assess only
+            # selected facts, against their own audible evidence.
+            if line is not None:
+                reason=confidence(card,line,block,project)
+                card.review_reason=reason
+        if block.language=='uz' and block.sport!='combat' and line and not line.recognized:line.recognized=line.text
         if reason:
             card.review_reason=reason
             plan.review_items.append(dict(id=card.review_id,block_id=block.uid,start=card.start,end=card.end,

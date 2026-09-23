@@ -167,7 +167,11 @@ def placements(block,lines,clip_meta,duration,frequency='normal'):
             else:from .uzbek import classify
             title,body=classify(l.text)
             annotation=block.speech_cards.get(str(i))
-            if annotation:title,body=annotation['title'],annotation['text']
+            if block.sport=='combat':
+                # Old speech annotations may contain the former keyword-only
+                # cards. Select facts again without rerunning recognition.
+                if title=='ПРОГНОЗ' and block.forecast:body=block.forecast
+            elif annotation:title,body=annotation['title'],annotation['text']
         else:title=classify_card(l.text);body=summarize_card(title,l.text,topic) if title else l.text
         if str(i) in block.card_overrides:
             body=block.card_overrides[str(i)];title=title or 'ИНФОРМАЦИЯ'
@@ -191,4 +195,3 @@ def zoom_windows(duration,inserts):
             windows.append((t,t+up,t+up+hold,t+span))
             t+=span+1.6
     return windows
-
