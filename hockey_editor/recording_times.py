@@ -1,7 +1,7 @@
 """Optional user-verified recording sections, distinct from authored script times."""
 import re
 
-def parse_times(text,count):
+def parse_times(text,count,include_outro=True):
     rows=[]
     pattern=r'^\s*(\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d+)?)\s+(\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d+)?)\s+(.+?)\s*$'
     def seconds(value):
@@ -18,7 +18,9 @@ def parse_times(text,count):
         if b<=a:raise ValueError('Конец раздела должен быть позже начала.')
         if rows and a<rows[-1][1]:raise ValueError('Разделы таймкодов пересекаются или идут не по порядку.')
         rows.append((a,b,match[3]))
-    if len(rows) not in (count+2,count+3):
+    if not include_outro and len(rows)!=count+1:
+        raise ValueError(f'Нужно: начало и {count} разбора по порядку. В этом сценарии нет завершения.')
+    if include_outro and len(rows) not in (count+2,count+3):
         raise ValueError(f'Нужно: начало, {count} разбора по порядку и завершение. Итоги и прощание можно указать двумя строками.')
     return rows
 

@@ -116,7 +116,7 @@ class EpisodeMixin:
                 if draft.recording_times:
                     try:
                         from .recording_times import parse_times
-                        parse_times(draft.recording_times,len(draft.blocks))
+                        parse_times(draft.recording_times,len(draft.blocks),include_outro=draft.profile!='uz_combat' or bool(fields['outro'].get('1.0','end').strip()))
                     except ValueError as error:return messagebox.showerror('Таймкоды записи',str(error),parent=w)
             for key,field in fields.items():getattr(draft,key).script=field.get('1.0','end').strip()
             draft.assets={k:v.get().strip() for k,v in asset_vars.items()};draft.full_video=enabled.get()
@@ -137,4 +137,3 @@ class EpisodeMixin:
         self.framing_window=w;self.framing_fields=fields;self.framing_assets=asset_vars;self.framing_enabled=enabled;self.apply_framing=apply
         self.framing_times=timing_field
         w.grab_set()
-

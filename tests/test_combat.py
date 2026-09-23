@@ -98,6 +98,29 @@ class CombatTests(unittest.TestCase):
     path=Path(d)/f'{i}.png';card_image(Card(0,5,title,text),path,{'ALEKSANDR XALZOV':'missing-logo.png'},'uz_combat');self.assertTrue(path.is_file())
 
 class IntroBoundaryTests(unittest.TestCase):
+ def test_combat_review_changes_with_forecast(self):
+  from hockey_editor.review import input_key
+  p=Project(profile='uz_combat');b=Block(forecast='Xalzov')
+  first=input_key(p,b);b.forecast='Espay';self.assertNotEqual(first,input_key(p,b))
+ def test_combat_manual_ranges_without_outro(self):
+  intro,blocks,outro=parse_script(SCRIPT);p=Project(profile='uz_combat',intro=intro,blocks=blocks,outro=outro,recording_times='00:00 00:10 intro\n00:12 00:30 fight')
+  with tempfile.TemporaryDirectory() as d:
+   host=Path(d)/'host';host.touch();p.host=str(host);prepare(p,[],30)
+  self.assertEqual(p.intro.asr_lines[-1]['end'],10);self.assertEqual(p.blocks[0].asr_lines[0]['start'],12)
+ def test_combat_without_cta_ignores_intro_pair(self):
+  intro=Block(uid='intro',kind='intro',language='uz',script='Salom. Bugun Xalzov Espay jang qiladi. Bugun juda yaxshi janglarni ko‘ramiz.')
+  b=Block(language='uz',title='ALEKSANDR XALZOV — AZAMAT ESPAY',script='Xalzov Espay. Xalzov kuchli zarba beradi.')
+  p=Project(profile='uz_combat',intro=intro,blocks=[b],outro=Block(kind='outro',script=''))
+  seg=[segment(0,4,'Salom.'),segment(4,8,'Bugun Xalzov Espay jang qiladi.'),segment(8,15,'Bugun juda yaxshi janglarni ko‘ramiz.'),segment(15,18,'Xalzov Espay.'),segment(18,25,'Xalzov kuchli zarba beradi.')]
+  with tempfile.TemporaryDirectory() as d:
+   host=Path(d)/'host';host.touch();p.host=str(host);prepare(p,seg,25)
+  self.assertEqual(b.asr_lines[0]['start'],15)
+ def test_combat_events_retained_until_speech_changes(self):
+  intro,blocks,outro=parse_script(SCRIPT);p=Project(profile='uz_combat',intro=intro,blocks=blocks,outro=outro)
+  with tempfile.TemporaryDirectory() as d:
+   host=Path(d)/'host';host.touch();p.host=str(host);prepare(p,[],100)
+   b=p.blocks[0];b.events=[EventRequest('a','zarba','play',skipped=True)];prepare(p,[],100);self.assertEqual(len(b.events),1)
+   b.script+=' Yangi gap.';prepare(p,[],100);self.assertFalse(b.events)
  def test_cue_end_is_not_six_words_early(self):
   s=segment(0,10,'Ссылка находится в описании. Переходим к разбору.');self.assertAlmostEqual(intro_floor(s['words']),s['words'][-1]['end'])
  def test_pair_after_promo_wins_over_intro_pair(self):

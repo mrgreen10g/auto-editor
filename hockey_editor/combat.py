@@ -110,7 +110,7 @@ def active_blocks(project):return [b for b in [project.intro,*project.blocks,pro
 
 def speech_key(project):
     from .uz_speech import recording_key
-    return hashlib.sha256(json.dumps(['combat-speech-v2',recording_key(project),project.recording_times,[(b.uid,b.title,b.script,b.forecast,b.featured_pairs) for b in active_blocks(project)]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['combat-speech-v3',recording_key(project),project.recording_times,[(b.uid,b.title,b.script,b.forecast,b.featured_pairs) for b in active_blocks(project)]],ensure_ascii=False).encode()).hexdigest()
 
 
 def prepare(project,segments,duration):
@@ -128,18 +128,27 @@ def prepare(project,segments,duration):
                 if not any(x in heard for x in ('obuna','layk')) and any(x in low for x in ('obuna','layk')):continue
                 clean.append(row)
             b.script='\n'.join(clean) or b.script
+    rough=draft_alignment(aligned,segments,duration,'Не удалось подтвердить границы боёв. Проверьте переходы.')
     words=[w for s in segments for w in s.get('words',[])];bounds=[0.];reliable=True
     floor=intro_floor(words,'uz') if blocks[0].kind=='intro' else 0.
     for b in blocks[1:]:
-        if b.kind=='analysis':choices=[s['start'] for s in segments if s['start']>=max(floor,bounds[-1]+1)-.01 and pair_in(b.title,s['text'])]
+        if b.kind=='analysis':choices=[s['start'] for s in segments if s['start']>=max(floor,bounds[-1]+1,rough[b.uid][0][0].start-3)-.01 and pair_in(b.title,s['text'])]
         else:
             from .uz_speech import recap_cue
             choices=[s['start'] for s in segments if s['start']>bounds[-1]+10 and recap_cue(s['text'])]
         if not choices:reliable=False;break
         bounds.append(choices[0]);floor=choices[0]+10
-    if reliable and len(bounds)==len(blocks) and all(z-a>.5 for a,z in zip(bounds,bounds[1:]+[duration])):
+    ranges=list(zip(bounds,bounds[1:]+[duration]))
+    if project.recording_times.strip():
+        from .recording_times import parse_times
+        rows=parse_times(project.recording_times,len(project.blocks),include_outro=bool(project.outro.script.strip()))
+        ranges=[(a,z) for a,z,_ in rows]
+        if len(ranges)==len(blocks)+1:ranges=ranges[:-2]+[(ranges[-2][0],ranges[-1][1])]
+        if len(ranges)!=len(blocks) or ranges[-1][1]>duration+.1:raise ValueError('Проверьте число разделов и границы таймкодов записи.')
+        reliable=True;bounds=[a for a,z in ranges]
+    if reliable and len(ranges)==len(blocks) and all(z-a>.5 for a,z in ranges):
         recovered={}
-        for b,lo,hi in zip(aligned,bounds,bounds[1:]+[duration]):
+        for b,(lo,hi) in zip(aligned,ranges):
             local=copy.deepcopy(slice_segments(segments,lo,hi))
             for s in local:
                 s['start']-=lo;s['end']-=lo
@@ -148,9 +157,10 @@ def prepare(project,segments,duration):
             for line in found[b.uid][0]:line.start+=lo;line.end+=lo
             recovered.update(found)
     else:
-        reliable=False;recovered=draft_alignment(aligned,segments,duration,'Не удалось подтвердить границы боёв. Проверьте переходы.')
+        reliable=False;recovered=rough
     key=speech_key(project)
     for b in blocks:
+        if b.speech_key and b.speech_key!=key:b.events=[]
         lines=recovered[b.uid][0];b.asr_lines=[vars(l) for l in lines];b.speech_cards={};b.speech_key=key
         if not reliable:
             for line in b.asr_lines:line['review_reason']='Не подтверждены границы раздела. Проверьте время.'

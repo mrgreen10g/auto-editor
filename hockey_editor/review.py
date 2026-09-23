@@ -118,6 +118,7 @@ def fallback_cards(project, block, lines, duration, reason):
 def input_key(project, block):
     from .host_media import identity
     data=[project.profile,[identity(p) for p in project.host_paths()],block.uid,block.script,project.recording_times]
+    if project.profile=='uz_combat':data.extend([block.title,block.forecast,block.featured_pairs])
     return hashlib.sha256(json.dumps(data,ensure_ascii=False).encode()).hexdigest()
 
 
