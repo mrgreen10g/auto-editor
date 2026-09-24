@@ -270,7 +270,7 @@ def propose(requests, scans, sources=(), allow_other=False):
     for event in requests:
         if (source_map.get(event.source_id) and source_map[event.source_id].sport=='combat') or (sources and all(m.sport=='combat' for m in sources)):
             from .combat import propose_event
-            propose_event(event,scans,usage)
+            propose_event(event,scans,usage,source_map.get(event.source_id))
             continue
         if event.skipped: continue
         data = scans.get(event.source_id, {})

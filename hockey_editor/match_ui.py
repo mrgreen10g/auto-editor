@@ -74,7 +74,7 @@ class MatchMixin:
         football=self.project.profile.startswith('uz_')
         combat=self.project.profile=='uz_combat'
         self.match_materials.title_label.configure(text='Архивные бои' if combat else 'Исходные матчи')
-        self.match_materials.subtitle_label.configure(text='Добавьте записи и выберите бойца для каждого файла. Удары и размены предлагаются для просмотра.' if combat else 'Добавьте одну или несколько записей, на которые ссылается ведущий. Таймкоды не нужны.')
+        self.match_materials.subtitle_label.configure(text='Добавьте записи и выберите бойца для каждого файла. Уверенные активные фрагменты выбираются автоматически; сомнительные — на проверку.' if combat else 'Добавьте одну или несколько записей, на которые ссылается ведущий. Таймкоды не нужны.')
         self.matchtable.heading('title',text='Боец' if combat else 'Встреча')
         self.eventtable.heading('source',text='Боец' if combat else 'Матч')
         self.find_events_button.configure(text='Найти удары / размены' if combat else 'Найти игровые вставки' if football else 'Найти голы')

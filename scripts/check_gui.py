@@ -184,7 +184,7 @@ def check():
         assert editor.player.playing and editor.player.path==before
         editor.player.stop()
         scale=editor.scale;editor.zoom(2);assert editor.scale>scale
-        editor.fit_timeline();assert editor.scale<scale
+        editor.fit_timeline();assert editor.offset+editor.plan.duration*editor.scale+25<=editor.canvas.winfo_width()+1
         snapshot=copy.deepcopy(editor.plan);depth=len(editor.history.undo_stack)
         editor.change(snapshot);assert editor.preview_current and len(editor.history.undo_stack)==depth
         changed=copy.deepcopy(editor.plan);changed.inserts[0].start+=.2

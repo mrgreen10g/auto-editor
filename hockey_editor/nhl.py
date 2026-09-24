@@ -48,6 +48,29 @@ for row in _DATA.splitlines():
     if canonical=='St. Louis Blues':english.extend([r'st\.?\s*louis(?:\s+blues)?',r'saint\s+louis(?:\s+blues)?'])
     NHL[canonical]=(('|'.join(english+russian)).lower(),)
 
+# Club nicknames used on their own in mixed Russian/English scripts.
+NICKNAMES = {
+ 'Anaheim Ducks':'Ducks', 'Boston Bruins':'Bruins', 'Buffalo Sabres':'Sabres',
+ 'Calgary Flames':'Flames', 'Carolina Hurricanes':'Hurricanes', 'Chicago Blackhawks':'Blackhawks',
+ 'Colorado Avalanche':'Avalanche', 'Columbus Blue Jackets':'Blue Jackets', 'Dallas Stars':'Stars',
+ 'Detroit Red Wings':'Red Wings', 'Edmonton Oilers':'Oilers', 'Florida Panthers':'Panthers',
+ 'Los Angeles Kings':'Kings', 'Minnesota Wild':'Wild', 'Montreal Canadiens':'Canadiens|Habs',
+ 'Nashville Predators':'Predators', 'New Jersey Devils':'Devils', 'New York Islanders':'Islanders',
+ 'New York Rangers':'Rangers', 'Ottawa Senators':'Senators', 'Philadelphia Flyers':'Flyers',
+ 'Pittsburgh Penguins':'Penguins', 'San Jose Sharks':'Sharks', 'Seattle Kraken':'Kraken',
+ 'St. Louis Blues':'Blues', 'Tampa Bay Lightning':'Lightning', 'Toronto Maple Leafs':'Maple Leafs|Leafs',
+ 'Utah Mammoth':'Mammoth', 'Vancouver Canucks':'Canucks', 'Vegas Golden Knights':'Golden Knights',
+ 'Washington Capitals':'Capitals|Caps', 'Winnipeg Jets':'Jets',
+}
+for club,names in NICKNAMES.items():NHL[club]=(NHL[club][0]+'|'+names.lower(),)
+# Alternative phonetic spellings and declined forms attested in Russian scripts.
+NHL['Calgary Flames']=(NHL['Calgary Flames'][0]+r'|калгар+и\w*',)
+NHL['Seattle Kraken']=(NHL['Seattle Kraken'][0]+r'|сеттл\w*|сеттал\w*',)
+for club in NHL:NHL[club]=(NHL[club][0].replace('[- ]',r'\s*[- ]\s*'),)
+NHL['Vegas Golden Knights']=(NHL['Vegas Golden Knights'][0]+r'|лас[- ]вегас\w*',)
+NHL['Toronto Maple Leafs']=(NHL['Toronto Maple Leafs'][0]+r'|мэйпл\s+лифс|лифс',)
+NHL['New Jersey Devils']=(NHL['New Jersey Devils'][0]+r'|дэвилз|девилс',)
+
 # Broadcast/scoreboard abbreviations. NY alone deliberately remains ambiguous.
 CODES='ANA BOS BUF CGY CAR CHI COL CBJ DAL DET EDM FLA LAK MIN MTL NSH NJD NYI NYR OTT PHI PIT SJS SEA STL TBL TOR UTA VAN VGK WSH WPG'.split()
 for club,code in zip(NHL,CODES):

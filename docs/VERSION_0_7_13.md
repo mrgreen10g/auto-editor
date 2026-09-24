@@ -14,6 +14,12 @@ Open the project, then run timing analysis once for the new cleanup/boundaries. 
 
 ## Validation
 
-200 local unit/integration tests passed before Windows packaging, including 13 new regressions for NHL, retakes, review filtering/migration, presets, logo matching and live compositing. Windows CI additionally exercises the desktop workflow, actual FFmpeg preview, OCR and packaged executable.
+Regression coverage includes new tests for NHL, retakes, review filtering/migration, presets, logo matching and live compositing. Windows CI additionally exercises the desktop workflow, actual FFmpeg preview, OCR and packaged executable.
 
-The user's NHL ZIP did not materialize in this session. The secondary `textNHL.rar` contained a zero-byte text file. The real reported NHL recording and the two intended scripts have therefore not been reproduced; usable uploads are still required for that case validation.
+The replacement NHL archive was subsequently received. Both complete scripts import as four fixtures. Cached ASR and the supplied 469-second voice WAV were exercised through Russian alignment and per-section pause/card analysis: all intro fixtures and main/recap bets are selected without pending review tasks; nine proven old automatic prose cards are removed. This is speech/card analysis, not a full export: original presenter and match videos were omitted from the archive.
+
+Mixed-script club nicknames (`Leafs`, `Canadiens`, `Oilers`, `Canucks`, `Bruins`, `Kraken`, `Devils`, `Golden Knights`) and Russian/ASR variants now resolve to the same clubs. Multiword ASR names and split decimal tokens (`Нью -Джерси`, `6 ,5`) retain a shared lexical unit; the latter no longer creates a false bet contradiction. An unmentioned fixture in the intro does not create a speculative review card. Vague follow-up phrases no longer replace a concrete primary pick. NHL season records are statistical cards; hypothetical rejected scores are not historical-result cards.
+
+Combat proposals are no longer universally pending. New scans assign higher confidence only to active movement during a continuously running, confidently read round clock with no detected shot change. Automatic selection also requires the requested fighter, assigned source fighter and scan fighter to agree. Weak/old scans, ambiguous ownership and missing candidates still need review. Existing confirmed/manual selections remain intact. Run “Find strikes / exchanges” once to refresh old scan evidence; no universal bulk confirmation is applied. A generic active-fight insert does not assert that a particular punch landed.
+
+Initial Windows run caught two test portability assumptions (Windows short paths and fitting a short timeline); assertions were corrected to check actual path identity and visible width.

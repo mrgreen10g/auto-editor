@@ -20,8 +20,15 @@ def prepared_script(block):
     names='|'.join(pattern for patterns in RU.values() for pattern in patterns)
     text=block.script
     if block.kind=='intro':
-        text=re.sub(r'[,：:]\s*(?=(?:а\s+)?(?:московск\w*\s+)?«?(?:'+names+r')\b)', '\n', text, flags=re.I)
+        text=re.sub(r'[,：:]\s*(?=(?:(?:а|и)\s+)?(?:московск\w*\s+)?«?(?:'+names+r')\b)', '\n', text, flags=re.I)
         text=re.sub(r',\s*(?=(?:а\s+)?в\s+)', '\n', text, flags=re.I)
+    if block.kind=='intro':
+        from .event_rules import suggested_names
+        pattern=r'\s+и\s+(?=«?(?:'+names+r')\b)'
+        # Split a list between fixtures, not 'Boston and Montreal' within one.
+        for match in reversed(list(re.finditer(pattern,text,re.I))):
+            prefix=text[:match.start()].rsplit('\n',1)[-1]
+            if len(suggested_names(prefix))==2:text=text[:match.start()]+'\n'+text[match.end():]
     lines=split_script(text);result=[]
     for line in lines:
         if re.search(r'ссылка\s+находится\s+в\s+описании',line,re.I) and result and 'телеграм' in result[-1].lower():
@@ -94,7 +101,7 @@ def framing_cards(project,block,lines,duration):
             seen_pairs.add(pairs[0].uid)
             cards.append(Card(line.start,line.end,'РАЗБОР МАТЧА',pairs[0].title,i));continue
         if block.kind=='outro':
-            if pairs and 'комментари' not in low and re.search(r'беру|выбираю|вариант|выбор|став|побед|\b[xх]2\b|\bфор(?:а|ой|у|ы|е)\b|\bтотал\w*',low):
+            if pairs and 'комментари' not in low and re.search(r'беру|выбираю|вариант|выбор|став|побед|плюс|минус|\b[xх]2\b|\bфор(?:а|ой|у|ы|е)\b|\bтотал\w*',low):
                 owner=pairs[0];text=forecast_text(owner)
                 if not text:raise SpeechIssue('Не найден основной прогноз в разборе: '+owner.title)
                 cards.append(Card(line.start,line.end,'ПРОГНОЗ',text,i,forecast_id=owner.uid));continue

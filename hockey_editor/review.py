@@ -42,7 +42,11 @@ def draft_alignment(blocks, segments, duration, reason):
         for index,text in enumerate(split_script(prepared_script(clean))):
             ts=tokenize(text,language) or ['?'];lo=len(script);script.extend(ts)
             rows.append((block,index,text,lo,len(script)))
-    for w in words:
+    source_words=words
+    if language=='ru':
+        from .ru_speech import speech_word_units
+        source_words=speech_word_units(words)
+    for w in source_words:
         ts=tokenize(w['word'],language)
         for k,t in enumerate(ts):
             source.append(t);stamps.append((w['start']+(w['end']-w['start'])*k/len(ts),w['start']+(w['end']-w['start'])*(k+1)/len(ts)))
@@ -106,6 +110,7 @@ def fallback_cards(project, block, lines, duration, reason):
     if block.kind in ('intro','outro'):
         for k,b in enumerate(owners):
             if b.uid in seen:continue
+            if block.kind=='intro' and not expected_intro_pair(block,b):continue
             # Keep every expected overlay, but never describe this slot as confirmed.
             start=max(0,min(duration-.2,duration*k/max(1,len(owners))))
             end=min(duration,start+max(.2,min(4,duration/max(1,len(owners)))))
@@ -263,6 +268,7 @@ def framing_draft(project,block,lines,duration):
     if block.kind=='intro':
         owners=[b for b in project.blocks if b.kind=='analysis']
         for k,b in enumerate(owners):
+            if not expected_intro_pair(block,b):continue
             if any(c.title=='РАЗБОР МАТЧА' and c.text==b.title for c in cards):continue
             a=min(max(0,duration-.2),duration*k/max(1,len(owners)))
             cards.append(Card(a,min(duration,a+3),'РАЗБОР МАТЧА',b.title,review_reason='Пара не найдена во вступлении. Проверьте предварительную плашку или удалите её.'))
@@ -396,3 +402,14 @@ def migrate_project(project):
     changed=remove_old_subtitles(project.episode_plan)
     for b in [project.intro,*project.blocks,project.outro]:changed=remove_old_subtitles(b.edit_plan) or changed
     if changed and valid:project.episode_key=episode_key(project)
+
+
+def expected_intro_pair(intro,owner):
+    if intro.sport=='combat':return True
+    if intro.language=='uz':
+        from .uzbek import mentions
+        return mentions(owner.title,intro.script)
+    from .graphics import block_teams
+    from .event_rules import team_position
+    names=block_teams(owner.title)
+    return any(n and team_position(n,intro.script,names) is not None for n in names)

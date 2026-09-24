@@ -91,14 +91,17 @@ def events(block,matches):
     return result
 
 
-def propose_event(event,scans,usage):
+def propose_event(event,scans,usage,source=None):
     if event.skipped or (event.selection and event.selection.accepted):return
     data=scans.get(event.source_id,{})
     choices=sorted(data.get('candidates',[]),key=lambda c:(-c['confidence'],c['time']));used=usage.setdefault(event.source_id,set())
     c=next((c for c in choices if c['id'] not in used),None)
     if not c:event.note='Нет нового боевого фрагмента. Выберите момент вручную или оставьте ведущего.';return
     used.add(c['id'])
-    event.selection=EventSelection(c['id'],c['start'],c['end'],c['time'],data['signature'],False,'Архив боя · '+', '.join(event.requested_teams));event.note=c['note']
+    from .combat_scan import DETECTOR_VERSION
+    owner=bool(source and len(event.requested_teams)==1 and norm(source.fighter)==norm(event.requested_teams[0]) and norm(data.get('fighter',''))==norm(source.fighter))
+    accepted=owner and data.get('detector_version')==DETECTOR_VERSION and c.get('kind')=='play' and c['confidence']>=.85
+    event.selection=EventSelection(c['id'],c['start'],c['end'],c['time'],data['signature'],accepted,'Архив боя · '+', '.join(event.requested_teams));event.note=c['note']
 
 
 def active_blocks(project):return [b for b in [project.intro,*project.blocks,project.outro] if b.script.strip()]

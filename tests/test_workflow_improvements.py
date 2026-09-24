@@ -105,7 +105,7 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(p.music,'music');self.assertEqual(p.settings.noise_reduction,14);self.assertEqual(p.host,'host')
             self.assertFalse(presets('uz_combat',path));remember_folder(p,path)
             new=Project();restore_folder(new,path);self.assertEqual(new.logo_folder,folder)
-            save=Path(folder)/'project.hockeyproj';p.save(save);loaded=Project.load(save);self.assertEqual(loaded.logo_folder,folder)
+            save=Path(folder)/'project.hockeyproj';p.save(save);loaded=Project.load(save);self.assertEqual(Path(loaded.logo_folder).resolve(),Path(folder).resolve())
 
     def test_logo_aliases_collisions_manual_and_combat(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -131,3 +131,69 @@ class WorkflowTests(unittest.TestCase):
             self.assertIsNone(ImageChops.difference(frame,after).getbbox())
 
 if __name__=='__main__':unittest.main()
+
+class NewCaseTests(unittest.TestCase):
+    def test_nhl_nicknames_and_vague_pick_followups(self):
+        from hockey_editor.framing import forecast_text
+        from hockey_editor.event_rules import team_position
+        names={'Leafs':'Toronto Maple Leafs','Kraken':'Seattle Kraken','Devils':'New Jersey Devils','Oilers':'Edmonton Oilers','Golden Knights':'Vegas Golden Knights','Canucks':'Vancouver Canucks','Bruins':'Boston Bruins','Canadiens':'Montreal Canadiens'}
+        for short,club in names.items():
+            self.assertEqual(ru_identity(short),club)
+            self.assertIsNotNone(team_position(club,'Сегодня '+short+' играют дома.'))
+        b=Block(title='Сент-Луис — Чикаго',script='Основной прогноз — победа Сент-Луиса с учётом овертайма и буллитов. Но мой основной выбор именно с дополнительным временем.')
+        self.assertEqual(forecast_text(b),'St. Louis Blues\nПобеда с ОТ и буллитами')
+
+    def test_intro_list_is_four_separate_pairs_not_statistics_or_subtitles(self):
+        from hockey_editor.framing import prepared_script,framing_cards
+        titles=['Ванкувер — Эдмонтон','Сент-Луис — Чикаго','Сиэтл — Калгари','Рейнджерс — Нью-Джерси']
+        p=Project(blocks=[Block(title=t) for t in titles])
+        b=Block(kind='intro',script='Сегодня четыре матча предсезонки НХЛ. Разберём «Ванкувер» — «Эдмонтон», «Сент-Луис» — «Чикаго», «Сиэтл» — «Калгари» и «Рейнджерс» — «Нью-Джерси».')
+        lines=[Line(t,i*3,i*3+3) for i,t in enumerate(prepared_script(b).splitlines())]
+        cards,_=framing_cards(p,b,lines,len(lines)*3)
+        self.assertEqual([c.text for c in cards],titles)
+        self.assertEqual(len({c.start for c in cards}),4)
+
+    def test_unmentioned_intro_fixture_does_not_create_pending_card(self):
+        from hockey_editor.review import framing_draft
+        p=Project(blocks=[Block(title='Бостон — Рейнджерс')]);b=Block(kind='intro',script='Всем привет, сегодня нас ждёт интересный хоккей.')
+        cards,_=framing_draft(p,b,[Line(b.script,0,5)],5)
+        self.assertFalse(cards)
+
+    def test_combat_auto_selection_needs_motion_clock_and_correct_fighter(self):
+        from hockey_editor.combat_scan import confident_action,DETECTOR_VERSION
+        from hockey_editor.goals import propose,unresolved
+        from hockey_editor.model import EventRequest
+        obs=[[0,100,.95],[2,98,.96],[4,96,.94],[6,94,.96]]
+        self.assertTrue(confident_action(.5,4,obs,[1.4]*14,[False]*14))
+        self.assertFalse(confident_action(.5,4,[[t,100,q] for t,v,q in obs],[1.4]*14,[False]*14))
+        self.assertFalse(confident_action(.5,4,obs,[.3]*14,[False]*14))
+        self.assertFalse(confident_action(.5,4,obs,[1.4]*14,[False,False,True]+[False]*11))
+        source=MatchSource('a','','',sport='combat',fighter='FIGHTER ALPHA')
+        candidate=dict(id='combat-0',start=.5,end=4,time=2,confidence=.86,kind='play',score=None,before=None,note='Active round')
+        scans={source.id:dict(signature='sig',fighter=source.fighter,detector_version=DETECTOR_VERSION,candidates=[candidate])}
+        def event():return EventRequest(source.id,'Alpha zarba beradi','play',requested_teams=[source.fighter])
+        e=event();propose([e],scans,[source]);self.assertTrue(e.selection.accepted)
+        e=event();e.requested_teams=['FIGHTER BETA'];propose([e],scans,[source]);self.assertFalse(e.selection.accepted)
+        candidate['confidence']=.7;e=event();propose([e],scans,[source]);self.assertFalse(e.selection.accepted)
+        candidate['confidence']=.86;scans[source.id].pop('detector_version');e=event();propose([e],scans,[source]);self.assertFalse(e.selection.accepted)
+
+
+class NHLRecognitionTests(unittest.TestCase):
+    def test_split_asr_names_and_decimal_do_not_create_false_conflict(self):
+        from hockey_editor.ru_speech import speech_word_units
+        from hockey_editor.review import semantic_conflict
+        heard='Рейнджерс Нью -Джерси, тотал меньше 6 ,5.'
+        units=speech_word_units(segment(heard)['words'])
+        self.assertIn('Нью -Джерси,',[w['word'] for w in units])
+        self.assertIn('6 ,5.',[w['word'] for w in units])
+        self.assertFalse(semantic_conflict('Тотал меньше 6,5',heard))
+        self.assertTrue(semantic_conflict('Тотал меньше 6,5','тотал больше 6 ,5'))
+        self.assertEqual(tokens('Сент -Луис'),tokens('St. Louis Blues'))
+        self.assertEqual(tokens('Сеттал Калгарри'),tokens('Seattle Kraken Calgary Flames'))
+
+    def test_season_record_is_stats_but_hypothetical_score_is_not_result(self):
+        from hockey_editor.card_text import classify_card,summarize_card
+        self.assertEqual(classify_card('Монреаль закончил регулярку 48–24–10.'),'СТАТИСТИКА')
+        self.assertIn('48 — 24 — 10',summarize_card('СТАТИСТИКА','Монреаль закончил регулярку 48–24–10.'))
+        self.assertFalse(classify_card('Требовать уверенных 4:1 я не собираюсь.'))
+        self.assertEqual(classify_card('Если Торонто выиграет 4:3 — ставка всё равно проходит.'),'УСЛОВИЯ ПРОГНОЗА')

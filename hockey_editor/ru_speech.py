@@ -71,6 +71,7 @@ def transcribe(project,cache,cancel,log):
 def tokens(text):
     from .nhl import speech_names
     text=speech_names(text.lower().replace('ё','е'))
+    text=re.sub(r'(\d)\s*([,.])\s*(\d)',r'\1\2\3',text)
     text=re.sub(r'\bcska\b|\bцск\b','цска',text)
     text=re.sub(r'\b(?:ska|sk)\b','ска',text)
     halves={'одного':'один','одной':'один','двух':'два','трех':'три','четырех':'четыре','пяти':'пять','шести':'шесть','семи':'семь','восьми':'восемь','девяти':'девять'}
@@ -89,13 +90,12 @@ def _align_episode(blocks,segments):
             ts=tokens(text);lo=len(script);script+=ts
             heading=block.kind=='analysis' and index==0 and normalize(text).strip('. ') == normalize(block.title).strip('. ')
             rows.append((block.uid,text,lo,len(script),heading))
-    for segment in segments:
-        for w in segment['words']:
-            ts=tokens(w['word'])
-            for i,token in enumerate(ts):
-                source.append(token)
-                span=(w['end']-w['start'])/len(ts)
-                stamps.append((w['start']+i*span,w['start']+(i+1)*span))
+    for w in speech_word_units([w for s in segments for w in s['words']]):
+        ts=tokens(w['word'])
+        for i,token in enumerate(ts):
+            source.append(token)
+            span=(w['end']-w['start'])/len(ts)
+            stamps.append((w['start']+i*span,w['start']+(i+1)*span))
     if not script or not source:raise AlignmentError('Не найден текст или голос для сопоставления выпуска.')
     mapping={}
     for a,b,size in SequenceMatcher(None,script,source,autojunk=False).get_matching_blocks():
@@ -173,3 +173,22 @@ def prepare(project,blocks,cache,cancel,log):
         log(f'Подтверждён раздел «{b.title}»: {lines[0].start:.2f}–{lines[-1].end:.2f} с.')
     return result
 
+
+
+def speech_word_units(words):
+    """Keep multiword club names/decimals intact across ASR word boundaries."""
+    from .nhl import NHL
+    patterns=[re.compile('(?:'+p[0]+')',re.I) for p in NHL.values()]
+    result=[];i=0
+    while i<len(words):
+        count=1
+        for size in range(min(4,len(words)-i),1,-1):
+            window=words[i:i+size]
+            if any(b['start']-a['end']>.8 for a,b in zip(window,window[1:])):continue
+            value=' '.join(w['word'].strip() for w in window).strip(' .,!?:;«»').replace('ё','е')
+            if any(p.fullmatch(value) for p in patterns) or re.fullmatch(r'\d+\s*[,.]\s*\d+',value):
+                count=size;break
+        window=words[i:i+count]
+        result.append(dict(words[i],word=' '.join(w['word'].strip() for w in window),end=window[-1]['end']))
+        i+=count
+    return result

@@ -37,6 +37,8 @@ def summarize_card(title, text, subject=None):
             elif 'овертайм' in t: clauses.append('овертайм')
             if clauses: return ' или '.join(clauses)+' → выигрыш'
     if title == 'СТАТИСТИКА':
+        record=re.search(r'\b(\d{1,2})\s*[–—-]\s*(\d{1,2})\s*[–—-]\s*(\d{1,2})\b',text)
+        if record:return ((names[0] if names else subject)+'\n' if names or subject else '')+'Сезон: '+' — '.join(record.groups())
         m=re.search(r'проигр\w*\s+(\d+)\s+первых\s+матч',numbers)
         if m:return f'Первые {m[1]} матча: {m[1]} поражения'
         m=re.search(r'(\d+)\s+побед\w*\s+в\s+(\d+)\s+матч',numbers)
@@ -87,12 +89,17 @@ def classify_card(text):
     if any(w in t for w in ('по счету жду','ожидаемый счет')):return 'ОЖИДАЕМЫЙ СЧЁТ'
     if any(w in t for w in ('повреждени','травм','недоступен')):return 'СОСТАВ КОМАНДЫ'
     if re.match(r'^(?:индивидуальн\w*\s+)?тотал\w*\s+(?:больше|меньше)\b',t):return 'ПРОГНОЗ'
-    if 'мой прогноз' in t:return 'ПРОГНОЗ'
-    if 'мой выбор' in t or 'основной выбор' in t or 'основной прогноз' in t or 'форой плюс' in t:return 'ПРОГНОЗ'
+    pick=any(w in t for w in ('мой прогноз','мой выбор','основной выбор','основной прогноз','форой плюс'))
+    if pick and re.search(r'побед|тотал|фор[аыуое]|\b[пp][12]\b|\b(?:1[xх]|[xх]2)\b|ничь',t):return 'ПРОГНОЗ'
     if any(w in t for w in ('ставка проходит','ставка выигрывает','ставка выиграет','возврат','ставка проигрывает')) or ('проигрыш' in t and re.search(r'\d',n)):return 'УСЛОВИЯ ПРОГНОЗА'
     if re.search(r'\d',n) and any(w in t for w in ('броск','переброс','сейв','отражен','отразил','процент')):return 'СТАТИСТИКА'
-    if re.search(r'\b\d{1,2}\s*[:：]\s*\d{1,2}\b',t):return 'РЕЗУЛЬТАТ ВСТРЕЧИ'
+    if re.search(r'\b\d{1,2}\s*[–—-]\s*\d{1,2}\s*[–—-]\s*\d{1,2}\b',t):return 'СТАТИСТИКА'
+    if re.search(r'ставка.{0,20}(?:проходит|выигрывает|проигрывает)',t):return 'УСЛОВИЯ ПРОГНОЗА'
+    if re.search(r'\b\d{1,2}\s*[:：]\s*\d{1,2}\b',t):
+        if re.search(r'если|могут|собираюсь|не говорю|автоматич|легко превращ',t):return ''
+        return 'РЕЗУЛЬТАТ ВСТРЕЧИ'
     if re.search(r'\b\d+[.,]\d{2}\b',t):return 'КОЭФФИЦИЕНТ ИЗ РАЗБОРА'
+    if re.search(r'сегодня|разбер[её]м|выпуск|сразу\s+в',t) and not re.search(r'побед|поражен|забил|заброс|набрал',t):return ''
     if re.search(r'\b\d+\s+(?:\w+\s+){0,2}(?:побед|поражен|матч|встреч|шайб|гол)',n):
         if not any(w in t for w in ('жду','если','должен','хочется','пусть')):return 'СТАТИСТИКА'
     return ''
