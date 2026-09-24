@@ -95,6 +95,22 @@ def confidence(card,line,block,project):
         if coverage(card.text,heard)>=.8 and numbers(card.text)==numbers(heard):return ''
         return 'Условия ставки распознаны неуверенно. Проверьте их по речи.'
     if card.title=='СТАТИСТИКА':
+        names=block_teams(block.title)
+        expected_owners=[n for n in names if n and line and name_position(n,line.text) is not None]
+        heard_owners=[n for n in names if n and name_position(n,heard) is not None]
+        if expected_owners and heard_owners and set(expected_owners)!=set(heard_owners):
+            return 'В речи статистика отнесена к другому бойцу. Проверьте принадлежность.'
+        def record_facts(text):
+            result={};low=norm(text)
+            for key,pattern in [('win',r"[gq]'?alab"),('loss',r"ma[gq]?'?lub"),('draw',r'durr?ang')]:
+                for hit in re.finditer(pattern,low):
+                    found=numbers(' '.join(low[:hit.start()].split()[-4:]))
+                    if found:result[key]=found[-1]
+            return result
+        if line and card.text.startswith('REKORD:'):
+            a,b=record_facts(line.text),record_facts(heard)
+            if any(a[k]!=b[k] for k in a.keys() & b.keys()):
+                return 'В речи различаются победы, поражения или ничьи. Проверьте рекорд.'
         expected=numbers(card.text);actual=numbers(heard)
         if expected and not any(actual[i:i+len(expected)]==expected for i in range(len(actual))):
             return 'Числа статистики не подтверждены речью. Проверьте значения и время.'

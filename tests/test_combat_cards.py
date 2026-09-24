@@ -32,6 +32,11 @@ class CombatCardTests(unittest.TestCase):
   for heard in ('',"Osobovning rekordi 5 g'alaba va 2 mag'lubiyat","Osobovning rekordi 2 g'alaba va 6 mag'lubiyat"):
    l=Line(self.b.script,0,10,recognized=heard);p=attach(self.plan([l],[Card(0,10,'СТАТИСТИКА','REKORD: 6–2',0)]),self.b,self.p)
    self.assertEqual(len(pending(p)),1)
+ def test_record_cannot_change_fighter_or_swap_wins_and_losses(self):
+  for heard in ("Aliyarovning rekordi 6 g'alaba va 2 mag'lubiyat", "Osobovning rekordi 6 mag'lubiyat va 2 g'alaba"):
+   line=Line(self.b.script,0,10,recognized=heard)
+   card=Card(0,10,'СТАТИСТИКА','REKORD: 6–2',0)
+   self.assertTrue(confidence(card,line,self.b,self.p))
  def test_stat_selection_is_concrete_not_keyword_subtitles(self):
   for text in ('Va bu statistika uslubini tushuntiradi.',"Besh raundlik janglarga tayyorligi yuqoriroq ko'rinadi.",'Agar ikki nokaut bo‘lsa, vaziyat o‘zgaradi.'):
    self.assertIsNone(classify(text)[0])
