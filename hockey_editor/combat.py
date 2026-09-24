@@ -43,19 +43,16 @@ def parse_script(text):
         current.script+=('\n' if current.script else '')+line
     if not intro or not blocks:raise ValueError('Нужны KIRISH и заголовки пар бойцов: 1. NAME — NAME.')
     if any(not b.script.strip() for b in blocks):raise ValueError('У заголовка боя отсутствует текст разбора.')
-    intro.featured_pairs=list(dict.fromkeys(index+[b.title for b in blocks]))
+    from .fighters import identity
+    pairs={}
+    for title in index+[b.title for b in blocks]:pairs[tuple(identity(n) for n in block_teams(title))]=title
+    intro.featured_pairs=list(pairs.values())
     return intro,blocks,outro or Block(title='Yakun',uid='outro',kind='outro',language='uz',sport='combat')
 
 
 def name_position(name,text):
-    chunks=re.findall(r'[a-z]+',norm(name));words=re.findall(r'[a-z]+',norm(text))
-    if not chunks:return None
-    surname=chunks[-1];hits=[]
-    for i,w in enumerate(words):
-        variants=[w]+[w[:-len(s)] for s in ('ning','dan','ga','ni','da') if w.endswith(s)]
-        score=max(SequenceMatcher(None,surname,v).ratio() for v in variants)
-        if score>=.80 and min(len(surname),len(w))>=4:hits.append((i,score))
-    return max(hits,key=lambda h:h[1])[0] if hits else None
+    from .fighters import position
+    return position(name,text)
 
 
 def pair_in(title,text):
@@ -69,6 +66,7 @@ def classify(text):
 
 
 def events(block,matches):
+    from .fighters import same_fighter
     sources=[s for s in matches if s.id in block.match_ids and s.sport=='combat']
     names=block_teams(block.title);owner=None;result=[];usage={};aliases={n:[n] for n in names}
     for n in names:
@@ -79,11 +77,15 @@ def events(block,matches):
     for line in lines:
         hits=[n for n in names if any(name_position(alias,line) is not None for alias in aliases[n])]
         if len(hits)==1:owner=hits[0]
-        elif len(hits)>1:owner=None;continue
+        elif len(hits)>1:
+            tail=re.split(r'[,;.!?]',line.rstrip(' .!?'))[-1]
+            last=[n for n in names if name_position(n,tail) is not None]
+            owner=last[0] if len(last)==1 and re.search(r'misol|esa|rekord|statistik|tanish|bazasi',norm(tail)) else None
+            continue
         title,_=classify(line);t=norm(line)
         if title=='ПРОГНОЗ' or any(x in t for x in ('telegram','obuna','layk')):continue
-        if not owner or not re.search(r'jang|zarba|hujum|himoya|nokaut|masofa|texnik|uslub|almashin|bosim|rekord|tajriba',t):continue
-        eligible=[s for s in sources if norm(s.fighter)==norm(owner)]
+        if not owner or not re.search(r'jang|zarba|hujum|himoya|nokaut|masofa|texnik|uslub|almashin|bosim|rekord|tajriba|boks|raund|temp|g.alab|mag.lub|yosh|statistik',t):continue
+        eligible=[s for s in sources if same_fighter(s.fighter,owner)]
         if not eligible:
             result.append(EventRequest('',line,'play',note='Нет записи бойца '+owner,requested_teams=[owner]));continue
         source=min(eligible,key=lambda s:usage.get(s.id,0));usage[source.id]=usage.get(source.id,0)+1
@@ -93,13 +95,14 @@ def events(block,matches):
 
 def propose_event(event,scans,usage,source=None):
     if event.skipped or (event.selection and event.selection.accepted):return
+    from .fighters import same_fighter
     data=scans.get(event.source_id,{})
     choices=sorted(data.get('candidates',[]),key=lambda c:(-c['confidence'],c['time']));used=usage.setdefault(event.source_id,set())
     c=next((c for c in choices if c['id'] not in used),None)
     if not c:event.note='Нет нового боевого фрагмента. Выберите момент вручную или оставьте ведущего.';return
     used.add(c['id'])
     from .combat_scan import DETECTOR_VERSION
-    owner=bool(source and len(event.requested_teams)==1 and norm(source.fighter)==norm(event.requested_teams[0]) and norm(data.get('fighter',''))==norm(source.fighter))
+    owner=bool(source and len(event.requested_teams)==1 and same_fighter(source.fighter,event.requested_teams[0]) and norm(data.get('fighter',''))==norm(source.fighter))
     accepted=owner and data.get('detector_version')==DETECTOR_VERSION and c.get('kind')=='play' and c['confidence']>=.85
     event.selection=EventSelection(c['id'],c['start'],c['end'],c['time'],data['signature'],accepted,'Архив боя · '+', '.join(event.requested_teams));event.note=c['note']
 
@@ -109,7 +112,40 @@ def active_blocks(project):return [b for b in [project.intro,*project.blocks,pro
 
 def speech_key(project):
     from .uz_speech import recording_key
-    return hashlib.sha256(json.dumps(['combat-speech-v3',recording_key(project),project.recording_times,[(b.uid,b.title,b.script,b.forecast,b.featured_pairs) for b in active_blocks(project)]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['combat-speech-v4-grounded',recording_key(project),project.recording_times,[(b.uid,b.title,b.script,b.forecast,b.featured_pairs) for b in active_blocks(project)]],ensure_ascii=False).encode()).hexdigest()
+
+
+def spoken_segments(segments):
+    """Break long ASR paragraphs on real timed punctuation, not script rows."""
+    result=[]
+    for s in segments:
+        chunk=[]
+        for w in s.get('words',[]):
+            chunk.append(w)
+            length=w['end']-chunk[0]['start']
+            if (length>=2 and re.search(r'[.!?]$',w['word'].strip())) or (length>=7 and re.search(r'[,;]$',w['word'].strip())):
+                result.append(dict(start=chunk[0]['start'],end=chunk[-1]['end'],text=' '.join(v['word'] for v in chunk),words=chunk));chunk=[]
+        if chunk:result.append(dict(start=chunk[0]['start'],end=chunk[-1]['end'],text=' '.join(v['word'] for v in chunk),words=chunk))
+    return result
+
+
+def intro_annotations(project,segments,lo,hi):
+    from .fighters import normalized,identity
+    words=[]
+    for segment in segments:
+        for w in segment.get('words',[]):
+            if w['start']>=lo and w['end']<=hi:
+                words.extend(dict(word=t,start=w['start'],end=w['end']) for t in normalized(w['word']).split())
+    text=' '.join(w['word'] for w in words);found=[];seen=set()
+    for title in project.intro.featured_pairs or [b.title for b in project.blocks]:
+        key=tuple(identity(n) for n in block_teams(title))
+        if key in seen:continue
+        positions=[name_position(n,text) for n in block_teams(title)]
+        if not all(p is not None for p in positions) or abs(positions[0]-positions[1])>8:continue
+        a,z=min(positions),max(positions)
+        start=words[max(0,a-1)]['start'];end=words[z]['end']
+        if end-start>=.3:found.append((start,end,'РАЗБОР МАТЧА',title));seen.add(key)
+    return sorted(found)
 
 
 def prepare(project,segments,duration):
@@ -160,7 +196,18 @@ def prepare(project,segments,duration):
     key=speech_key(project)
     for b in blocks:
         if b.speech_key and b.speech_key!=key:b.events=[]
-        lines=recovered[b.uid][0];b.asr_lines=[vars(l) for l in lines];b.speech_cards={};b.speech_key=key
+        lines=recovered[b.uid][0]
+        if segments:
+            from .uz_speech import make_lines
+            from .timeline import Line
+            k=blocks.index(b)
+            lo,hi=ranges[k] if reliable else (lines[0].start,lines[-1].end)
+            annotations=intro_annotations(project,segments,lo,hi) if b.kind=='intro' else []
+            spoken,_=make_lines(spoken_segments(segments),lo,hi,annotations)
+            if spoken:
+                lines=[Line(**dict(row,recognized=row['text'],agreement=0.)) for row in spoken]
+                recovered[b.uid]=(lines,[])
+        b.asr_lines=[vars(l) for l in lines];b.speech_cards={};b.speech_key=key
         if not reliable:
             for line in b.asr_lines:line['review_reason']='Не подтверждены границы раздела. Проверьте время.'
         for i,line in enumerate(lines):
@@ -188,23 +235,55 @@ def synchronize(project,cache,cancel,log):
         if not local:continue
         scans={s.id:GoalScanner(cancel=cancel,log=log).scan(s) for s in local}
         b.events=propose(events(b,local),scans,local,False)
-        log('Боевые вставки требуют просмотра: '+b.title)
+        log('Вставки подобраны; неуверенные моменты доступны для проверки: '+b.title)
 
 
 def framing_cards(project,block,lines,duration):
     from .framing import forecast_text,optional_subscription
     from .media import probe
+    from .fighters import identity
+    unique={}
+    for title in (block.featured_pairs or [b.title for b in project.blocks]):
+        unique[tuple(identity(n) for n in block_teams(title))]=title
     cards=[];seen=set()
     for i,line in enumerate(lines):
         t=norm(line.text);heard=norm(line.recognized)
         if block.kind=='intro':
-            for title in block.featured_pairs or [b.title for b in project.blocks]:
-                if title not in seen and pair_in(title,line.text):cards.append(Card(line.start,line.end,'РАЗБОР МАТЧА',title,i));seen.add(title)
+            matches=[]
+            for title in unique.values():
+                if title not in seen and pair_in(title,line.text):
+                    pos=min(name_position(n,line.text) for n in block_teams(title))
+                    matches.append((max(0,pos-1),title))
+            matches.sort()
+            count=max(1,len(re.findall(r'[a-z]+',norm(line.text))))
+            for j,(pos,title) in enumerate(matches):
+                start=line.start if j==0 else line.start+(line.end-line.start)*pos/count
+                end=line.end if j+1==len(matches) else line.start+(line.end-line.start)*matches[j+1][0]/count
+                if end-start>=.3:cards.append(Card(start,end,'РАЗБОР МАТЧА',title,i));seen.add(title)
         elif block.kind=='outro':
-            owners=[b for b in project.blocks if any(name_position(n,line.text) is not None for n in block_teams(b.title))]
-            if len(owners)==1 and (classify(line.text)[0]=='ПРОГНОЗ' or "g'alab" in t):
-                owner=owners[0];text=forecast_text(owner)
-                if text:cards.append(Card(line.start,line.end,'ПРОГНОЗ',text,i,forecast_id=owner.uid));seen.add(owner.uid)
+            # A recap can contain several bets in one ASR sentence.
+            from .fighters import identity
+            claims=[]
+            for match in re.finditer(r"[gq]'?alab\w*",t):
+                prefix=t[:match.start()];near=' '.join(prefix.split()[-5:]);candidates=[]
+                for owner in project.blocks:
+                    for name in block_teams(owner.title):
+                        first=identity(name).split()[0] if identity(name) else ''
+                        pos=name_position(name,near)
+                        first_hits=[j for j,w in enumerate(re.findall(r'[a-z]+',near)) if w==first]
+                        if pos is not None or first_hits:candidates.append((max([pos if pos is not None else -1]+first_hits),owner))
+                if not candidates:continue
+                best=max(v[0] for v in candidates);owners={b.uid:b for score,b in candidates if score==best}
+                if len(owners)!=1:continue
+                owner=next(iter(owners.values()))
+                if owner.uid in seen:continue
+                text=forecast_text(owner)
+                if text:claims.append((max(0,len(prefix.split())-4),owner,text));seen.add(owner.uid)
+            count=max(1,len(t.split()))
+            for j,(pos,owner,text) in enumerate(claims):
+                start=line.start if j==0 else line.start+(line.end-line.start)*pos/count
+                end=line.end if j+1==len(claims) else line.start+(line.end-line.start)*claims[j+1][0]/count
+                cards.append(Card(start,end,'ПРОГНОЗ',text,i,forecast_id=owner.uid))
         if 'telegram' in heard and project.assets.get('telegram'):cards.append(Card(line.start,line.end,'ТЕЛЕГРАМ','Telegram',i,project.assets['telegram']))
         if ('obuna' in heard or 'layk' in heard) and project.assets.get('subscribe'):
             asset=project.assets['subscribe'];cards.append(Card(line.start,line.start+probe(asset)['duration'],'ПОДПИСКА','Obuna bo‘ling',i,asset))

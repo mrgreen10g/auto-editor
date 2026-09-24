@@ -159,9 +159,19 @@ def placements(block,lines,clip_meta,duration,frequency='normal'):
         if clip.kind=='play':last_play_source=clip.origin_path or clip.path
     from .card_text import summarize_card,classify_card
     cards=[Card(0,intro_end,'РАЗБОР МАТЧА',block.title)] if intro_end>=.15 else []
-    topic=next(iter(suggested_names(block.title)),'')
+    topic=next(iter(suggested_names(block.title)),'');combat_owner=None
     for i,l in enumerate(lines):
         topic=topic_for_phrase(topic,l.text,block.title)
+        if block.language=='uz' and block.sport=='combat':
+            from .combat import name_position
+            from .graphics import block_teams
+            names=block_teams(block.title)
+            named=[n for n in names if name_position(n,l.text) is not None]
+            if len(named)==1:combat_owner=named[0]
+            elif len(named)>1:
+                tail=re.split(r'[,;.!?]',l.text.rstrip(' .!?'))[-1]
+                named=[n for n in names if name_position(n,tail) is not None]
+                combat_owner=named[0] if len(named)==1 and re.search(r'misol|esa|rekord|statistik|tanish|bazasi',norm(tail)) else None
         if norm(l.text).rstrip('.')==norm(block.title):continue
         if block.language=='uz':
             if block.sport=='combat':from .combat import classify
@@ -171,9 +181,19 @@ def placements(block,lines,clip_meta,duration,frequency='normal'):
             if block.sport=='combat':
                 # Old speech annotations may contain the former keyword-only
                 # cards. Select facts again without rerunning recognition.
-                if title=='ПРОГНОЗ' and block.forecast:body=block.forecast
+                if title=='ПРОГНОЗ':
+                    from .combat import name_position
+                    from .graphics import block_teams
+                    if not any(name_position(n,l.text) is not None for n in block_teams(block.title)):title=None
+                    elif block.forecast:body=block.forecast
+                if title=='ИНФОРМАЦИЯ':
+                    from .combat_cards import polished_argument
+                    body=polished_argument(body,l.recognized or l.text,block.script)
             elif annotation:title,body=annotation['title'],annotation['text']
         else:title=classify_card(l.text);body=summarize_card(title,l.text,topic) if title else l.text
+        if block.language=='uz' and block.sport=='combat' and combat_owner and title in ('СТАТИСТИКА','ИНФОРМАЦИЯ'):
+            from .fighters import clean_name
+            body=clean_name(combat_owner).upper()+'\n'+body
         if str(i) in block.card_overrides:
             body=block.card_overrides[str(i)];title=title or 'ИНФОРМАЦИЯ'
         if title and body.strip() and l.end-l.start>=.15:

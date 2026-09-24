@@ -42,7 +42,7 @@ class CombatCardTests(unittest.TestCase):
    self.assertIsNone(classify(text)[0])
   self.assertEqual(classify('Yetti nokaut.'),('СТАТИСТИКА','7 KO'))
   self.assertEqual(classify('Yana o‘n santimetr.'),('СТАТИСТИКА','FARQ: 10 CM'))
-  self.assertEqual(classify("Rekordi — 1 g'alaba va 2 mag'lubiyat, bitta nokaut."),('СТАТИСТИКА','REKORD: 1–2'))
+  self.assertEqual(classify("Rekordi — 1 g'alaba va 2 mag'lubiyat, bitta nokaut."),('СТАТИСТИКА','REKORD: 1–2 · 1 KO'))
  def test_winner_claim_checks_outcome_owner_and_negation(self):
   card=Card(0,10,'ПРОГНОЗ',"VALERIY OSOBOV G'ALABASI",0,forecast_id=self.b.uid)
   for heard in ("Osobov Aliyarov jangida Valeriy Asobov g'alabasi kutilmoqda.","Asobov yutishi kerak."):

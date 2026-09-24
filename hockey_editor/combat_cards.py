@@ -26,8 +26,8 @@ def numbers(text):
     t=norm(text).replace("'",'')
     words=re.findall(r'[a-z]+|\d+',t)
     values=[];current=0;active=False
-    units={'nol':0,'bir':1,'bitta':1,'ikki':2,'ikkita':2,'uch':3,'uchta':3,'tort':4,'torta':4,'tortta':4,'besh':5,'beshta':5,'olti':6,'oltita':6,'oltida':6,'yetti':7,'yettita':7,'sakkiz':8,'toqqiz':9}
-    tens={'on':10,'yigirma':20,'ottiz':30,'qirq':40,'ellik':50,'oltmish':60,'yetmish':70,'sakson':80,'toqson':90}
+    units={'nol':0,'bir':1,'bitta':1,'biti':1,'ikki':2,'ikkita':2,'uch':3,'uchta':3,'tort':4,'torta':4,'tortta':4,'besh':5,'beshta':5,'olti':6,'oltita':6,'oltida':6,'oltisida':6,'yetti':7,'yetta':7,'yettita':7,'sakkiz':8,'toqqiz':9}
+    tens={'on':10,'onta':10,'yigirma':20,'ottiz':30,'otiz':30,'qirq':40,'ellik':50,'oltmish':60,'yetmish':70,'sakson':80,'toqson':90}
     def flush():
         nonlocal current,active
         if active:values.append(current)
@@ -48,23 +48,31 @@ def numbers(text):
 
 def classify(text):
     t=norm(text);n=numbers(text)
-    if re.search(r'\bprognoz\s*:|\b(?:mening|birinchi|ikkinchi|uchinchi|asosiy)\s+(?:asosiy\s+)?tanlovim\b',t) and re.search(r"g'alab|nokaut|raund|total|ochko",t):
+    if re.search(r'\bprognoz\s*:|\btanlo(?:v|y)\w*|(?:[qk]ut\w*|kutil\w*)',t) and re.search(r"g'alab|nokaut|raund|total|ochko",t):
         return 'ПРОГНОЗ',re.split(r'tanlovim\s*[—–:\-]?\s*|PROGNOZ\s*:\s*',text,flags=re.I)[-1].strip(' .')
-    # A mention of statistics, age or a punch is not itself a numeric fact.
-    if n and re.search(r'rekord',t) and re.search(r"g'alab|mag'lub|durang|\d+\s*[:—–-]\s*\d+",t):
-        tail=re.split(r'rekord\w*\s*[—–:\-]?\s*',t,maxsplit=1)[-1]
-        values=numbers(tail)
-        if len(values)>=2:return 'СТАТИСТИКА','REKORD: '+'–'.join(map(str,values[:3 if 'durang' in tail else 2]))
-    if n and re.search(r'\byosh\w*',t):return 'СТАТИСТИКА',str(n[0])+' YOSH'
-    if n and re.search(r'\bsantimetr\b|\bcm\b',t) and not re.search(r'\bagar\b|\bsifatida\b',t):
-        return 'СТАТИСТИКА',('FARQ: ' if 'farq' in t or t.startswith('yana ') else "BO'Y: ")+str(n[0])+' CM'
-    if n and re.search(r"\bnokaut\b|(?<![\w'])ko(?![\w'])",t) and not re.search(r'\bagar\b|\bxavf\b|\bzarba\b|\bemas\b',t):
-        if len(n)==1 or (len(n)==2 and "g'alabasidan" in t):return 'СТАТИСТИКА',str(n[-1])+' KO'
-    if n and re.search(r'\bjang\b',t) and re.search(r"g'alaba",t) and len(n)==2 and n[0]==n[1]:
-        return 'СТАТИСТИКА',f'{n[0]} JANG · {n[1]} G‘ALABA'
-    if re.search(r'jarohat|diskvalifik',t) and not re.search(r'\bagar\b|\bemas\b|\byo.q\b',t):
-        return 'ИНФОРМАЦИЯ',text.strip()
+    from .uz_facts import combat_facts,argument
+    facts=combat_facts(text)
+    if facts:return 'СТАТИСТИКА',' · '.join(facts)
+    claim=argument(text)
+    if claim:return 'ИНФОРМАЦИЯ',claim
     return None,''
+
+
+def polished_argument(body,heard,script):
+    from .combat import clean_script
+    from .alignment import split_script
+    from .uz_facts import argument
+    # Written phrasing may improve readability, but cannot introduce numbers
+    # or reverse a condition/negation from the speaker.
+    candidates=[]
+    for row in split_script(clean_script(script)):
+        claim=argument(row)
+        if not claim or numbers(claim):continue
+        if bool(re.search(r'agar|mumkin',norm(claim)))!=bool(re.search(r'agar|mumkin',norm(heard))):continue
+        if bool(re.search(r'emas|maydi|yo.q',norm(claim)))!=bool(re.search(r'emas|maydi|yo.q',norm(heard))):continue
+        score=coverage(claim,heard)
+        if score>=.70:candidates.append((score,claim))
+    return max(candidates,default=(0,body))[1]
 
 
 def confidence(card,line,block,project):
@@ -107,10 +115,15 @@ def confidence(card,line,block,project):
                     found=numbers(' '.join(low[:hit.start()].split()[-4:]))
                     if found:result[key]=found[-1]
             return result
-        if line and card.text.startswith('REKORD:'):
+        if line and 'REKORD:' in card.text:
             a,b=record_facts(line.text),record_facts(heard)
             if any(a[k]!=b[k] for k in a.keys() & b.keys()):
                 return 'В речи различаются победы, поражения или ничьи. Проверьте рекорд.'
+        # Reordering a bundle (record + age + finishes) is a layout choice.
+        # Compare independently extracted facts, not one numeric substring.
+        from .uz_facts import combat_facts
+        grounded=combat_facts(heard)
+        if line and line.text.strip()==heard.strip() and card.text.split('\n')[-1]==' · '.join(grounded):return ''
         expected=numbers(card.text);actual=numbers(heard)
         if expected and not any(actual[i:i+len(expected)]==expected for i in range(len(actual))):
             return 'Числа статистики не подтверждены речью. Проверьте значения и время.'
@@ -139,7 +152,7 @@ def migrate_plan(value,project,block=None):
         if not 0<=i<len(lines):continue
         line=Line(**lines[i]);card=live.get(ident)
         authored=card is not None and any(card.get(k)!=b.get(k) for k in ('text','title','asset','forecast_id'))
-        if b['title'] in ('ИНФОРМАЦИЯ','СТАТИСТИКА') and b['text']==line.text and line.review_reason and classify(line.text)[0] is None and not authored:
+        if b['title'] in ('ИНФОРМАЦИЯ','СТАТИСТИКА') and b['text']==line.text and line.review_reason and (classify(line.text)[0] is None or (classify(line.text)[0]=='ИНФОРМАЦИЯ' and not re.search(r'jarohat|diskvalifik',norm(line.text)))) and not authored:
             removed.add(ident);continue
         if card is None or authored:continue
         title,body=classify(line.text)

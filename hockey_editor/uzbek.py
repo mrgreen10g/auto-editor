@@ -124,8 +124,12 @@ def classify(text):
             body=re.sub(r"\buchrashuvda\s+|\bumumiy hisobda\s+",'',body,flags=re.I)
             return 'УСЛОВИЯ ПРОГНОЗА',body
     if any(w in t for w in ('jarohat','diskvalifik','safdan chi')):return 'СОСТАВ КОМАНДЫ',text
-    if re.search(r'\d',t) and any(w in t for w in ('zarba','foiz','statistika','koeffits','g\'alaba','durang','mag\'lubiyat')):
+    from .combat_cards import numbers
+    if numbers(t) and any(w in t for w in ('zarba','foiz','statistika','koeffits','g\'alaba','durang','mag\'lubiyat')):
         return 'СТАТИСТИКА',text
+    from .uz_facts import argument
+    claim=argument(text)
+    if claim:return 'ИНФОРМАЦИЯ',claim
     return None,''
 
 

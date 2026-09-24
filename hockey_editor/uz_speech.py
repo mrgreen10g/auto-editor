@@ -17,7 +17,7 @@ def recording_key(project):
     data=[]
     for name in project.host_paths():
         p=Path(name).resolve();s=p.stat();data.append([str(p),s.st_size,s.st_mtime_ns])
-    return hashlib.sha256(json.dumps([MODEL_REV,data]).encode()).hexdigest()
+    return hashlib.sha256(json.dumps([MODEL_REV,'selective-refine-v1',project.profile,[b.title for b in project.blocks],data]).encode()).hexdigest()
 
 def speech_key(project):
     return hashlib.sha256(json.dumps(['uz-speech-9-manual-review',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
@@ -45,6 +45,14 @@ def model_path(cancel,log):
             if temp.exists():temp.unlink()
     return folder
 
+def recognition_prompt(project):
+    # A short vocabulary prompt, never the narrative or its unspoken numbers.
+    names='; '.join(b.title for b in project.blocks)
+    from .uz_facts import COMBAT_TERMS
+    terms=("TOP DOG, UFC, "+', '.join(COMBAT_TERMS)+", g‘alaba, mag‘lubiyat, durang, masofa, bosim, himoya, hujum") if project.profile=='uz_combat' else "futbol, gol, durang, g‘alaba, zarba, hujum, himoya"
+    return names[:600]+'. '+terms
+
+
 def transcribe(project,cache,cancel,log):
     folder=Path(cache)/'uz-speech';folder.mkdir(parents=True,exist_ok=True);saved=folder/(recording_key(project)+'.json')
     if saved.exists():return json.loads(saved.read_text(encoding='utf-8'))
@@ -61,10 +69,12 @@ def transcribe(project,cache,cancel,log):
         segments,_=model.transcribe(str(audio),language='uz',word_timestamps=True,beam_size=1,vad_filter=False,condition_on_previous_text=False)
         for s in segments:
             if cancel.is_set():raise Cancelled('Отменено.')
-            words=[{'word':w.word,'start':w.start,'end':w.end} for w in s.words if w.end>w.start]
+            words=[{'word':w.word,'start':w.start,'end':w.end,'probability':w.probability} for w in s.words if w.end>w.start]
             if not words:continue
             result.append({'start':words[0]['start'],'end':words[-1]['end'],'text':s.text,'words':words})
             log(f'Распознана речь до {int(s.end)//60:02}:{int(s.end)%60:02}')
+        from .uz_refine import refine
+        result=refine(model,audio,result,project,cancel,log)
         if project.profile=='uz_combat':
             from .combat import recover_gaps
             result=recover_gaps(model,audio,result,cancel,log)
