@@ -7,7 +7,7 @@ import re
 import unicodedata
 from functools import lru_cache
 
-CATALOG_VERSION = 'teams-1'
+CATALOG_VERSION = 'teams-2-nhl'
 
 @lru_cache(maxsize=8192)
 def normalize(text):
@@ -41,6 +41,9 @@ RU = {
  'СКА-ВМФ': (r'ска\s*[-—]\s*вмф',),
  'Нефтяник': (r'нефтяник\w*',),
 }
+from .nhl import NHL
+RU.update(NHL)
+
 RU_CONTEXT = {
  r'москв\w*|москвич\w*': ('Динамо Москва','ЦСКА','Спартак'),
  r'(?:санкт[- ]?)?петербург\w*|питер\w*': ('СКА','Шанхайские Драконы'),
@@ -199,3 +202,4 @@ def ru_file_names(text):
     if 'Динамо' in names and _matches(RU['Динамо Москва'][0],text):
         names[names.index('Динамо')]='Динамо Москва'
     return names
+

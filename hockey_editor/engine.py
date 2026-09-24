@@ -102,7 +102,12 @@ class Engine:
         if protected_tail is not None:
             limit=protected_tail-start
             spans=[(a,min(b,limit)) for a,b in spans if a<limit and min(b,limit)>a]
-        keep=keep_ranges(end-start,spans,enabled=p.settings.cut_pauses and not any(l.review_reason for l in source))
+        keep=keep_ranges(end-start,spans,enabled=p.settings.cut_pauses)
+        if p.settings.cut_pauses:
+            from .speech_cleanup import subtract_ranges
+            cuts=[(max(0,frame(a-start)),min(frame(end-start),frame(b-start))) for l in source for a,b in l.omit if b>start and a<end]
+            keep=subtract_ranges(keep,cuts)
+            if not keep:raise AlignmentError('После очистки не осталось речи. Проверьте сценарий и запись.')
         duration=sum(b-a for a,b in keep)
         lines=[Line(l.text,frame(map_time(l.start-start,keep)),frame(map_time(l.end-start,keep)),l.agreement,l.review_reason,l.recognized,l.review_id) for l in source]
         meta={c.path:probe(c.path) for c in block.clips}

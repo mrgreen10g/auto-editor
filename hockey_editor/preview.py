@@ -18,6 +18,7 @@ class PreviewPlayer:
         self.queue=queue.Queue(4);self.after=None;self.image=None
         self.started=None;self.base=0;self.index=0;self.pending=None
         self.audio_segment=None
+        self.frame_transform=None;self.raw_frame=None
 
     def load(self,path,audio,duration,position=0):
         self.stop();self.path=Path(path);self.audio=Path(audio) if audio else None;self.duration=duration
@@ -112,13 +113,21 @@ class PreviewPlayer:
         due=self.started+self.index/15
         if self.playing and now<due:
             self.after=self.widget.after(max(1,int((due-now)*1000)),lambda:self.tick(generation));return
-        width,height=self.widget.winfo_width(),self.widget.winfo_height()
-        if width>50 and height>50:value.thumbnail((width,height),Image.Resampling.BILINEAR)
-        self.image=ImageTk.PhotoImage(value)
-        self.widget.configure(image=self.image,text='')
         self.position=min(self.duration,self.base+self.index/15)
+        self.raw_frame=value
+        self.redraw()
         self.on_position(self.position);self.index+=1;self.pending=None
         if self.playing:self.after=self.widget.after(1,lambda:self.tick(generation))
 
+    def redraw(self):
+        if self.raw_frame is None or self.closed:return
+        try:
+            value=self.frame_transform(self.raw_frame,self.position) if self.frame_transform else self.raw_frame.copy()
+            width,height=self.widget.winfo_width(),self.widget.winfo_height()
+            if width>50 and height>50:value.thumbnail((width,height),Image.Resampling.BILINEAR)
+            self.image=ImageTk.PhotoImage(value);self.widget.configure(image=self.image,text='')
+        except Exception as error:self.on_error(str(error))
+
     def close(self):
         self.closed=True;self.stop()
+

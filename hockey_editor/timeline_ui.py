@@ -21,6 +21,7 @@ class TimelineEditor:
     def __init__(self,app):
         self.app=app;self.history=EditHistory(app.plan)
         self.project=copy.deepcopy(app.project);self.index=app.index
+        self.live_plan=None;self.built_key=None
         self.selected=None;self.scrubbing=False;self.cursor=0.;self.drag=None;self.dirty=False
         self.busy=False;self.closing=False;self.closed=False;self.preview_current=False
         self.cancel=threading.Event();self.jobs=queue.Queue();self.worker=None
@@ -45,6 +46,9 @@ class TimelineEditor:
         self.screen=ttk.Label(left,text='Здесь появится видео со звуком, переходами и плашками.\nНажмите «Собрать предпросмотр».',anchor='center')
         self.screen.pack(fill='both',expand=True)
         self.player=PreviewPlayer(self.screen,self.position_changed,lambda e:self.status.set('Предпросмотр: '+e))
+        from .live_cards import LiveCards
+        self.overlays=LiveCards(self.project,self.app.cache_path()/'live-cards')
+        self.player.frame_transform=lambda image,t:self.overlays.compose(image,t,self.live_plan or self.plan)
         playbar=ttk.Frame(left);playbar.pack(fill='x')
         self.play_button=ttk.Button(playbar,text='▶ / ❚❚',command=self.toggle_preview);self.play_button.pack(side='left')
         self.seekvar=tk.DoubleVar()
@@ -86,10 +90,16 @@ class TimelineEditor:
             self.sectionbox.pack(side='left');self.sectionbox.current(0)
             self.sectionbox.bind('<<ComboboxSelected>>',lambda _:self.jump_section())
         area=ttk.Frame(w,padding=(12,8));area.pack(fill='x')
+        zoom=ttk.Frame(area);zoom.pack(fill='x')
+        ttk.Label(zoom,text='Масштаб дорожки · Ctrl + колесо').pack(side='left')
+        ttk.Button(zoom,text='−',command=lambda:self.zoom(.5)).pack(side='left',padx=5)
+        ttk.Button(zoom,text='+',command=lambda:self.zoom(2)).pack(side='left')
+        ttk.Button(zoom,text='Весь выпуск',command=self.fit_timeline).pack(side='left',padx=5)
         self.canvas=tk.Canvas(area,height=155,bg='#142334',highlightthickness=0)
         self.canvas.pack(fill='x')
         bar=ttk.Scrollbar(area,orient='horizontal',command=self.canvas.xview);bar.pack(fill='x');self.canvas.configure(xscrollcommand=bar.set)
         self.scale=max(7,min(24,1000/self.plan.duration));self.offset=95
+        self.canvas.bind('<Control-MouseWheel>',lambda e:self.zoom(1.3 if e.delta>0 else 1/1.3,e.x))
         self.canvas.bind('<Button-1>',self.down);self.canvas.bind('<B1-Motion>',self.motion);self.canvas.bind('<ButtonRelease-1>',self.up)
         bottom=ttk.Frame(w,padding=(12,0,12,10));bottom.pack(fill='x')
         label=ttk.Label(bottom,textvariable=self.status,wraplength=720,style='Muted.TLabel');label.pack(side='left',fill='x',expand=True)
@@ -103,7 +113,8 @@ class TimelineEditor:
     def draw(self,plan=None):
         plan=plan or self.plan;c=self.canvas;c.delete('all')
         width=self.offset+plan.duration*self.scale+25;c.configure(scrollregion=(0,0,width,155))
-        for t in range(0,int(plan.duration)+1,5):
+        step=next((v for v in (1,2,5,10,30,60,120,300,600) if v*self.scale>=55),600)
+        for t in range(0,int(plan.duration)+1,step):
             x=self.offset+t*self.scale;c.create_line(x,22,x,152,fill='#304359')
             c.create_text(x,11,text=ui.timecode(t),fill='#a9bbce',font=('Segoe UI',8))
         for y,text in ((43,'Речь'),(88,'Игра'),(132,'Плашки')):
@@ -126,6 +137,18 @@ class TimelineEditor:
                 if selected:
                     for x in (x1+3,x2-3):c.create_line(x,y+5,x,y+26,fill='white',width=2,tags=(tag,))
         x=self.offset+self.cursor*self.scale;c.create_line(x,20,x,152,fill='#fa7373',width=2,tags=('cursor',))
+
+    def zoom(self,factor,x=None):
+        x=self.canvas.winfo_width()/2 if x is None else x
+        anchor=(self.canvas.canvasx(x)-self.offset)/self.scale
+        self.scale=max(.15,min(240,self.scale*factor));self.draw()
+        width=self.offset+self.plan.duration*self.scale+25
+        self.canvas.xview_moveto(max(0,(self.offset+anchor*self.scale-x)/width))
+        return 'break'
+
+    def fit_timeline(self):
+        self.scale=max(.15,(self.canvas.winfo_width()-self.offset-25)/self.plan.duration)
+        self.draw();self.canvas.xview_moveto(0)
 
     def item(self,plan=None):
         if self.selected is None:return None
@@ -191,17 +214,20 @@ class TimelineEditor:
             delta=max(-item.start,min(delta,item.end-item.start-.2));item.start+=delta
             if self.selected[0]=='insert':item.source_in+=delta
         else:item.end=frame(max(item.start+.2,min(plan.duration,item.end+delta)))
-        if self.selected[0]=='card' and item.title=='ТЕЛЕГРАМ':item.line=-1
+        if delta and self.selected[0]=='card' and item.title=='ТЕЛЕГРАМ':item.line=-1
         return plan
 
     def motion(self,event):
-        if self.drag and not self.busy:self.draw(self.dragged(self.canvas.canvasx(event.x)))
+        if self.drag and not self.busy:
+            self.live_plan=self.dragged(self.canvas.canvasx(event.x));self.draw(self.live_plan)
+            if self.preview_current and self.selected[0]=='card' and not self.item().asset:self.player.redraw()
 
     def up(self,event):
         if self.drag and not self.busy:
-            plan=self.dragged(self.canvas.canvasx(event.x));self.drag=None;self.change(plan)
+            plan=self.dragged(self.canvas.canvasx(event.x));self.drag=None;self.live_plan=None;self.change(plan)
 
     def change(self,plan):
+        if plan.to_dict()==self.plan.to_dict():self.player.redraw();return True
         try:
             # Forecast text edits are shared with the recap in both directions.
             before_by_id={c.review_id:c for c in self.plan.cards if c.review_id}
@@ -214,9 +240,8 @@ class TimelineEditor:
             update_task_times(plan)
             self.history.replace(plan)
         except Exception as error:
-            self.status.set(str(error));self.draw();return False
-        self.dirty=True;self.preview_current=False;self.player.stop();self.build_button.configure(text="Обновить предпросмотр")
-        self.status.set('Правки внесены. Соберите предпросмотр, затем примените дорожку к проекту.')
+            self.status.set(str(error));self.draw();self.player.redraw();return False
+        self.dirty=True;self.update_preview_state()
         self.select(self.selected);return True
 
     def edit(self):
@@ -243,8 +268,16 @@ class TimelineEditor:
     def redo(self):
         if not self.busy and self.history.redo():self.after_history()
     def after_history(self):
-        self.selected=None;self.dirty=True;self.preview_current=False;self.player.stop();self.build_button.configure(text="Обновить предпросмотр");self.select(None)
-        self.status.set('Дорожка изменена. Предпросмотр нужно обновить.')
+        self.selected=None;self.dirty=True;self.update_preview_state();self.select(None)
+
+    def update_preview_state(self):
+        from .live_cards import base_key
+        self.preview_current=self.built_key is not None and self.built_key==base_key(self.plan)
+        if self.preview_current:
+            self.player.redraw();self.status.set('Плашки обновлены в предпросмотре. Правки можно применить к проекту.')
+        else:
+            self.player.stop();self.status.set('Видео-вставки или основа изменились. Соберите предпросмотр для их просмотра.')
+        self.build_button.configure(text='Обновить предпросмотр')
 
     def review_speech(self):
         if self.busy:return
@@ -321,7 +354,9 @@ class TimelineEditor:
         for b in self.buttons:b.configure(state='disabled')
         self.cancel_button.configure(state='normal')
         self.status.set('Собираю полный предпросмотр 640×360 со звуком. Это может занять несколько минут.')
-        project=copy.deepcopy(self.project);plan=copy.deepcopy(self.plan)
+        from .live_cards import base_plan,base_key
+        key=base_key(self.plan)
+        project=copy.deepcopy(self.project);plan=base_plan(self.plan)
         root=self.app.cache_path()/'timeline-preview';root.mkdir(parents=True,exist_ok=True)
         target=root/f'preview-{uuid.uuid4().hex[:10]}.mp4';audio=target.with_suffix('.wav')
         def work():
@@ -329,7 +364,7 @@ class TimelineEditor:
                 engine_class=EpisodeEngine if plan.sections else Engine
                 engine_class(project,self.index,root,self.cancel,lambda s:self.jobs.put(('log',s))).render(plan,target,draft=True)
                 run(['-y','-i',target,'-vn','-ac','1','-ar','16000','-c:a','pcm_s16le',audio],self.cancel)
-                self.jobs.put(('ready',(target,audio,plan.duration)))
+                self.jobs.put(('ready',(target,audio,plan.duration,key)))
             except Cancelled:self.jobs.put(('log','Сборка предпросмотра остановлена. Правки сохранены в окне.'))
             except Exception as error:self.jobs.put(('log','Предпросмотр не собран: '+str(error)))
             finally:self.jobs.put(('done',None))
@@ -342,7 +377,7 @@ class TimelineEditor:
                 kind,value=self.jobs.get_nowait()
                 if kind=='log':self.status.set(value)
                 elif kind=='ready' and not self.closing:
-                    self.preview_current=True;self.player.load(*value,position=self.cursor);self.build_button.configure(text="Обновить предпросмотр");self.status.set('Предпросмотр готов. Нажмите ▶ или выберите время на дорожке.')
+                    self.built_key=value[3];self.preview_current=True;self.player.load(*value[:3],position=self.cursor);self.build_button.configure(text="Обновить предпросмотр");self.status.set('Предпросмотр готов. Нажмите ▶ или выберите время на дорожке.')
                 elif kind=='done':
                     self.busy=False
                     for b in self.buttons:b.configure(state='normal')

@@ -113,6 +113,7 @@ class Project:
     assets: dict[str, str] = field(default_factory=dict)
     profile: str = 'ru_hockey'
     recording_times: str = ''
+    logo_folder: str = ''
 
     def host_paths(self):
         # The legacy first-file field remains compatible with earlier projects.
@@ -184,7 +185,7 @@ class Project:
             if not s: return ''
             try: return os.path.relpath(Path(s).resolve(), target.parent)
             except ValueError: return str(Path(s).resolve())
-        for key in ('host','music'): data[key] = relative(data[key])
+        for key in ('host','music','logo_folder'): data[key] = relative(data[key])
         data['hosts'] = [relative(path) for path in self.host_paths()] if self.hosts else []
         data['assets'] = {key: relative(path) for key,path in self.assets.items()}
         def plan_paths(plan):
@@ -260,7 +261,7 @@ class Project:
         if data.get('version', 1) < 3:
             settings.setdefault('auto_rotate', settings.get('rotate', 0) == 0)
             settings.setdefault('use_manual_clips', any(b.clips for b in blocks))
-        project=cls(host=resolve(data['host']),music=resolve(data.get('music','')),profile=data.get('profile','ru_hockey'),recording_times=data.get('recording_times',''),
+        project=cls(logo_folder=resolve(data.get('logo_folder','')),host=resolve(data['host']),music=resolve(data.get('music','')),profile=data.get('profile','ru_hockey'),recording_times=data.get('recording_times',''),
                    hosts=[resolve(v) for v in data.get('hosts',[])],full_video=data.get('full_video',False),
                    intro=framing('intro'),outro=framing('outro'),assets={k:resolve(v) for k,v in data.get('assets',{}).items()},
                    whole_episode=data.get('whole_episode',False),episode_plan=episode,episode_key=data.get('episode_key',''),
@@ -270,4 +271,6 @@ class Project:
         if project.profile=='uz_combat':
             from .combat_cards import migrate_project
             migrate_project(project)
+        from .review import migrate_project as migrate_review
+        migrate_review(project)
         return project

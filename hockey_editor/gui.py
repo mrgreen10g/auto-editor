@@ -43,6 +43,8 @@ class App(EpisodeMixin,MatchMixin):
         root.minsize(min(960, w), min(640, h))
         root.configure(bg=ui.BG)
         self.project = Project()
+        from .preferences import restore_folder
+        restore_folder(self.project)
         try:
             self.project.assets={k:v for k,v in json.loads(kit_path().read_text(encoding='utf-8')).items() if Path(v).is_file()}
         except (OSError,ValueError):pass
@@ -270,6 +272,11 @@ class App(EpisodeMixin,MatchMixin):
 
     def build_settings(self):
         page = self.scrollable('settings')
+        saved=ui.card(page,'Мои настройки','Шаблоны хранятся отдельно для русского хоккея, узбекского футбола и боёв.')
+        self.presetbox=ttk.Combobox(saved,state='readonly');self.presetbox.pack(fill='x')
+        row=ttk.Frame(saved);row.pack(fill='x',pady=6)
+        self.button(row,'Сохранить как шаблон',self.save_settings_preset).pack(side='left')
+        self.button(row,'Применить шаблон',self.load_settings_preset).pack(side='left',padx=6)
         look = ui.card(page, 'Изображение и динамика', 'Проверенные настройки уже включены. Их можно менять для конкретного выпуска.')
         self.rotate = tk.StringVar(value='Автоматически')
         self.option(look, 'Поворот ведущего', self.rotate, ['Автоматически', 'Без поворота', '90°', '180°', '270°'])
@@ -278,7 +285,7 @@ class App(EpisodeMixin,MatchMixin):
                            ('transitions', 'Мягкие переходы к игре и обратно'),
                            ('animate_cards', 'Плавное появление и уход плашек'),
                            ('wobble', 'Лёгкое покачивание плашек'),
-                           ('cut_pauses', 'Сокращать паузы, сохраняя окончания слов'),
+                           ('cut_pauses', 'Сокращать паузы и повторные неудачные дубли'),
                            ('color', 'Лёгкая цветокоррекция')]:
             var = tk.BooleanVar(value=True)
             self.effect_vars[key] = var
@@ -298,6 +305,11 @@ class App(EpisodeMixin,MatchMixin):
         self.option(sound, 'Громкость музыки', self.level, ['Очень тихо', 'Тихо', 'Заметнее'])
         logos = ui.card(page, 'Карточка матча', 'Логотипы команд выбираются отдельно. PNG, JPEG или WebP автоматически вписываются в карточку; детали размытого оригинала не восстанавливаются.')
         self.logos_panel=logos.master
+        self.logo_folder_label=tk.StringVar()
+        ttk.Label(logos,textvariable=self.logo_folder_label,wraplength=660).pack(anchor='w')
+        row=ttk.Frame(logos);row.pack(fill='x',pady=6)
+        self.button(row,'Папка логотипов…',self.choose_logo_folder).pack(side='left')
+        self.button(row,'Подобрать из папки',self.scan_logos).pack(side='left',padx=6)
         self.logo_select=ttk.Combobox(logos,state='readonly');self.logo_select.pack(fill='x',pady=(0,8))
         self.logo_select.bind('<<ComboboxSelected>>',lambda _e:self.logo_tabs.select(self.logo_frames[self.logo_select.current()]))
         self.logo_tabs=ttk.Notebook(logos);self.logo_tabs.pack(fill='x')
@@ -474,6 +486,8 @@ class App(EpisodeMixin,MatchMixin):
         p.settings.noise_reduction = {'Выключено': 10, 'Мягко': 6, 'Обычно': 10, 'Сильнее': 14}[self.noise.get()]
         p.settings.music_db = {'Очень тихо': -32, 'Тихо': -28, 'Заметнее': -24}[self.level.get()]
         p.settings.width, p.settings.height = (1920, 1080) if self.resolution.get() == '1080p' else (1280, 720)
+        from .logos import assign
+        assign(p)
 
     def refresh(self):
         self.refreshing = True
@@ -502,6 +516,10 @@ class App(EpisodeMixin,MatchMixin):
         self.noise.set('Выключено' if not p.settings.denoise else 'Мягко' if p.settings.noise_reduction < 8 else 'Сильнее' if p.settings.noise_reduction > 12 else 'Обычно')
         self.level.set('Очень тихо' if p.settings.music_db <= -30 else 'Заметнее' if p.settings.music_db >= -26 else 'Тихо')
         self.resolution.set('1080p' if p.settings.width == 1920 else '720p')
+        from .preferences import presets
+        self.presetbox.configure(values=sorted(presets(p.profile)))
+        if self.presetbox.get() not in presets(p.profile):self.presetbox.set('')
+        self.logo_folder_label.set(p.logo_folder or 'Папка логотипов не выбрана')
         self.project_label.set(Path(self.project_path).name if self.project_path else 'Проект не сохранён')
         self.refresh_matches()
         self.refreshing = False
@@ -724,6 +742,48 @@ class App(EpisodeMixin,MatchMixin):
         if old in self.logo_tabs.tabs():self.logo_tabs.select(old)
         self.sync_logo_selector()
 
+    def save_settings_preset(self):
+        if self.busy:return
+        self.collect()
+        name=simpledialog.askstring('Шаблон настроек','Название, например «РУ · сильная очистка»:',parent=self.root)
+        if not name:return
+        try:
+            from .preferences import save_preset,presets
+            if name.strip() in presets(self.project.profile) and not messagebox.askyesno('Шаблон','Заменить настройки этого шаблона?',parent=self.root):return
+            save_preset(self.project,name);self.refresh();self.presetbox.set(name.strip())
+            self.status.set('Шаблон настроек сохранён.')
+        except (OSError,ValueError) as e:messagebox.showerror('Шаблон',str(e),parent=self.root)
+
+    def load_settings_preset(self):
+        if self.busy:return
+        self.collect()
+        try:
+            from .preferences import apply_preset
+            warnings=apply_preset(self.project,self.presetbox.get())
+            self.invalidate();self.refresh()
+            self.status.set('Шаблон применён.'+(' '+ ' '.join(warnings) if warnings else ''))
+        except (OSError,ValueError) as e:messagebox.showerror('Шаблон',str(e),parent=self.root)
+
+    def choose_logo_folder(self):
+        if self.busy:return
+        folder=filedialog.askdirectory(title='Папка: имя файла = название команды',initialdir=self.project.logo_folder or None)
+        if not folder:return
+        self.project.logo_folder=folder
+        try:
+            from .preferences import remember_folder
+            remember_folder(self.project)
+        except OSError as e:messagebox.showerror('Папка логотипов',str(e),parent=self.root)
+        self.scan_logos()
+
+    def scan_logos(self):
+        if self.busy:return
+        self.collect()
+        from .logos import assign
+        warnings=assign(self.project)
+        self.refresh_logo_tabs();self.logo_folder_label.set(self.project.logo_folder)
+        self.result=None
+        self.status.set(' '.join(warnings) or 'Логотипы подобраны по именам файлов. Ручной выбор сохранён.')
+
     def choose_logo(self, index, block_index=None):
         from .graphics import block_teams
         from PIL import Image
@@ -751,12 +811,16 @@ class App(EpisodeMixin,MatchMixin):
         self.collect()
         from .profiles import apply_profile
         apply_profile(self.project,profile)
+        from .preferences import restore_folder
+        restore_folder(self.project)
         self.scans.clear();self.invalidate();self.refresh()
 
     def new(self):
         if not messagebox.askyesno('Новый проект', 'Создать новый проект? Несохранённые изменения текущего проекта будут потеряны.'):
             return
         self.project = Project()
+        from .preferences import restore_folder
+        restore_folder(self.project)
         self.index = 0
         self.project_path = None
         self.invalidate()
@@ -1052,4 +1116,5 @@ def launch():
     root = tk.Tk()
     App(root)
     root.mainloop()
+
 

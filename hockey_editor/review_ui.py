@@ -26,8 +26,8 @@ class ReviewDialog:
         ttk.Checkbutton(w,text='Показать также проверенные и удалённые',variable=self.show_all,command=self.refresh).pack(anchor='w',padx=12)
         body=ttk.Panedwindow(w,orient='horizontal');body.pack(fill='both',expand=True,padx=12,pady=8)
         left=ttk.Frame(body);right=ttk.Frame(body);body.add(left,weight=1);body.add(right,weight=2)
-        self.table=ttk.Treeview(left,columns=('time','state','text'),show='headings',height=16)
-        for key,title,width in [('time','Время',90),('state','Решение',90),('text','Плашка',240)]:
+        self.table=ttk.Treeview(left,columns=('time','kind','state','text'),show='headings',height=16)
+        for key,title,width in [('time','Время',75),('kind','Тип плашки',155),('state','Решение',75),('text','Текст',180)]:
             self.table.heading(key,text=title);self.table.column(key,width=width)
         scroll=ttk.Scrollbar(left,orient='vertical',command=self.table.yview);self.table.configure(yscrollcommand=scroll.set)
         scroll.pack(side='right',fill='y');self.table.pack(fill='both',expand=True);self.table.bind('<<TreeviewSelect>>',self.select)
@@ -65,7 +65,9 @@ class ReviewDialog:
         for task in self.plan.review_items:
             if task['status']!='pending' and not self.show_all.get():continue
             card=cards.get(task['id']);title=card.text if card else task['script']
-            self.table.insert('','end',iid=task['id'],values=(format_time(task['start']),labels[task['status']],title.replace('\n',' ')))
+            from .review import describe_card
+            kind,_=describe_card(card,task,self.project,self.plan)
+            self.table.insert('','end',iid=task['id'],values=(format_time(task['start']),kind,labels[task['status']],title.replace('\n',' ')))
         self.status.set(f'Осталось проверить: {len(pending(self.plan))}. Решения применяются к проекту сразу; сохраните проект перед закрытием программы.')
         ids=self.table.get_children()
         if ids:self.table.selection_set(ids[0]);self.select()
@@ -76,7 +78,9 @@ class ReviewDialog:
         if not task:return
         card=next((c for c in self.plan.cards if c.review_id==task['id']),None)
         if card is None and task.get('deleted_card'):card=Card(**task['deleted_card'])
-        self.reason.set(task['reason'])
+        from .review import describe_card
+        kind,where=describe_card(card,task,self.project,self.plan)
+        self.reason.set(kind+' · '+where+'\n'+task['reason'])
         for box,value in [(self.script,task['script']),(self.heard,task.get('recognized','')),(self.text,card.text if card else '')]:
             box.configure(state='normal');box.delete('1.0','end');box.insert('1.0',value)
         self.script.configure(state='disabled')

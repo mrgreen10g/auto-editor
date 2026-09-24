@@ -11,6 +11,7 @@ class Line:
     review_reason: str = ""
     recognized: str = ""
     review_id: str = ""
+    omit: list = field(default_factory=list)
 
 @dataclass
 class Insert:

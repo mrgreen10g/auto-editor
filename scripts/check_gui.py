@@ -178,9 +178,18 @@ def check():
         assert editor.player.image is not None and editor.player.position>=1.5
         editor.player.stop()
         editor.select(('card',1));editor.text.delete('1.0','end');editor.text.insert('1.0','Лада +2 · обновлено');editor.edit()
-        assert not editor.preview_current
+        assert editor.preview_current  # text updates over the existing video
+        before=editor.player.path
         editor.seek(7);editor.toggle_preview();root.update()
-        assert not editor.player.playing and editor.cursor==7
+        assert editor.player.playing and editor.player.path==before
+        editor.player.stop()
+        scale=editor.scale;editor.zoom(2);assert editor.scale>scale
+        editor.fit_timeline();assert editor.scale<scale
+        snapshot=copy.deepcopy(editor.plan);depth=len(editor.history.undo_stack)
+        editor.change(snapshot);assert editor.preview_current and len(editor.history.undo_stack)==depth
+        changed=copy.deepcopy(editor.plan);changed.inserts[0].start+=.2
+        editor.change(changed);assert not editor.preview_current
+        editor.undo();assert editor.preview_current
         with patch.object(app,'cache_path',return_value=tmp/'editor-cache'):
             editor.build_preview()
             deadline=time.monotonic()+120

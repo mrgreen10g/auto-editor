@@ -95,12 +95,12 @@ def fallback_cards(project, block, lines, duration, reason):
             continue
         if 'телеграм' in low or 'telegram' in low:
             asset=project.assets.get('telegram','')
-            cards.append(Card(line.start,line.end,'ТЕЛЕГРАМ','Telegram',i,asset,review_reason=reason));continue
+            if asset:cards.append(Card(line.start,line.end,'ТЕЛЕГРАМ','Telegram',i,asset,review_reason=reason))
+            continue
         if re.search(r'подписывай|ставьте\s+лайк|obuna|layk',low):
             asset=project.assets.get('subscribe','')
             if asset:
                 cards.append(Card(line.start,frame(line.start+probe(asset)['duration']),'ПОДПИСКА','Подписка',i,asset,review_reason=reason))
-            else:cards.append(Card(line.start,line.end,'ИНФОРМАЦИЯ',line.text,i,review_reason='Нет анимации подписки. '+reason))
             continue
         if title:cards.append(Card(line.start,line.end,title,body or line.text,i,review_reason=reason))
     if block.kind in ('intro','outro'):
@@ -137,8 +137,6 @@ def attach(plan, block, project):
         annotation=block.speech_cards.get(str(i),{})
         if annotation.get('needs_review') and not line.review_reason:line.review_reason=annotation.get('review_reason','Слова или принадлежность плашки определены неуверенно.')
         if line.agreement>.8 and not line.review_reason:line.review_reason='Неуверенная привязка фразы к записи.'
-        if block.sport!='combat' and line.review_reason and not any(c.line==i for c in plan.cards):
-            plan.cards.append(Card(line.start,line.end,'ИНФОРМАЦИЯ',line.text or block.title,i,review_reason=line.review_reason))
     for card in plan.cards:
         if card.title=='ПРОГНОЗ' and block.kind=='analysis':card.forecast_id=block.uid
         line=plan.lines[card.line] if 0<=card.line<len(plan.lines) else None
@@ -153,7 +151,6 @@ def attach(plan, block, project):
             if line is not None:
                 reason=confidence(card,line,block,project)
                 card.review_reason=reason
-        if block.language=='uz' and block.sport!='combat' and line and not line.recognized:line.recognized=line.text
         if reason:
             card.review_reason=reason
             plan.review_items.append(dict(id=card.review_id,block_id=block.uid,start=card.start,end=card.end,
@@ -278,7 +275,7 @@ def framing_draft(project,block,lines,duration):
                 if any(c.forecast_id==b.uid for c in cards):continue
                 a=min(max(0,duration-.2),duration*k/max(1,len(owners)))
                 cards.append(Card(a,min(duration,a+3),'ПРОГНОЗ',forecast_text(b) or b.title+' — уточните прогноз',forecast_id=b.uid,review_reason='Повтор ставки не найден уверенно. Предварительное время.'))
-        if 'telegram' in norm(block.script) and not any(c.title=='ТЕЛЕГРАМ' for c in cards):
+        if project.assets.get('telegram') and 'telegram' in norm(block.script) and not any(c.title=='ТЕЛЕГРАМ' for c in cards):
             a=max(0,duration-5)
             cards.append(Card(a,duration,'ТЕЛЕГРАМ','Telegram',asset=project.assets.get('telegram',''),review_reason='Призыв Telegram есть в сценарии, но не найден в речи. Проверьте или удалите плашку.'))
     return cards,warnings
@@ -349,3 +346,53 @@ def script_context(block,card,line):
     from .alignment import split_script
     rows=split_script(block.script)
     return max(rows,key=lambda text:SequenceMatcher(None,text.casefold(),card.text.casefold()).ratio()) if rows else card.text
+
+
+def describe_card(card,task,project,plan):
+    block=next((b for b in [project.intro,*project.blocks,project.outro] if b.uid==task.get('block_id')),None)
+    section=next((s for s in plan.sections if s['start']<=task['start']<s['end']),None)
+    kind=section.get('kind') if section else block.kind if block else 'analysis'
+    where={'intro':'Вступление','outro':'Повтор ставок','analysis':'Разбор'}.get(kind,kind)
+    if block and kind=='analysis':where+=' · '+block.title
+    if card is None:return 'Удалённая плашка',where
+    if card.asset:return card.title.capitalize()+' · видео-вставка',where+' · анимация'
+    if card.title=='РАЗБОР МАТЧА':return ('Представление пары' if kind=='intro' else 'Пара разбора'),where+' · внизу по центру'
+    if card.title=='ПРОГНОЗ':return 'Ставка',where+' · внизу по центру'
+    if card.title in ('СМЕНА МАТЧА','ИТОГИ ВЫПУСКА'):return 'Переход',where+' · полный экран'
+    bottom=project.profile!='uz_combat' and card.title=='СОСТАВ КОМАНДЫ' and len(card.text)>85
+    return card.title.capitalize(),where+(' · внизу' if bottom else ' · вверху слева')
+
+
+def remove_old_subtitles(value):
+    """Only remove proven generated prose cards; custom edits remain authored."""
+    if not value:return False
+    base=value.get('edit_baseline',{}).get('cards',[]);live={c.get('review_id'):c for c in value.get('cards',[])}
+    removed=set()
+    for old in base:
+        ident=old.get('review_id');card=live.get(ident)
+        if not ident or card is None:continue
+        if any(card.get(k)!=old.get(k) for k in ('text','title','asset','forecast_id')):continue
+        i=old.get('line',-1);lines=value.get('lines',[])
+        if old.get('title')=='ТЕЛЕГРАМ' and not old.get('asset'):removed.add(ident)
+        if old.get('title')!='ИНФОРМАЦИЯ' or not 0<=i<len(lines):continue
+        line=lines[i]
+        if not line.get('review_reason') or old.get('text')!=line['text']:continue
+        from .card_text import classify_card
+        from .uzbek import classify
+        if not classify_card(line['text']) and not classify(line['text'])[0]:removed.add(ident)
+    if not removed:return False
+    value['cards']=[c for c in value['cards'] if c.get('review_id') not in removed]
+    value['edit_baseline']['cards']=[c for c in base if c.get('review_id') not in removed]
+    value['review_items']=[t for t in value.get('review_items',[]) if t['id'] not in removed]
+    value.setdefault('warnings',[]).append(f'Удалены автоматические плашки обычной речи: {len(removed)}. Ручные тексты сохранены.')
+    return True
+
+
+def migrate_project(project):
+    if project.profile=='uz_combat':return
+    from .episode import episode_key
+    try:valid=bool(project.episode_plan and project.episode_key==episode_key(project))
+    except OSError:valid=False
+    changed=remove_old_subtitles(project.episode_plan)
+    for b in [project.intro,*project.blocks,project.outro]:changed=remove_old_subtitles(b.edit_plan) or changed
+    if changed and valid:project.episode_key=episode_key(project)

@@ -16,7 +16,8 @@ def prepared_script(block):
     if block.kind=='analysis':return block.script
     # Align team introductions independently even inside a single sentence.
     from .event_rules import TEAMS
-    names='|'.join(re.escape(n) for n in TEAMS)
+    from .team_names import RU
+    names='|'.join(pattern for patterns in RU.values() for pattern in patterns)
     text=block.script
     if block.kind=='intro':
         text=re.sub(r'[,：:]\s*(?=(?:а\s+)?(?:московск\w*\s+)?«?(?:'+names+r')\b)', '\n', text, flags=re.I)
@@ -193,18 +194,37 @@ def asset_filter(card,cache,cancel):
 
 
 def split_full_script(text):
-    # Headings are standalone team pairs; hyphens within ordinary prose aren't headings.
-    from .event_rules import TEAMS
-    rows=text.splitlines();headers=[]
+    """Standalone fixtures and recap intent, independent of one catchphrase."""
+    from .team_names import ru_identity
+    from .speech_boundaries import recap_cue
+    # A recap can start inside a paragraph. Preserve the wording verbatim.
+    rows=[]
+    for line in text.splitlines():
+        parts=re.split(r'(?<=[.!?])\s+(?=(?:Итак|Подвед|Подытож|Напомню|Повтор|В\s+итоге|На\s+сегодня|Коротко|Теперь\s+к\s+итогам)\b)',line,flags=re.I)
+        rows.extend(parts)
+    headers=[];titles={}
     for i,line in enumerate(rows):
-        if len(line.strip())<75 and re.fullmatch(r'[А-Яа-яЁёA-Za-z «»]+\s+[—–-]\s+[А-Яа-яЁёA-Za-z «»]+',line.strip()):
-            pair=block_teams(line.strip())
-            if all(any(team_position(team,name) is not None for team in TEAMS) for name in pair):headers.append(i)
-    end=next((i for i,l in enumerate(rows) if re.match(r'\s*Итак[, ]',l,re.I)),None)
-    if not headers or end is None or end<=headers[-1]:
-        raise ValueError('Нужны отдельные строки с названиями пар и завершение со слова «Итак». Можно заполнить тексты вручную.')
+        title=re.sub(r'^\s*(?:#{1,4}\s*|\d+[.)]\s*)','',line).strip().strip('*').strip()
+        pair=block_teams(title)
+        if len(title)<100 and pair[1] and all(ru_identity(name) for name in pair):
+            # Don't accept a prose sentence containing two clubs as a heading.
+            if re.fullmatch(r"[\w .«»'’()-]+\s+[—–-]\s+[\w .«»'’()-]+",title):
+                headers.append(i);titles[i]=title
+    if not headers:raise ValueError('Не найдены отдельные заголовки пар команд. Проверьте названия и разделитель « — ».')
+    end=next((i for i in range(headers[-1]+1,len(rows)) if recap_cue(rows[i])),None)
+    if end is None:
+        # An unlabelled recap repeats at least two distinct fixtures' choices,
+        # followed by a closing CTA. One last analysis bet is not a recap.
+        promo=next((i for i in range(headers[-1]+1,len(rows)) if re.search(r'телеграм|подписывай|до\s+встреч',rows[i],re.I)),len(rows))
+        owners=[type('Pair',(),{'title':titles[h]})() for h in headers]
+        choices=[(i,{b.title for b in owners if pair_matches(rows[i],b)}) for i in range(headers[-1]+1,promo) if re.search(r'беру|выбор|ставк|тотал|фор[ауо]|побед',rows[i],re.I)]
+        for k,(i,names) in enumerate(choices):
+            remaining=set().union(*(n for j,n in choices[k:]))
+            if names and len(remaining)>=2 and promo-i<=max(12,2*len(owners)):
+                end=i;break
+    if end is None:
+        raise ValueError('Не удалось отделить повтор ставок от последнего разбора. Добавьте перед итогами строку «Итоги» или задайте конец вручную.')
     intro='\n'.join(rows[:headers[0]]).strip();outro='\n'.join(rows[end:]).strip()
-    blocks=[(rows[a].strip(),'\n'.join(rows[a:(headers[j+1] if j+1<len(headers) else end)]).strip()) for j,a in enumerate(headers)]
+    blocks=[(titles[a],'\n'.join([titles[a],*rows[a+1:(headers[j+1] if j+1<len(headers) else end)]]).strip()) for j,a in enumerate(headers)]
     if not intro:raise ValueError('Перед первым разбором не найден текст начала.')
     return intro,blocks,outro
-

@@ -28,7 +28,13 @@ def wrap(draw, text, ft, maxwidth):
 
 
 def block_teams(title):
-    names = re.split(r'\s*[—–]\s*|\s+-\s+|(?<=\w)-(?=\w)', title, maxsplit=1)
+    names = re.split(r'\s*[—–]\s*|\s+-\s+', title, maxsplit=1)
+    if len(names)==1:
+        from .team_names import ru_identity
+        if not ru_identity(title):names=re.split(r'(?<=\w)-(?=\w)',title,maxsplit=1)
+        elif ' - ' not in title and title.count('-')==1:
+            pair=title.split('-')
+            if all(ru_identity(n) for n in pair):names=pair
     return [n.strip() for n in names] if len(names)==2 else [title.strip(), '']
 
 
