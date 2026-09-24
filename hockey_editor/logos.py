@@ -23,7 +23,7 @@ def assign(project):
         if club:by_club.setdefault(club,[]).append(str(p))
     warnings=[]
     for name in dict.fromkeys(n for b in project.blocks for n in block_teams(b.title) if n):
-        if project.team_logos.get(name):continue
+        if name in project.team_logos:continue  # empty value is an explicit manual removal
         options=by_exact.get(compact(name),[]) or by_club.get(identity(name,project.profile),[])
         if len(options)==1:project.team_logos[name]=options[0]
         elif len(options)>1:warnings.append('Несколько логотипов для '+name+' — выберите вручную.')

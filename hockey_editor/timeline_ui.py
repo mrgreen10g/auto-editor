@@ -208,6 +208,7 @@ class TimelineEditor:
     def dragged(self,x):
         initial,mode,original=self.drag;plan=copy.deepcopy(original);item=self.item(plan)
         delta=frame((x-initial)/self.scale)
+        if not delta:return plan
         if mode=='move':
             delta=max(-item.start,min(delta,plan.duration-item.end));item.start+=delta;item.end+=delta
         elif mode=='left':

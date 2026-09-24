@@ -114,6 +114,7 @@ class WorkflowTests(unittest.TestCase):
             p=Project(logo_folder=folder,blocks=[Block(title='Бостон — Montreal Canadiens')])
             self.assertFalse(assign(p));self.assertEqual(Path(p.team_logos['Бостон']).name,'Boston Bruins.png')
             p.team_logos['Бостон']='manual';assign(p);self.assertEqual(p.team_logos['Бостон'],'manual')
+            p.team_logos['Бостон']='';assign(p);self.assertEqual(p.team_logos['Бостон'],'')
             p.team_logos.clear();(root/'Boston Bruins.jpg').touch();self.assertTrue(assign(p));self.assertNotIn('Бостон',p.team_logos)
             p.profile='uz_combat';p.team_logos.clear();assign(p);self.assertFalse(p.team_logos)
 

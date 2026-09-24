@@ -801,7 +801,9 @@ class App(EpisodeMixin,MatchMixin):
     def clear_logo(self, index, block_index=None):
         from .graphics import block_teams
         self.collect();block_index=self.index if block_index is None else block_index
-        self.project.team_logos.pop(block_teams(self.project.blocks[block_index].title)[index],None)
+        name=block_teams(self.project.blocks[block_index].title)[index]
+        if self.project.logo_folder:self.project.team_logos[name]=''
+        else:self.project.team_logos.pop(name,None)
         self.invalidate();self.update_summary()
 
     def switch_profile(self,event=None):
