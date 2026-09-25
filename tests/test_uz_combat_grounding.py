@@ -57,6 +57,12 @@ class RetryTests(unittest.TestCase):
   a=segment("Barmin beshta g‘alaba oltita mag‘lubiyat",.9)
   b=segment("Barmin uchta g‘alaba oltita mag‘lubiyat",.99)
   self.assertFalse(preferable(a,b,'uz_combat'))
+ def test_arguments_are_compact_and_keep_uncertainty(self):
+  _,body=classify('G‘alaba qaraymiz, chunki uning jismoniy bosim va tempi raqibga juda ko‘p muammo yaratishi mumkin.')
+  self.assertEqual(body,'Bosim va temp raqibga muammo yaratishi mumkin')
+  self.assertLess(len(body.split()),12)
+  _,body=classify('Agar raqibi bosimni oshirsa, javob berishi mumkin.')
+  self.assertIn('Agar',body)
  def test_ufc_rates_and_finish_types(self):
   title,body=classify("UFC daqiqasiga 2,4 ta muhim zarba, zarbalardan himoyasi 64 foiz, takedownlardan himoyasi 77 foiz.")
   self.assertEqual(title,'СТАТИСТИКА')

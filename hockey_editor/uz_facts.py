@@ -34,7 +34,18 @@ def argument(text):
         if any(re.search(a,t) and re.search(b,t) for a,b in ARGUMENTS):
             # Preserve the actual claim and its qualifiers, not a manufactured
             # two-word summary that could reverse a negation.
-            return re.sub(r'\s+va jang$','',clause.strip(' ,:'))
+            if not re.search(r'agar|emas|maydi|yo.q',t):
+                if 'mumkin' not in t and re.search(r'tajriba\w*\s+(?:ancha\s+)?(?:yuqori|katta|ko.p)|katta\s+tajriba',t):return 'Katta tajriba'
+                if 'mumkin' not in t and 'bosim' in t and re.search(r'javob bera ol(?:adi|aydi)|javob beradi',t):return 'Bosimga javob bera oladi'
+                if 'bosim' in t and 'temp' in t and 'muammo' in t:
+                    return 'Bosim va temp raqibga muammo yaratishi mumkin' if 'mumkin' in t else 'Bosim va temp raqibga muammo yaratadi'
+                if 'mumkin' not in t and 'temp' in t and 'oshir' in t and 'seriya' in t and re.search(r'ishla|shiloli',t):return 'Tempni oshirib, seriyalar bilan ishlaydi'
+            # Keep qualifiers and negations in the clause. Trimming a prefix
+            # containing them could turn an uncertain claim into an assertion.
+            if re.search(r'agar|emas|maydi|yo.q|mumkin',t):
+                return re.sub(r'\s+va jang$','',clause.strip(' ,:'))
+            start=min((m.start() for a,b in ARGUMENTS if re.search(b,t) for m in [re.search(a,t)] if m),default=0)
+            return re.sub(r'\s+va jang$','',clause.strip(' ,:')[start:])
     return ''
 
 def combat_facts(text):
