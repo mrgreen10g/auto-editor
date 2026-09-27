@@ -36,7 +36,9 @@ def display_title(line):
 
 def parse_script(text):
     sections=[];current=None
-    rows=text.splitlines()
+    # Author headings may carry advisory time ranges. Strip those ranges
+    # before identifying sections; preserve prose and separate recording times.
+    rows=[re.sub(r'\s*\|\s*\d{1,2}:\d{2}\s*[—–-]\s*\d{1,2}:\d{2}\s*$','',l).strip().lstrip('\ufeff') for l in text.splitlines()]
     # Authors supply an unspoken title and fixture index before KIRISH.
     start=next((i for i,l in enumerate(rows) if norm(l.strip().lstrip('\ufeff'))=='kirish'),None)
     if start is None:raise ValueError('Начните узбекский сценарий с заголовка KIRISH.')
@@ -51,6 +53,7 @@ def parse_script(text):
         pair_heading=pair and not line.endswith('.') and len(line)<100 and (known or line.upper()==line)
         if current and current['kind']=='outro':pair_heading=False
         if kind or pair_heading:
+            if kind=='intro' and current and current['kind']=='intro' and not current['lines']:continue
             current={'kind':kind or 'analysis','title':display_title(line) if not kind else 'Boshlanish' if kind=='intro' else 'Yakun','lines':[],'hint':[]};sections.append(current);continue
         hint=HINT.match(line)
         if hint:
@@ -233,4 +236,3 @@ def asr_framing_cards(project,block,lines,duration):
         if value is not None and not card.asset and card.title!='ПРОГНОЗ':card.text=value
     from .framing import optional_subscription
     return optional_subscription([c for c in cards if c.text.strip()],duration)
-

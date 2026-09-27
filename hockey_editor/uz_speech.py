@@ -356,7 +356,19 @@ def prepare(project,segments,review=False,duration=None):
         from .timeline import Line
         if duration is None:duration=segments[-1]['end'] if segments else 1.
         blocks=[candidate.intro,*candidate.blocks,candidate.outro]
-        recovered=draft_alignment(blocks,segments,duration,str(error))
+        if candidate.recording_times.strip() and segments:
+            from .recording_times import recording_ranges
+            from .speech_boundaries import slice_segments
+            recovered={}
+            for b,(lo,hi) in zip(blocks,recording_ranges(candidate,segments)):
+                local=copy.deepcopy(slice_segments(segments,lo,hi))
+                for s in local:
+                    s['start']-=lo;s['end']-=lo
+                    for w in s['words']:w['start']-=lo;w['end']-=lo
+                part=draft_alignment([b],local,hi-lo,str(error))
+                for line in part[b.uid][0]:line.start+=lo;line.end+=lo
+                recovered.update(part)
+        else:recovered=draft_alignment(blocks,segments,duration,str(error))
         bounds=[]
         for b in blocks:
             lines,_=recovered[b.uid];bounds.append(lines[0].start)

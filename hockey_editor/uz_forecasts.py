@@ -71,7 +71,9 @@ def score(candidate,owner,reference,index,owners,recap=True):
     # episode ordinal. Clear foreign names still reject a different owner.
     others=any(v>=.9 for k,v in enumerate(strengths) if k!=index)
     if others and not own:return None
-    if ordinal is not None and ordinal!=index:return None
+    # Inside one already identified match, "my second choice" is the episode
+    # ordinal, not index zero of this single-owner search.
+    if ordinal is not None and ordinal!=index and (recap or len(owners)>1):return None
     if recap and len(owners)>1:
         ordinals={features(w['word'])['ordinal'] for w in candidate['words']}-{None}
         ordinals={len(owners)-1 if n==-1 else n for n in ordinals}
@@ -152,4 +154,3 @@ def match_forecasts(segments,lo,hi,owners,references,recap=True):
         raise ValueError('Не удалось разнести повторы ставок по времени без пересечений. Проверьте речь в итогах и выбранные границы.')
     chosen=max(states[full],key=lambda s:s[0])[2]
     return [chosen[i] for i in range(len(owners))]
-

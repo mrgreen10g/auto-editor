@@ -211,7 +211,7 @@ class EpisodeEngine(Engine):
         runtime=assembly_project(self.project)
         snapshot=[(copy.deepcopy(b.edit_plan),b.edit_key) for b in runtime.blocks]
         try:
-            if self.project.profile=='ru_hockey' and self.project.full_video and runtime.blocks[0].script.strip():
+            if self.project.profile=='ru_hockey' and (self.project.full_video or self.project.settings.cut_pauses) and runtime.blocks[0].script.strip():
                 from .ru_speech import prepare
                 return self._assemble(runtime,prepare(self.project,runtime.blocks,self.cache,self.cancel,self.log))
             return self._assemble(runtime)

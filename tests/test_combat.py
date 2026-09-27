@@ -120,7 +120,7 @@ class IntroBoundaryTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as d:
    host=Path(d)/'host';host.touch();p.host=str(host);prepare(p,[],100)
    b=p.blocks[0];b.events=[EventRequest('a','zarba','play',skipped=True)];prepare(p,[],100);self.assertEqual(len(b.events),1)
-   b.script+=' Yangi gap.';prepare(p,[],100);self.assertFalse(b.events)
+   b.script+=' Yangi gap.';prepare(p,[],100);self.assertEqual(len(b.events),1);self.assertTrue(b.events[0].skipped)
  def test_cue_end_is_not_six_words_early(self):
   s=segment(0,10,'Ссылка находится в описании. Переходим к разбору.');self.assertAlmostEqual(intro_floor(s['words']),s['words'][-1]['end'])
  def test_pair_after_promo_wins_over_intro_pair(self):

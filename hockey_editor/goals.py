@@ -255,6 +255,9 @@ def propose(requests, scans, sources=(), allow_other=False):
     from .event_rules import clean, team_position
     source_map = {m.id: m for m in sources}
     usage = {}; source_usage = {}; last_source = None
+    for event in requests:
+        if event.selection and event.selection.accepted:
+            usage.setdefault(event.source_id,set()).add(event.selection.candidate_id)
     def next_play(source_id):
         data = scans.get(source_id, {})
         choices = [Candidate(**c) for c in data.get('candidates', []) if c['kind'] == 'play' and c['confidence']>=.65]
@@ -363,6 +366,9 @@ def montage_block(project, index, cache, cancel):
     if unresolved(block) and block.sport!='combat':
         raise ValueError(f'Проверьте найденные эпизоды: {len(unresolved(block))}. Можно оставить ведущего вместо вставки.')
     sources = {m.id: m for m in project.matches}
+    if block.sport=='combat':
+        from .combat import bind_confirmed_archives
+        bind_confirmed_archives(block,project.matches)
     for event in block.events:
         if event.skipped or (block.sport=='combat' and (not event.selection or not event.selection.accepted)): continue
         selection = event.selection
@@ -370,4 +376,3 @@ def montage_block(project, index, cache, cancel):
         block.clips.append(Clip(str(path), event.phrase, selection.event_time-selection.source_start, selection.context_label,
                                 sources[event.source_id].path,selection.source_start,event.kind,event.flexible_source))
     return block
-

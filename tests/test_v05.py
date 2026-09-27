@@ -111,6 +111,7 @@ class V05Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             host=Path(tmp)/'host';host.touch()
             p=Project(host=str(host),blocks=[Block(title=str(i),script='Длинный текст для проверки последовательного поиска.') for i in range(3)])
+            p.settings.cut_pauses=False  # Exercise the bounded acoustic path, not lexical cleanup.
             plans=[block_plan(i*12,b.title) for i,b in enumerate(p.blocks)];floors=[]
             def analyze(engine,source_floor=0):floors.append(source_floor);return plans[engine.index]
             with patch('hockey_editor.episode.Engine.analyze',analyze):
@@ -153,6 +154,7 @@ class V05Tests(unittest.TestCase):
             anchors=synthesize(texts,d/'voice.wav',cancel)
             run(['-y','-f','lavfi','-i','color=c=blue:s=320x180:r=30','-i',d/'voice.wav','-shortest','-c:v','libx264','-c:a','aac',d/'host.mp4'])
             p=Project(host=str(d/'host.mp4'),blocks=blocks,whole_episode=True);p.settings.auto_rotate=False
+            p.settings.cut_pauses=False  # This regression exercises forced alignment without ASR.
             plan=EpisodeEngine(p,0,d/'cache',cancel).analyze()
             self.assertEqual(len(plan.sections),2)
             self.assertAlmostEqual(plan.sections[0]['source_start'],anchors[1],delta=.5)

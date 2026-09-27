@@ -27,6 +27,11 @@ class Engine:
         return hashlib.sha256(json.dumps(data,ensure_ascii=False).encode()).hexdigest()
 
     def analyze(self,source_floor=0,speech=None,recover=True):
+        if recover and speech is None and self.project.profile=='ru_hockey' and self.project.settings.cut_pauses and getattr(self,'recover_speech',True):
+            self.project.validate(self.index)
+            from .ru_speech import prepare
+            found=prepare(self.project,self.project.blocks,self.cache,self.cancel,self.log)
+            speech=found[self.project.blocks[self.index].uid]
         try:return self._analyze(source_floor,speech)
         except AlignmentError:
             if not recover or not getattr(self,'recover_speech',True) or speech is not None:raise
@@ -220,7 +225,7 @@ class Engine:
                 if not joined_before:filt+=f',fade=t=in:st=0:d={fin:.6f}:alpha=1'
                 if not joined_after:filt+=f',fade=t=out:st={length-fout:.6f}:d={fout:.6f}:alpha=1'
             fl.append(f'[{inputs}:v]{filt},setpts=PTS+{start:.6f}/TB[clip{i}]');inputs+=1
-            nv=f'ins{i}';fl.append(f"[{v}][clip{i}]overlay=0:0:eof_action=pass:enable='gte(t,{start:.6f})*lt(t,{start+length:.6f})'[{nv}]");v=nv
+            nv=f'ins{i}';fl.append(f"[{v}][clip{i}]overlay=0:0:eof_action=pass:repeatlast=0:enable='gte(t,{start:.6f})*lt(t,{start+length:.6f})'[{nv}]");v=nv
         for i,card in enumerate(plan.cards):
             if card.title in ('АРХИВНЫЕ КАДРЫ','КАДРЫ МАТЧА'): continue
             length=card.end-card.start
@@ -248,7 +253,7 @@ class Engine:
             enabled=f'gte(t,{card.start:.6f})*lt(t,{card.end:.6f})'
             if card.title=='РАЗБОР МАТЧА':
                 enabled+=''.join(f'*not(between(t,{c.start:.6f},{c.end+tail:.6f}))' for c,tail,_,_ in game_transitions(plan))
-            nv=f'panel{i}';fl.append(f"[{v}][card{i}]overlay=x='{xpos}':y='{ypos}':eof_action=pass:enable='{enabled}'[{nv}]");v=nv
+            nv=f'panel{i}';fl.append(f"[{v}][card{i}]overlay=x='{xpos}':y='{ypos}':eof_action=pass:repeatlast=0:enable='{enabled}'[{nv}]");v=nv
         width,height=(640,360) if draft else (s.width,s.height)
         fl.append(f'[{v}]scale={width}:{height},format=yuv420p[final]')
         graph=self.cache/'final-filter.txt';graph.write_text(';\n'.join(fl),encoding='utf-8')
@@ -268,4 +273,3 @@ class Engine:
         shutil.copy2(self.cache/'edit-plan.json',target.with_suffix('.timing.json'))
         self.log('Готово: '+str(target))
         return target
-

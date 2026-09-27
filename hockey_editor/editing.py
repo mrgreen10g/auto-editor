@@ -26,7 +26,7 @@ def project_edit_key(project, index):
     for clip in block['clips']:
         clip['path']=identity(clip['path'])
         if clip.get('origin_path'):clip['origin_path']=identity(clip['origin_path'])
-    data=['workflow-0.7.13',block,structural,identity(project.host),
+    data=['workflow-0.7.15',block,structural,identity(project.host),
           [(m.id,m.home,m.away,identity(m.path),m.score_box) for m in project.matches if m.id in block['match_ids']]]
     if project.full_video and project.profile=='ru_hockey':data.append('intro-boundary-v2')
     if project.profile!='ru_hockey':data.append([project.profile,project.recording_times,[(m.id,m.fighter,m.sport) for m in project.matches if m.id in block['match_ids']]])
@@ -36,13 +36,13 @@ def project_edit_key(project, index):
 
 def validate_plan(plan, check_files=True):
     if not math.isfinite(plan.duration) or plan.duration<=0: raise ValueError('Некорректная длина дорожки.')
-    def span(start,end):
+    def span(start,end,label='Элемент'):
         if not all(math.isfinite(v) for v in (start,end)) or not 0<=start<end<=plan.duration+.034:
             raise ValueError('Границы элемента должны находиться внутри дорожки.')
-        if end-start<.15: raise ValueError('Элемент слишком короткий.')
+        if end-start<.15: raise ValueError(f'{label}: длительность {end-start:.2f} с меньше 0,15 с. Увеличьте длительность на дорожке.')
     end=0
     for c in sorted(plan.inserts,key=lambda c:c.start):
-        span(c.start,c.end)
+        span(c.start,c.end,'Вставка «'+c.label+'»')
         if c.start<end-.001: raise ValueError('Игровые вставки пересекаются. Сдвиньте или сократите одну из них.')
         end=c.end
         if not all(math.isfinite(v) for v in (c.source_in,c.source_min)) or c.source_in<c.source_min-.001:
@@ -52,7 +52,7 @@ def validate_plan(plan, check_files=True):
             raise ValueError('Вставка выходит за конец игрового фрагмента. Сократите её или выберите другой момент.')
         if check_files and not Path(c.path).is_file(): raise ValueError('Не найдена запись: '+c.path)
     for c in plan.cards:
-        span(c.start,c.end)
+        span(c.start,c.end,'Плашка «'+c.title+'»')
         if c.asset:
             if check_files and not Path(c.asset).is_file():raise ValueError('Не найдена анимация: '+c.asset)
             if not math.isfinite(c.source_in) or c.source_in<0:raise ValueError('Некорректное начало анимации.')
@@ -114,4 +114,3 @@ def saved_plan(project,index):
     if block.edit_plan and block.edit_key==project_edit_key(project,index):
         return validate_plan(Plan.from_dict(copy.deepcopy(block.edit_plan)))
     return None
-

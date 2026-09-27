@@ -112,7 +112,7 @@ def active_blocks(project):return [b for b in [project.intro,*project.blocks,pro
 
 def speech_key(project):
     from .uz_speech import recording_key
-    return hashlib.sha256(json.dumps(['combat-speech-v4-grounded',recording_key(project),project.recording_times,[(b.uid,b.title,b.script,b.forecast,b.featured_pairs) for b in active_blocks(project)]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['combat-speech-v5-archives',recording_key(project),project.recording_times,[(b.uid,b.title,b.script,b.forecast,b.featured_pairs) for b in active_blocks(project)]],ensure_ascii=False).encode()).hexdigest()
 
 
 def spoken_segments(segments):
@@ -195,7 +195,8 @@ def prepare(project,segments,duration):
         reliable=False;recovered=rough
     key=speech_key(project)
     for b in blocks:
-        if b.speech_key and b.speech_key!=key:b.events=[]
+        if b.speech_key and b.speech_key!=key:
+            b.events=[e for e in b.events if e.skipped or (e.selection and e.selection.accepted)]
         lines=recovered[b.uid][0]
         if segments:
             from .uz_speech import make_lines
@@ -230,11 +231,14 @@ def synchronize(project,cache,cancel,log):
         log('Бои размечены по речи; сомнительные плашки сохранены для проверки.')
     from .goals import GoalScanner,propose
     for b in project.blocks:
-        if b.events:continue
         local=[s for s in project.matches if s.id in b.match_ids and s.sport=='combat']
         if not local:continue
+        bind_confirmed_archives(b,local)
+        existing={(e.source_id,norm(e.phrase)) for e in b.events}
+        b.events.extend(e for e in events(b,local) if (e.source_id,norm(e.phrase)) not in existing)
+        if all(e.skipped or (e.selection and e.selection.accepted) for e in b.events):continue
         scans={s.id:GoalScanner(cancel=cancel,log=log).scan(s) for s in local}
-        b.events=propose(events(b,local),scans,local,False)
+        b.events=propose(b.events,scans,local,False)
         log('Вставки подобраны; неуверенные моменты доступны для проверки: '+b.title)
 
 
@@ -325,3 +329,27 @@ def recover_gaps(model,audio,segments,cancel,log):
                 words=[w for w in words if w['end']>w['start']]
                 if words:result.append(dict(start=words[0]['start'],end=words[-1]['end'],text=' '.join(w['word'] for w in words),words=words))
     return sorted(result,key=lambda s:s['start'])
+
+
+def bind_confirmed_archives(block,matches):
+    """Rebind selected B-roll to spoken fighter slots after ASR paraphrasing.
+
+    A selected shot is an illustration of this fighter's form, not footage of
+    an exact historical claim. Preserve the user's source and source trim.
+    """
+    from .fighters import same_fighter
+    from .combat_cards import coverage
+    if not block.asr_lines:return
+    slots=events(block,matches);used=set();sources={s.id:s for s in matches}
+    for event in block.events:
+        if event.skipped or not event.selection or not event.selection.accepted:continue
+        source=sources.get(event.source_id)
+        if not source:continue
+        choices=[(i,s) for i,s in enumerate(slots) if i not in used and len(s.requested_teams)==1 and same_fighter(source.fighter,s.requested_teams[0])]
+        if not choices:continue
+        scored=[(coverage(event.phrase,s.phrase),i,s) for i,s in choices]
+        score,i,slot=max(scored,key=lambda x:(x[0],-x[1]))
+        if score<.45:i,slot=choices[0]
+        used.add(i);event.phrase=slot.phrase
+        event.requested_teams=slot.requested_teams[:]
+        event.selection.context_label='Архив боя · '+source.fighter

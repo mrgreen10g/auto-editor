@@ -18,9 +18,9 @@ def remove_retakes(blocks,segments):
         for i in range(len(words)-3):
             # A restart is a sentence/segment boundary or follows a real pause.
             boundary=i==0 or re.search(r'[.!?…]$',words[i-1]['word'].strip()) or words[i]['start']-words[i-1]['end']>=.25
-            if not boundary:continue
             flat=[t for row in source[i:i+4] for t in row]
-            if flat[:4]==prefix:starts.append(i)
+            hits=sum(a==b for a,b in zip(flat[:4],prefix))
+            if (hits==4 or (boundary and hits>=3 and flat[:1]==prefix[:1])):starts.append(i)
         for a,b in zip(starts,starts[1:]):
             if not 1<=words[b]['start']-words[a]['start']<=25:continue
             first=[t for row in source[a:b] for t in row]
@@ -30,7 +30,9 @@ def remove_retakes(blocks,segments):
             best=max((SequenceMatcher(None,target,later[:n],autojunk=False).ratio() for n in range(max(4,len(target)-2),min(len(later),len(target)+2)+1)),default=0)
             earlier=SequenceMatcher(None,target,first,autojunk=False).ratio()
             if best<.85 or best+.001<earlier or len(first)>len(target)+4:continue
-            if words[b]['start']-words[b-1]['end']<.18:continue
+            correction=bool(re.search(r'\b(?:нет|точнее|заново|оговорился|поправлюсь)\b',' '.join(w['word'].lower().strip(',.!?') for w in words[a:b])))
+            if words[b]['start']-words[b-1]['end']<.08 and not correction:continue
+            if not correction and best-earlier<.05 and words[b]['start']-words[b-1]['end']<.18:continue
             lo=max(0,words[a]['start']-.06)
             if a:lo=max(lo,words[a-1]['end'])
             hi=max(lo,words[b]['start']-.08)

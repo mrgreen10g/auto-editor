@@ -130,6 +130,13 @@ def input_key(project, block):
 def attach(plan, block, project):
     """Create stable, persistent tasks after all automatic overlay generation."""
     plan.input_key=input_key(project,block)
+    # A sentence can collapse into a removed pause. Keep its selected fact
+    # reviewable instead of letting a two-frame card block the whole export.
+    for card in plan.cards:
+        if card.end-card.start < .15:
+            card.start=frame(max(0,min(card.start,plan.duration-min(1.5,plan.duration))))
+            card.end=frame(min(plan.duration,card.start+1.5))
+            card.review_reason='Фраза попала в вырезанную паузу. Проверьте время плашки.'
     counts={}
     from .framing import forecast_text
     if block.kind=='analysis' and not (block.sport=='combat' and not forecast_text(block)) and not any(c.title=='ПРОГНОЗ' for c in plan.cards):
@@ -205,12 +212,18 @@ def preserve_edits(previous,plan):
                 if equivalent:plan.cards.remove(equivalent)
             plan.cards.append(changed)
     # Preserve manual insert choices and trims using their source-time anchors.
-    if old.edit_baseline.get('inserts')!=[asdict(c) for c in old.inserts]:
-        inserts=[]
-        for item in old.inserts:
-            c=copy.deepcopy(item);c.start=output_time(plan,source_time(old,item.start));c.end=output_time(plan,source_time(old,item.end))
-            if c.end-c.start>=.15:inserts.append(c)
-        plan.inserts=inserts
+    def clip_key(c):
+        return (c['path'],c.get('source_min',0),c.get('source_max'),c['label'] if c.get('source_max') is None else '')
+    before={clip_key(c):c for c in old.edit_baseline.get('inserts',[])}
+    after={clip_key(asdict(c)):c for c in old.inserts}
+    deleted_clips=set(before)-set(after)
+    plan.inserts=[c for c in plan.inserts if clip_key(asdict(c)) not in deleted_clips]
+    for key,item in after.items():
+        if key in before and asdict(item)==before[key]:continue
+        c=copy.deepcopy(item);c.start=output_time(plan,source_time(old,item.start));c.end=output_time(plan,source_time(old,item.end))
+        if c.end-c.start<.15:continue
+        plan.inserts=[v for v in plan.inserts if clip_key(asdict(v))!=key]
+        plan.inserts.append(c)
     old_tasks={x['id']:x for x in old.review_items}
     ids={x['id'] for x in plan.review_items}
     for item in plan.review_items:

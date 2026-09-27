@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 from .media import probe,run
 
-DETECTOR_VERSION='combat-selective-review-v4'
+DETECTOR_VERSION='combat-selective-review-v5'
 
 
 def clock_value(text):
@@ -15,10 +15,10 @@ def clock_value(text):
 
 def live_ranges(observations,duration):
     intervals=[]
-    for a,b in zip(observations,observations[1:]):
-        if a[1] is None or b[1] is None:continue
+    valid=[o for o in observations if o[1] is not None]
+    for a,b in zip(valid,valid[1:]):
         delta=b[0]-a[0]
-        if 0<delta<=2.1 and 0<abs(a[1]-b[1])<=delta+1:
+        if 0<delta<=4.1 and abs(abs(a[1]-b[1])-delta)<=1 and a[1]!=b[1]:
             if intervals and abs(intervals[-1][1]-a[0])<.01:intervals[-1][1]=b[0]
             else:intervals.append([a[0],b[0]])
     return [[a+.5,min(duration,b)-.5] for a,b in intervals if b-a>=5]
@@ -94,13 +94,13 @@ def scan(source,scanner):
 
 def confident_action(start,end,observations,motion,cuts):
     """Evidence for generic active-fight B-roll, not a claim of a landed punch."""
-    points=[o for o in observations if start-2.1<=o[0]<=end+2.1]
+    points=[o for o in observations if start-2.1<=o[0]<=end+2.1 and len(o)>=3 and o[1] is not None and o[2]>=.8]
     if len(points)<3 or points[0][0]>start or points[-1][0]<end:return False
     if any(len(o)<3 or o[1] is None or o[2]<.8 for o in points):return False
     direction=None
     for a,b in zip(points,points[1:]):
         dt=b[0]-a[0];dv=b[1]-a[1]
-        if not 0<dt<=2.1 or abs(abs(dv)-dt)>1 or dv==0:return False
+        if not 0<dt<=4.1 or abs(abs(dv)-dt)>1 or dv==0:return False
         sign=1 if dv>0 else -1
         if direction is not None and sign!=direction:return False
         direction=sign
