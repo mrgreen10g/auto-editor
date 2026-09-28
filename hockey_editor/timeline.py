@@ -175,6 +175,7 @@ def placements(block,lines,clip_meta,duration,frequency='normal'):
         if norm(l.text).rstrip('.')==norm(block.title):continue
         if block.language=='uz':
             if block.sport=='combat':from .combat import classify
+            elif block.sport=='hockey':from .uz_hockey import classify
             else:from .uzbek import classify
             title,body=classify(l.text)
             annotation=block.speech_cards.get(str(i))

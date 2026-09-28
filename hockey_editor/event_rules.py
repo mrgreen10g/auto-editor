@@ -15,7 +15,15 @@ def clean(text):
 
 def team_position(name, text, context=()):
     if not name.strip():return None
-    if ru_identity(name):return ru_position(name,text,context)
+    if ru_identity(name):
+        position=ru_position(name,text,context)
+        if position is not None:return position
+        if not re.search('[a-z]',text,re.I):return None
+    from .hockey_names import identity,hits
+    club=identity(name)
+    if club:
+        return next((a for a,z,c in hits(text) if c==club),None)
+    if ru_identity(name):return None
     key = clean(name).split()[0]
     # Short names must not match a suffix (СКА inside ЦСКА).
     pattern = r'\b' + re.escape(key if len(key) <= 4 else key[:6]) + (r'\b' if len(key) <= 4 else r'\w*')
@@ -53,6 +61,9 @@ def requests_for(block, matches, use_manual=True):
         from .combat import events
         return events(block,matches)
     if block.language=='uz':
+        if block.sport=='hockey':
+            from .uz_hockey import events
+            return events(block,matches,use_manual)
         from .uzbek import events
         return events(block,matches)
     sources = [m for m in matches if m.id in block.match_ids]
@@ -62,7 +73,7 @@ def requests_for(block, matches, use_manual=True):
     topic=title_names[0] if title_names else primary.home
     current = primary; subject = 0; previous = {}; finals = {}; result = []
     lines = [s.strip() for s in re.split(r'(?<=[.!?])\s+|\n+', block.script) if s.strip()]
-    requested = [primary.home, primary.away]; active = False; last_generic = -3
+    requested = [primary.home, primary.away]; active = getattr(block,'archive_context',False); last_generic = -3
     names = list(dict.fromkeys([*TEAMS, *[n for m in sources for n in (m.home, m.away)]]))
     for i, phrase in enumerate(lines):
         text = clean(phrase)
@@ -139,4 +150,3 @@ def requests_for(block, matches, use_manual=True):
                                    flexible_source=kind=='play' and not pairs and not known))
         if score: previous[source_id] = score
     return result
-

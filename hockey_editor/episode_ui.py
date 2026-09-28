@@ -87,7 +87,8 @@ class EpisodeMixin:
             try:
                 text=Path(path).read_text(encoding='utf-8-sig');parsed=None
                 if draft.profile.startswith('uz_'):
-                    if draft.profile=='uz_combat':from .combat import parse_script
+                    if draft.profile=='uz_hockey':from .uz_hockey import parse_script
+                    elif draft.profile=='uz_combat':from .combat import parse_script
                     else:from .uzbek import parse_script
                     start,parsed,end=parse_script(text);intro=start.script;outro=end.script;blocks=[(b.title,b.script) for b in parsed]
                 else:intro,blocks,outro=split_full_script(text)

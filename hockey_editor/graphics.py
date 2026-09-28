@@ -78,7 +78,7 @@ def logo_image(path, size=120):
 def match_card(card, path, logos, profile='ru_hockey'):
     width,height=1080,230
     im=panel(width,height,profile=profile);d=ImageDraw.Draw(im)
-    d.text((44,31),'O‘YIN TAHLILI' if profile=='uz_football' else 'РАЗБОР МАТЧА',font=font(16,True),fill='#69dbd3')
+    d.text((44,31),'O‘YIN TAHLILI' if profile in ('uz_football','uz_hockey') else 'РАЗБОР МАТЧА',font=font(16,True),fill='#69dbd3')
     names=block_teams(card.text)
     for i,name in enumerate(names):
         cx=130 if i==0 else 974
@@ -109,8 +109,8 @@ def forecast_card(card,path,profile='ru_hockey'):
     height=85+len(lines)*(size+9)
     if height>260:raise ValueError('Сократите текст основной ставки до команды, типа и значения.')
     im=panel(width,height,(250,190,77,255),profile);d=ImageDraw.Draw(im)
-    d.rounded_rectangle((40,30,260 if profile=='uz_football' else 228,62),radius=10,fill='#fabe4d')
-    d.text((56,36),'MENING TANLOVIM' if profile=='uz_football' else 'МОЙ ВЫБОР',font=font(17,True),fill='#102b40')
+    d.rounded_rectangle((40,30,260 if profile in ('uz_football','uz_hockey') else 228,62),radius=10,fill='#fabe4d')
+    d.text((56,36),'MENING TANLOVIM' if profile in ('uz_football','uz_hockey') else 'МОЙ ВЫБОР',font=font(17,True),fill='#102b40')
     for i,line in enumerate(lines):d.text((48,82+i*(size+9)),line,font=font(size,True),fill='#fff5d9')
     d.line((width-35,35,width-35,height-16),fill='#fabe4d',width=3)
     im.save(path);return (1280-im.width)//2,720-im.height-30
@@ -119,7 +119,7 @@ def section_card(card,path,profile='ru_hockey'):
     im=Image.new('RGBA',(1280,720),'#0c1b2b');d=ImageDraw.Draw(im)
     d.polygon([(920,0),(1140,0),(640,720),(420,720)],fill='#14334a')
     d.polygon([(1160,0),(1200,0),(700,720),(660,720)],fill='#43ccd0')
-    d.text((100,220),(('YAKUNIY TANLOVLAR' if card.title=='ИТОГИ ВЫПУСКА' else 'KEYINGI O‘YIN') if profile=='uz_football' else ('ИТОГИ ВЫПУСКА' if card.title=='ИТОГИ ВЫПУСКА' else 'СЛЕДУЮЩИЙ МАТЧ')),font=font(22,True),fill='#69dbd3')
+    d.text((100,220),(('YAKUNIY TANLOVLAR' if card.title=='ИТОГИ ВЫПУСКА' else 'KEYINGI O‘YIN') if profile in ('uz_football','uz_hockey') else ('ИТОГИ ВЫПУСКА' if card.title=='ИТОГИ ВЫПУСКА' else 'СЛЕДУЮЩИЙ МАТЧ')),font=font(22,True),fill='#69dbd3')
     size=52
     while size>28:
         lines=wrap(d,card.text,font(size,True),1060)
@@ -139,7 +139,7 @@ def card_image(card, path, logos=None,profile='ru_hockey'):
     if card.title=='ПРОГНОЗ':return forecast_card(card,path,profile)
     if card.title in ('СМЕНА МАТЧА','ИТОГИ ВЫПУСКА'):return section_card(card,path,profile)
     label=card.title
-    if profile=='uz_football':
+    if profile in ('uz_football','uz_hockey'):
         from .uzbek import card_label
         label=card_label(card.title)
     forecast=card.title in ('ПРОГНОЗ','УСЛОВИЯ ПРОГНОЗА','ОЖИДАЕМЫЙ СЧЁТ')

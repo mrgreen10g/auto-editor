@@ -366,6 +366,9 @@ def montage_block(project, index, cache, cancel):
     if unresolved(block) and block.sport!='combat':
         raise ValueError(f'Проверьте найденные эпизоды: {len(unresolved(block))}. Можно оставить ведущего вместо вставки.')
     sources = {m.id: m for m in project.matches}
+    if block.sport=='hockey' and block.language=='uz':
+        from .uz_hockey import bind_archives
+        bind_archives(block,project.matches)
     if block.sport=='combat':
         from .combat import bind_confirmed_archives
         bind_confirmed_archives(block,project.matches)

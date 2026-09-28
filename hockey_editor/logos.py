@@ -6,6 +6,9 @@ from .graphics import block_teams
 
 def identity(name,profile):
     if profile=='uz_football':return football_identity(name)
+    if profile=='uz_hockey':
+        from .hockey_names import identity as hockey_identity
+        return hockey_identity(name)
     # Entire filename must identify one club, not a game or a prose mention.
     hits={club for club,patterns in RU.items() for pattern in patterns if any(m.start()==0 and m.end()==len(normalize(name)) for m in _matches(pattern,name))}
     return next(iter(hits)) if len(hits)==1 else None

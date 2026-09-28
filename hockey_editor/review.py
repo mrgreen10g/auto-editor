@@ -82,6 +82,9 @@ def fallback_cards(project, block, lines, duration, reason):
     from .framing import forecast_text, pair_matches, optional_subscription
     from .card_text import classify_card,summarize_card
     from .uzbek import classify,mentions,norm
+    if block.sport=='hockey' and block.language=='uz':
+        from .uz_hockey import classify
+        from .hockey_names import pair_in as mentions
     from .media import probe
     owners=[b for b in project.blocks if b.kind=='analysis']
     cards=[];seen=set()
@@ -419,6 +422,9 @@ def migrate_project(project):
 
 def expected_intro_pair(intro,owner):
     if intro.sport=='combat':return True
+    if intro.language=='uz' and intro.sport=='hockey':
+        from .hockey_names import mentioned
+        return bool(set(mentioned(owner.title)) & set(mentioned(intro.script)))
     if intro.language=='uz':
         from .uzbek import mentions
         return mentions(owner.title,intro.script)

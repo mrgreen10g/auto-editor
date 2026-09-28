@@ -11,6 +11,7 @@ def quality(words):
 
 def preferable(original,retry,profile):
     from .combat_cards import coverage,numbers,classify
+    if profile=='uz_hockey':from .uz_hockey import classify
     a,b=original.get('text',''),retry.get('text','')
     if not b or coverage(a,b)<.72 or not .65<=len(b.split())/max(1,len(a.split()))<=1.6:return False
     if classify(a)[0]=='ПРОГНОЗ' and classify(b)[0]!='ПРОГНОЗ':return False
@@ -33,7 +34,7 @@ def refine(model,audio,segments,project,cancel,log):
     for s in baseline:
         if cancel.is_set():raise Cancelled('Отменено.')
         span=s['end']-s['start'];t=norm(s['text'])
-        important=bool(re.search(r'rekord|statistik|g.alab|mag.lub|nokaut|yosh|foiz|tanlo|santimetr|zarba',t))
+        important=bool(re.search(r'rekord|statistik|g.alab|mag.lub|nokaut|yosh|foiz|tanlo|santimetr|zarba|shayba|total|fora|overtaym|bullit|murabbiy|darvozabon|tarkib|transfer',t))
         if not important or quality(s['words'])>=.80 or not 1<=span<=20 or span>budget:
             result.append(s);continue
         budget-=span;lo=max(0,s['start']-.2);hi=min(len(samples)/rate,s['end']+.2)

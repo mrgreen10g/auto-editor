@@ -10,6 +10,9 @@ from .media import probe,ffmpeg
 
 
 def prepared_script(block):
+    if block.language=='uz' and block.sport=='hockey':
+        from .uz_hockey import clean_script
+        return clean_script(block.script)
     if block.language=='uz':
         from .uzbek import prepared
         return prepared(block)
@@ -51,7 +54,9 @@ def forecast_text(block):
         from .combat import classify
         if block.forecast:return block.forecast
     if block.language=='uz':
-        if block.sport!='combat':from .uzbek import classify
+        if block.sport=='hockey':
+            from .uz_hockey import classify
+        elif block.sport!='combat':from .uzbek import classify
         for i,line in reversed(list(enumerate(split_script(block.script)))):
             title,text=classify(line)
             if title=='ПРОГНОЗ':return block.card_overrides.get(str(i),text)
@@ -70,6 +75,9 @@ def optional_subscription(cards,duration):
 
 
 def framing_cards(project,block,lines,duration):
+    if project.profile=='uz_hockey':
+        from .uz_hockey import framing_cards as hockey_cards
+        return hockey_cards(project,block,lines,duration)
     if project.profile=='uz_combat':
         from .combat import framing_cards as combat_cards
         return combat_cards(project,block,lines,duration)
