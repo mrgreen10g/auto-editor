@@ -127,7 +127,6 @@ class Project:
             raise ValueError('Выберите разбор.')
         block = self.blocks[index]
         if self.profile not in ('ru_hockey','uz_football','uz_combat','uz_hockey'):raise ValueError('Неизвестный шаблон выпуска.')
-        if self.profile=='uz_football' and len(block.match_ids)>1:raise ValueError('Футбол: оставьте одну очную встречу на разбор.')
         expected='uz' if self.profile.startswith('uz_') else 'ru'
         if block.language!=expected:raise ValueError('Язык блока не совпадает с шаблоном ведущего.')
         if len(block.script.strip()) < 30:

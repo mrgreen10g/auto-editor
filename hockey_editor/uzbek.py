@@ -35,6 +35,8 @@ def display_title(line):
                     else w[:1].upper()+w[1:].lower() for w in line.split())
 
 def parse_script(text):
+    from .script_input import clean_script
+    text=clean_script(text)
     sections=[];current=None
     # Author headings may carry advisory time ranges. Strip those ranges
     # before identifying sections; preserve prose and separate recording times.
@@ -45,6 +47,7 @@ def parse_script(text):
     for raw in rows[start:]:
         line=raw.strip().lstrip('\ufeff')
         if not line:continue
+        line=re.sub(r'^\d+[.)]\s+(?=.+\s[—–-]\s)', '', line)
         key=norm(line)
         kind='intro' if key=='kirish' else 'outro' if key in ('yakuniy tanlovlar','yakuniy cta','yakuniy ekspress','xulosa','yakun') else None
         pair=re.fullmatch(r"[A-ZА-ЯЁa-zа-яёʻʼ'’ .0-9]+\s+[—–-]\s+[A-ZА-ЯЁa-zа-яёʻʼ'’ .0-9]+",norm(line))
@@ -72,7 +75,8 @@ def parse_script(text):
 
 def prepared(block):
     if block.asr_lines:return '\n'.join(l['text'] for l in block.asr_lines)
-    values=split_script(block.script);result=[];i=0
+    from .script_input import clean_script
+    values=split_script(clean_script(block.script));result=[];i=0
     while i<len(values):
         line=values[i];t=norm(line)
         promo=('telegram' in t or ("youtube'da" in t and 'prognoz' in t) or ('aytgancha' in t and 'prognoz' in t))
@@ -98,15 +102,17 @@ def mentions(title,text):
 
 def core(text):
     # Remove only introductory speech; retain the actual selection and team names.
-    return re.sub(r"^.*?mening\s+(?:asosiy\s+)?tanlovim\s*[—:–-]?\s*",'',text,flags=re.I).strip(' .')
+    return re.sub(r"^\s*(?:(?:mening|birinchi|ikkinchi|uchinchi|to.rt.inchi|beshinchi)\s+)?(?:asosiy\s+)?tanlovim\s*[—:–-]?\s*",'',text,flags=re.I).strip(' .')
 
 
 def bet(text):
     raw=core(text);t=norm(raw)
-    total=re.search(r"(\d+(?:[,.]\d+)?)\s*(?:ta)?dan\s+(ko'p|kam)\s+gol",t)
+    total=re.search(r"(\d+(?:[,.]\d+)?)\s*(?:ta)?dan\s+(ko'p|kam)(?:\s+gol)?",t)
     pieces=[]
     double=re.search(r"([\w'’ʻʼ .-]+?)\s+\b(1x|x2|12)\b",raw,re.I)
     winner=re.search(r"([\w'’ʻʼ .-]+?)\s+g['’ʻʼ]alab\w*",raw,re.I)
+    unbeaten=re.search(r"([\w'’ʻʼ .-]+?)\s+yutqazma\w*",raw,re.I)
+    if unbeaten and not double:pieces.append(unbeaten[1].strip()+' yutqazmaydi')
     if double:pieces.append(double[1].strip().title()+' '+double[2].upper())
     elif winner:pieces.append(winner[1].strip().title()+' g‘alabasi')
     if total:pieces.append('Jami gollar: '+total[1].replace('.',',')+(' dan ko‘p' if total[2]=="ko'p" else ' dan kam'))
@@ -115,11 +121,12 @@ def bet(text):
 
 
 def classify(text):
-    t=norm(text).replace("go'l","gol").replace("go'il","gol");is_pick='mening tanlovim' in t or 'mening asosiy tanlovim' in t
-    market=bool(re.search(r"\b(?:x2|1x)\b|g'alab|(?:ta)?dan (?:ko'p|kam) gol|fora|total",t))
-    if is_pick or (market and text==text.upper() and re.search('[A-Z]',text)):
+    t=norm(text).replace("go'l","gol").replace("go'il","gol");is_pick=bool(re.search(r'\btanlovim\b',t))
+    market=bool(re.search(r"\b(?:x2|1x)\b|g'alab|(?:ta)?dan (?:ko'p|kam) gol|fora|total|yutqazma",t))
+    if re.search(r'\b(?:olmayman|tanlamayman)\b',t):return None,''
+    if (is_pick and market) or (market and text==text.upper() and re.search('[A-Z]',text)):
         return 'ПРОГНОЗ',bet(text)
-    if re.search(r'\d+:\d+',t) and any(s in t for s in ('mos',"o'tadi",'yetarli')):
+    if re.search(r'\d+:\d+',t) and re.search(r"\bmos\b|o'tadi|yetarli",t):
         return 'УСЛОВИЯ ПРОГНОЗА',', '.join(re.findall(r'\d+:\d+',text))+' — mos keladi'
     if any(s in t for s in ('kamida','kerak',"shart emas",'majburiy emas','qaytar','stavka','tanlovimiz yut')):
         if any(s in t for s in ('gol',"mag'lub",'durang','qaytar','stavka')):
@@ -128,7 +135,7 @@ def classify(text):
             return 'УСЛОВИЯ ПРОГНОЗА',body
     if any(w in t for w in ('jarohat','diskvalifik','safdan chi')):return 'СОСТАВ КОМАНДЫ',text
     from .combat_cards import numbers
-    if numbers(t) and any(w in t for w in ('zarba','foiz','statistika','koeffits','g\'alaba','durang','mag\'lubiyat')):
+    if numbers(t) and any(w in t for w in ('zarba','foiz','statistika','koeffits','g\'alaba','durang','mag\'lub','gol','ochko')):
         return 'СТАТИСТИКА',text
     from .uz_facts import argument
     claim=argument(text)
@@ -137,18 +144,9 @@ def classify(text):
 
 
 def events(block,matches):
-    sources=[m for m in matches if m.id in block.match_ids]
-    if len(sources)>1:raise ValueError('Оставьте одну очную встречу на футбольный разбор.')
-    if not sources:return []
-    result=[]
-    speech=[l['text'] for l in block.asr_lines] if block.asr_lines else split_script(block.script)
-    for index,line in enumerate(speech):
-        t=norm(line);title,_=classify(line)
-        if str(index) in block.speech_cards:title=block.speech_cards[str(index)]['title']
-        if title in ('ПРОГНОЗ','УСЛОВИЯ ПРОГНОЗА','СОСТАВ КОМАНДЫ') or any(v in t for v in ('telegram','obuna','layk')):continue
-        if len(t.split())>=6 or any(w in t for w in ("o'yn","o'yin",'hujum','himoya','vaziyat','nazorat','bosim','hisob','uchrashuv','gollar','birinchi gol','ikkinchi gol','mezbon','mehmon','jamoa','safar','maydon')):
-            result.append(EventRequest(sources[0].id,line,kind='play'))
-    return result
+    from .football_archives import events as archive_events
+    return archive_events(block,matches)
+
 
 
 LABELS={'РАЗБОР МАТЧА':'O‘YIN TAHLILI','ПРОГНОЗ':'MENING TANLOVIM','УСЛОВИЯ ПРОГНОЗА':'TANLOV SHARTLARI','СТАТИСТИКА':'STATISTIKA','ИНФОРМАЦИЯ':'MA’LUMOT','СОСТАВ КОМАНДЫ':'JAMOA TARKIBI','ОЖИДАЕМЫЙ СЧЁТ':'KUTILAYOTGAN HISOB','СМЕНА МАТЧА':'KEYINGI O‘YIN','ИТОГИ ВЫПУСКА':'YAKUNIY TANLOVLAR','ВОПРОС ЗРИТЕЛЯМ':'FIKRINGIZNI YOZING','РЕЗУЛЬТАТ МАТЧА':'O‘YIN NATIJASI','КОЭФФИЦИЕНТЫ':'KOEFFITSIYENTLAR'}

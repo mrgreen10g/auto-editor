@@ -103,7 +103,7 @@ class WorkflowTests(unittest.TestCase):
             save_preset(p,'Сильный',path);p.music='other';p.settings.noise_reduction=6
             apply_preset(p,'Сильный',path)
             self.assertEqual(p.music,'music');self.assertEqual(p.settings.noise_reduction,14);self.assertEqual(p.host,'host')
-            self.assertFalse(presets('uz_combat',path));remember_folder(p,path)
+            self.assertIn('Сильный',presets('uz_combat',path));remember_folder(p,path)
             new=Project();restore_folder(new,path);self.assertEqual(new.logo_folder,folder)
             save=Path(folder)/'project.hockeyproj';p.save(save);loaded=Project.load(save);self.assertEqual(Path(loaded.logo_folder).resolve(),Path(folder).resolve())
 

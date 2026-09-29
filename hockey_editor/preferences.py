@@ -21,19 +21,27 @@ def write(data,path=None):
     temp=target.with_suffix('.tmp');temp.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8');temp.replace(target)
 
 
-def presets(profile,path=None):return read(path).get(profile,{}).get('presets',{})
+def presets(profile,path=None):
+    data=read(path);result=dict(data.get('shared_presets',{}))
+    for source,entry in data.items():
+        if source=='shared_presets' or not isinstance(entry,dict):continue
+        for name,value in entry.get('presets',{}).items():
+            key=name if name not in result else name+' ['+source+']'
+            while key in result:key+=' legacy'
+            result[key]=value
+    return result
 
 
 def save_preset(project,name,path=None):
     if not name.strip():raise ValueError('Введите название шаблона.')
-    data=read(path);entry=data.setdefault(project.profile,{})
-    entry.setdefault('presets',{})[name.strip()]={'settings':asdict(project.settings),'music':project.music,'logo_folder':project.logo_folder}
+    data=read(path)
+    data.setdefault('shared_presets',{})[name.strip()]={'settings':asdict(project.settings),'music':project.music,'logo_folder':project.logo_folder}
     write(data,path)
 
 
 def apply_preset(project,name,path=None):
     value=presets(project.profile,path).get(name)
-    if value is None:raise ValueError('Выберите сохранённый шаблон этого ведущего.')
+    if value is None:raise ValueError('Выберите сохранённый шаблон настроек.')
     settings=Settings(**{k:v for k,v in value['settings'].items() if k in {f.name for f in fields(Settings)}})
     project.settings=settings;project.music=value.get('music','');project.logo_folder=value.get('logo_folder','')
     from .logos import assign

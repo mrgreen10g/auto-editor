@@ -75,7 +75,7 @@ class V07Tests(unittest.TestCase):
   b=Block(language='uz',match_ids=[m.id],script="Avvalgi uchrashuvda Juventus kuchli o'ynadi.\nRoma o'z maydonida hujum qiladi.\nMening tanlovim — Milan X2 va 1,5 tadan ko'p gol.")
   requests=events(b,[m,other]);self.assertEqual(len(requests),2);self.assertTrue(all(e.kind=='play' and e.source_id==m.id and e.score is None for e in requests))
   b.match_ids.append(other.id)
-  with self.assertRaisesRegex(ValueError,'bitta|одну'):events(b,[m,other])
+  self.assertTrue(all(e.source_id==m.id for e in events(b,[m,other])))
  def test_profile_save_and_cache_isolation(self):
   with tempfile.TemporaryDirectory() as d:
    p=Project(host=str(Path(d)/'host.mp4'));Path(p.host).touch();old=project_edit_key(p,0);p.assets={'telegram':'russian.mov'}

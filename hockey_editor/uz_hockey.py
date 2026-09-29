@@ -35,7 +35,7 @@ def parse_script(text):
             if outro is None:outro=Block(title='Yakun',uid='outro',kind='outro',language='uz',sport='hockey')
             current=outro;continue
         title=heading(line)
-        if title and intro is not None and current is not outro and (re.match(r'^\d+[.)]',line) or '|' in line or line.upper()==line):
+        if title and not line.endswith((':','.','!','?')) and intro is not None and current is not outro and (re.match(r'^\d+[.)]',line) or '|' in line or line.upper()==line):
             current=Block(title=title,language='uz',sport='hockey');blocks.append(current);continue
         if current is None or re.fullmatch(r'\d+:\d+\s*[—–-]\s*\d+:\d+',line):continue
         current.script+=('\n' if current.script else '')+line
@@ -49,13 +49,17 @@ def parse_script(text):
 
 def numeric(text):
     t=norm(text)
+    t=re.sub(r"\bto'?(?:r|ri)yam(?:ti)?dan\b","4,5 dan",t)
+    t=re.sub(r'\bbeshta(?:ndan|na|da)\b','5 dan',t)
+    if re.search(r'total|tanlo|varia',t):t=re.sub(r'\b(?:brixs|briggs)\b','1x',t)
     t=re.sub(r'\bbir\s*(?:iks|eks)\b','1x',t)
     t=re.sub(r'\b(?:iks|eks)\s*ikki\b','x2',t)
     t=re.sub(r'\b(?:plyus|plus)\s*','+',t);t=re.sub(r'\bminus\s*','-',t)
     t=t.replace("qo'shimcha vaqt",'overtaym').replace('overtime','overtaym')
     for a,z in [("besh yarim","5,5"),("to'rt yarim","4,5"),("uch yarim","3,5"),("ikki yarim","2,5"),("bir yarim","1,5")]:t=t.replace(a,z)
     for n,w in enumerate(['nol','bir','ikki','uch',"to'rt",'besh','olti','yetti','sakkiz',"to'qqiz", "o'n"]):
-        t=re.sub(r'\b'+re.escape(w)+r'(?:ta)?\b',str(n),t)
+        t=re.sub(r'\b'+re.escape(w)+r'(?:ta)?(?=dan\b|\b)',str(n),t)
+    t=re.sub(r'(\d)(?:ta)?dan\b',r'\1 dan',t)
     return t
 
 def bet(text):
@@ -79,7 +83,7 @@ def bet(text):
 
 def classify(text):
     t=norm(text);body=bet(text)
-    pick=bool(re.search(r'tanlovim|tanlovimiz|tanlayman',t) or (text==text.upper() and re.search('[A-Z]',text)))
+    pick=bool(re.search(r'tanlo\w*|tanlu\w*|tanlayman|varia\w*|qildik',t) or (text==text.upper() and re.search('[A-Z]',text)))
     short_market=bool(len(t.split())<=16 and re.search(r'^total\s+\d|\b(?:1x|x2)\b|\bfora\s*[+-]?\d',numeric(t)))
     pick=pick or (short_market and not re.search(r'emas|olmay|yutqaz|o.tgan|agar|bukmeker',t))
     if pick and body:
@@ -145,11 +149,25 @@ def events(block,matches,use_manual=True):
     for s in sources:s.home=identity(s.home) or s.home;s.away=identity(s.away) or s.away
     result=requests_for(b,sources,use_manual)
     for e in result:e.phrase=mapping.get(e.phrase,e.phrase)
-    return [e for e in result if e.phrase in rows]
+    result=[e for e in result if e.phrase in rows]
+    # Use actual narrated analysis for archive b-roll even without a score cue.
+    from .model import EventRequest
+    assigned=[m for m in sources if m.id in block.match_ids]
+    if not assigned:return result
+    seen={e.phrase for e in result};counts={m.id:0 for m in assigned}
+    for text in rows:
+        t=norm(text);title,_=classify(text)
+        if text in seen or title in ('ПРОГНОЗ','УСЛОВИЯ ПРОГНОЗА') or re.search(r'telegram|havola|obuna|layk|tanlo|varia',t):continue
+        if len(t.split())<5:continue
+        named=set(mentioned(text))
+        choices=[m for m in assigned if named & {identity(m.home),identity(m.away)}] or assigned
+        source=min(choices,key=lambda m:counts[m.id]);counts[source.id]+=1
+        result.append(EventRequest(source.id,text,kind='play',requested_teams=list(owners)))
+    return result
 
 def speech_key(project):
     from .uz_speech import recording_key
-    return hashlib.sha256(json.dumps(['uz-hockey-v1',recording_key(project),project.recording_times,[(b.uid,b.script,b.title) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['uz-hockey-v2',recording_key(project),project.recording_times,[(b.uid,b.script,b.title) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
 
 def intro_annotations(project,segments,lo,hi):
     from .hockey_names import hits
@@ -169,6 +187,12 @@ def intro_annotations(project,segments,lo,hi):
                 if selected and len(selected)<=14:options.append((selected[0]['start'],selected[-1]['end']))
         if options:
             a,z=min(options);annotations.append((a,z,'РАЗБОР МАТЧА',b.title))
+    for b in project.blocks:
+        if any(v[3]==b.title for v in annotations):continue
+        teams=set(mentioned(b.title));single=[(a,z) for a,z,club in found if club in teams]
+        if single:
+            a,z=single[0];selected=[w for start,end,w in spans if start<z and end>a]
+            if selected:annotations.append((selected[0]['start'],selected[-1]['end'],'РАЗБОР МАТЧА',b.title))
     return annotations
 
 def prepare(project,segments,duration):
@@ -183,6 +207,8 @@ def prepare(project,segments,duration):
     if project.settings.cut_pauses:
         from .speech_cleanup import remove_retakes
         segments,cuts=remove_retakes(aligned,segments)
+    from .uz_hockey_support import check_script
+    check_script(project,segments)
     rough=draft_alignment(aligned,segments,duration,'Проверьте границы хоккейного раздела.')
     words=[w for s in segments for w in s.get('words',[])]
     bounds=[0.];floor=intro_floor(words,'uz') if blocks[0].kind=='intro' else 0.;reliable=True
@@ -191,7 +217,7 @@ def prepare(project,segments,duration):
         if b.kind=='analysis':
             choices=[s['start'] for s in segments if s['start']>=max(floor,bounds[-1]+1,approximate-8)-.01 and pair_in(b.title,s['text'])]
         else:
-            choices=[s['start'] for s in segments if s['start']>=max(bounds[-1]+10,approximate-10) and re.search(r'xullas|xulosa|demak|yakun|takror|ko.rib chiqdik',norm(s['text']))]
+            choices=[s['start'] for s in segments if s['start']>=max(bounds[-1]+10,approximate-10) and re.search(r'xullas|qull?as|xulosa|demak|yakun|takror|ko.rib chiqdik',norm(s['text']))]
         if not choices:reliable=False;break
         bounds.append(min(choices,key=lambda x:abs(x-approximate)));floor=bounds[-1]+5
     ranges=list(zip(bounds,bounds[1:]+[duration]))
@@ -208,6 +234,9 @@ def prepare(project,segments,duration):
     for b,(lo,hi) in zip(blocks,ranges):
         local=spoken_segments(slice_segments(segments,lo,hi))
         timed=intro_annotations(project,segments,lo,hi) if b.kind=='intro' else []
+        from .uz_hockey_support import forecast_span
+        pick=forecast_span(b,local,lo,hi) if b.kind=='analysis' else None
+        if pick:timed.append((pick[1],pick[2],'ПРОГНОЗ',pick[3]))
         rows,timed_cards=make_lines(local,lo,hi,timed)
         if rows:
             for row in rows:row['recognized']=row['text']
@@ -221,8 +250,17 @@ def prepare(project,segments,duration):
         # Script-backed forecasts; prose is never turned into subtitle cards.
         if rows:rows[0]['omit']=list(cuts)
         annotations=dict(timed_cards)
+        if b.kind=='intro':
+            for i,card in annotations.items():
+                if card['title']=='РАЗБОР МАТЧА' and not pair_in(card['text'],rows[int(i)]['text']):card.update(needs_review=True,review_reason='Одно название пары распознано неуверенно.')
+        if pick and pick[4]:
+            for card in annotations.values():
+                if card['title']=='ПРОГНОЗ':card.update(needs_review=True,review_reason=pick[4])
         for i,row in enumerate(rows):
+            if str(i) in annotations:continue
             title,body=classify(row['text'])
+            if title=='ПРОГНОЗ' and pick:
+                annotations[str(i)]={'title':None,'text':''};continue
             if title and body:
                 value={'title':title,'text':body}
                 if title=='ПРОГНОЗ' and b.kind=='analysis':
@@ -277,7 +315,11 @@ def synchronize(project,cache,cancel,log):
                 reserved={e.selection.candidate_id for e in b.events if e.source_id==source_id and e.selection and e.selection.accepted}
                 data['candidates']=[c for c in data['candidates'] if c['id'] not in reserved]
             pending=[e for e in b.events if not e.skipped and (not e.selection or not e.selection.accepted)]
-            propose(pending,scans,local,project.settings.allow_other_matches)
+            propose(pending,scans,local,False)
+            for e in pending:
+                if e.selection and e.kind=='play':
+                    m=next(m for m in local if m.id==e.source_id)
+                    e.selection.context_label='Архивные кадры · '+m.title
 
 def framing_cards(project,block,lines,duration):
     from .framing import forecast_text,optional_subscription
@@ -294,7 +336,7 @@ def framing_cards(project,block,lines,duration):
                 if b.uid not in seen:cards.append(Card(line.start,line.end,'РАЗБОР МАТЧА',b.title,i));seen.add(b.uid)
         else:
             title,body=classify(line.text)
-            if title=='ПРОГНОЗ' or (pairs and bet(line.text) and re.search(r'total|\b1x\b|\bx2\b|tanlov|tanlay|g.alabasi',t)):
+            if title=='ПРОГНОЗ' or (owner and bet(line.text) and re.search(r'total|\b1x\b|\bx2\b|tanlov|tanlay|g.alabasi',t)):
                 own=[b for b in project.blocks if set(mentioned(line.text)) & set(mentioned(b.title))]
                 if len(own)==1:owner=own[0]
                 if owner and owner.uid not in seen:

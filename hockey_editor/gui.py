@@ -142,7 +142,7 @@ class App(EpisodeMixin,MatchMixin):
         self.profilebox=ttk.Combobox(profilebar,values=['Хоккей · русский','Футбол · узбекский','Бои · узбекский','Хоккей · узбекский'],state='readonly',width=28)
         self.profilebox.pack(side='left');self.controls.append(self.profilebox)
         self.profilebox.bind('<<ComboboxSelected>>',self.switch_profile)
-        ui.Tooltip(self.profilebox,'Язык речи и плашек, вид спорта и отдельные материалы канала. Футбол: одна очная встреча на каждый разбор.')
+        ui.Tooltip(self.profilebox,'Язык речи и плашек, вид спорта и отдельные материалы канала. Футбол: очные и архивные встречи для каждого разбора.')
         context=ttk.Frame(main);context.pack(fill='x',pady=(0,12))
         ttk.Label(context,text='Разбор',style='Muted.TLabel').pack(side='left',padx=(0,8))
         self.blockbox=ttk.Combobox(context,state='readonly',width=25)

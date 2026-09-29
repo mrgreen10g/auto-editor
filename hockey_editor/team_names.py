@@ -7,7 +7,7 @@ import re
 import unicodedata
 from functools import lru_cache
 
-CATALOG_VERSION = 'teams-2-nhl'
+CATALOG_VERSION = 'teams-3-national'
 
 @lru_cache(maxsize=8192)
 def normalize(text):
@@ -164,6 +164,9 @@ FOOTBALL = {
  'PSG': ('PSG','PSJ','Paris Saint Germain','ПСЖ'),
  'Monaco': ('Monaco','Monako','Монако'),
 }
+from .football_names import NATIONAL
+FOOTBALL.update(NATIONAL)
+
 FOOTBALL_CONTEXT = {'Real': ('Real Madrid',), 'Yunayted': ('Manchester United','Newcastle United'),
                     'United': ('Manchester United','Newcastle United'),
                     'Siti': ('Manchester City','Coventry City','Hull'),
@@ -189,7 +192,10 @@ def football_positions(name,text,context=()):
     suffix=r"(?:'?(?:ning|ni|ga|da|dan|mi))?"
     for alias in football_aliases(name,context):
         pattern=r'\s+'.join(re.escape(w) for w in normalize(alias).split())
-        hits.extend((m.start(),m.end()) for m in re.finditer(r'(?<!\w)'+pattern+suffix+r'(?!\w)',text))
+        matches=re.finditer(r'(?<!\w)'+pattern+suffix+r'(?!\w)',text)
+        for m in matches:
+            if football_identity(name)=='Irlandiya' and re.search(r'(?:northern|shimoliy)\s+$',text[:m.start()]):continue
+            hits.append((m.start(),m.end()))
     return sorted(set(hits))
 
 def football_names(text):

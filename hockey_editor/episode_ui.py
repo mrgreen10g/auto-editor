@@ -82,10 +82,11 @@ class EpisodeMixin:
             timing_field.pack(fill='both',expand=True);timing_field.insert('1.0',draft.recording_times)
             ttk.Button(timing_page,text='Очистить · искать автоматически',command=lambda:timing_field.delete('1.0','end')).pack(anchor='w',pady=10)
         def import_script():
-            path=filedialog.askopenfilename(parent=w,title='Полный сценарий',filetypes=[('Текст UTF-8','*.txt')])
+            path=filedialog.askopenfilename(parent=w,title='Полный сценарий',filetypes=[('Сценарии','*.txt *.docx'),('Текст UTF-8','*.txt'),('Word','*.docx')])
             if not path:return
             try:
-                text=Path(path).read_text(encoding='utf-8-sig');parsed=None
+                from .script_input import read_script
+                text=read_script(path);parsed=None
                 if draft.profile.startswith('uz_'):
                     if draft.profile=='uz_hockey':from .uz_hockey import parse_script
                     elif draft.profile=='uz_combat':from .combat import parse_script
@@ -132,7 +133,7 @@ class EpisodeMixin:
                     path=kit_path(draft.profile);path.parent.mkdir(parents=True,exist_ok=True);tmp=path.with_suffix('.tmp');tmp.write_text(json.dumps(draft.assets,ensure_ascii=False),encoding='utf-8');tmp.replace(path)
                 except OSError as error:return messagebox.showerror('Материалы','Не удалось сохранить набор: '+str(error),parent=w)
             self.project=draft;self.index=min(self.index,len(draft.blocks)-1);self.invalidate();self.refresh();w.destroy()
-        ttk.Button(bottom,text='Загрузить полный сценарий .txt',command=import_script).pack(side='left')
+        ttk.Button(bottom,text='Загрузить сценарий .txt / .docx',command=import_script).pack(side='left')
         ttk.Button(bottom,text='Сохранить',command=apply).pack(side='right')
         ttk.Button(bottom,text='Отмена',command=w.destroy).pack(side='right',padx=8)
         self.framing_window=w;self.framing_fields=fields;self.framing_assets=asset_vars;self.framing_enabled=enabled;self.apply_framing=apply

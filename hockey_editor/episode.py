@@ -41,9 +41,17 @@ def saved_episode(project):
     return None
 
 
+def remap_lines(plan, original):
+    mapping={i:next((j for j,line in enumerate(plan.lines) if line is old),-1) for i,old in enumerate(original)}
+    for card in plan.cards:
+        if card.line>=0:card.line=mapping.get(card.line,-1)
+    for card in plan.edit_baseline.get('cards',[]):
+        if card.get('line',-1)>=0:card['line']=mapping.get(card['line'],-1)
+
+
 def trim_overlap(plan,previous_end):
     """Remove duplicated source frames from padding, without losing spoken audio."""
-    p=copy.deepcopy(plan);removed=0;keep=[]
+    p=copy.deepcopy(plan);original=list(p.lines);removed=0;keep=[]
     for a,b in p.keep:
         # Compare frame-aligned boundaries, not floating-point residues.
         cut=frame(min(b,max(a,previous_end-p.source_start)))
@@ -62,8 +70,9 @@ def trim_overlap(plan,previous_end):
             trimmed=max(0,removed-item.start)
             item.start=frame(max(0,item.start-removed));item.end=frame(item.end-removed)
             if name=='inserts':item.source_in+=trimmed
-            if item.end-item.start>=.15:output.append(item)
+            if item.end-item.start>=(1/60 if name=='lines' else .15):output.append(item)
         setattr(p,name,output)
+    remap_lines(p,original)
     return p
 
 
@@ -76,7 +85,7 @@ def source_time(plan,output_time):
 
 
 def crop_padding_at_next_speech(plan,next_plan):
-    p=copy.deepcopy(plan)
+    p=copy.deepcopy(plan);original=list(p.lines)
     last=p.source_start+p.keep[-1][1]
     if next_plan.source_start>=last or not next_plan.lines:return p
     boundary=frame(source_time(next_plan,next_plan.lines[0].start))
@@ -93,8 +102,9 @@ def crop_padding_at_next_speech(plan,next_plan):
         values=[]
         for item in getattr(p,name):
             item.end=min(item.end,p.duration)
-            if item.end-item.start>=.15:values.append(item)
+            if item.end-item.start>=(1/60 if name=='lines' else .15):values.append(item)
         setattr(p,name,values)
+    remap_lines(p,original)
     return p
 
 

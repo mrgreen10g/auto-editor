@@ -114,8 +114,6 @@ class MatchMixin:
         from .gui import VIDEO
         self.collect()
         changed = False
-        if self.project.profile=='uz_football' and self.project.blocks[self.index].match_ids:
-            return messagebox.showinfo('Очная встреча','В этом разборе уже есть запись. Уберите её, чтобы выбрать другую.')
         for path in filedialog.askopenfilenames(title='Полные записи исходных матчей', filetypes=VIDEO):
             existing = next((m for m in self.project.matches if Path(m.path).resolve() == Path(path).resolve()), None)
             if existing is None:
@@ -145,14 +143,12 @@ class MatchMixin:
                     messagebox.showinfo('Боец','Запись назначена бойцу вне выбранной пары.');continue
             if source.id not in block.match_ids:
                 block.match_ids.append(source.id); changed = True
-            if self.project.profile=='uz_football':break
         if changed:
             self.project.blocks[self.index].events = []
             self.invalidate(); self.refresh()
 
     def reuse_match(self):
         self.collect(); block = self.project.blocks[self.index]
-        if self.project.profile=='uz_football' and block.match_ids:return messagebox.showinfo('Очная встреча','Уберите текущую запись перед выбором другой.')
         sources = [m for m in self.project.matches if m.id not in block.match_ids and (m.sport=='combat')==(self.project.profile=='uz_combat')]
         if not sources:
             return messagebox.showinfo('Записи проекта', 'Других записей пока нет. Добавьте файл кнопкой «+ Записи».')

@@ -49,6 +49,11 @@ for club,code,extra in zip(NHL,CODES,PHONETIC):
     ALIASES[club]=tuple(dict.fromkeys(x for x in aliases if x))
 ALIASES['New York Rangers']+=('NY Rangers',)
 ALIASES['New York Islanders']+=('NY Islanders',)
+ALIASES['Carolina Hurricanes']+=('Korolina','Korelina','Koralini','Karolino','Hurri Keyens','Hurrikens')
+ALIASES['Florida Panthers']+=('Panzers','Panzas',)
+ALIASES['Toronto Maple Leafs']+=('Taronto','Tarolta')
+ALIASES['Boston Bruins']+=("Bo’ston",'Bostern','Bruynes')
+ALIASES['New York Rangers']+=('Renjers','Rinjers')
 
 @lru_cache(maxsize=1)
 def patterns():

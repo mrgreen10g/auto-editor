@@ -6,12 +6,12 @@ def compact(text):return re.sub(r'[^a-z0-9]','',norm(text))
 
 def features(text):
     t=norm(text);c=compact(text)
-    chance='x2' if re.search(r'x(?:2|ikki)|[ei]ks?ik{1,2}i|sikki',c) else '1x' if re.search(r"\b1\s*x\b|\bbir\s*(?:iks|eks)\b",t) else '12' if re.search(r"\b12(?=\s+(?:va|variant)\b|$)",t) else None
-    double=chance is not None
+    chance='x2' if re.search(r'x(?:2|ikki)|[ei]ks?ik{1,2}i|sikki|2x',c) else '1x' if re.search(r"\b1\s*x\b|\bbir\s*(?:iks|eks)\b",t) else '12' if re.search(r"\b12(?=\s+(?:va|variant)\b|$)",t) else None
+    double=chance is not None or bool(re.search(r'yutqaz[ai]?m',c))
     winner=bool(re.search(r'[gq]alab',c)) and not double
     cue=bool(re.search(r'tanlo|varia|qildik|qilaqold',c))
     phonetic_total=bool(cue and re.search(r"\bko'l\b",t) and ("ko'p" in t or re.search(r'\bkam\b',t)))
-    total=bool(re.search(r'g[ou]i?l',c) or ('umumiy' in c and ("ko'p" in t or 'son' in c)) or phonetic_total)
+    total='total' in t or bool(re.search(r'g[ou]i?l',c) or ('umumiy' in c and ("ko'p" in t or 'son' in c)) or phonetic_total)
     ordinal=next((n for pattern,n in ((r'\bbirinchi',0),(r'\b(?:ikkinchi|ikinchi|kinchi|ekin(?:chi|ji))',1),(r'\buch(?:i|ri)nchi',2),(r'\b(?:tortinchi|to.rt.inchi)',3),(r'\boxirgi',-1)) if re.search(pattern,t)),None)
     if ordinal is None:
         ordinal=next((n for n,word in enumerate(['beshinchi','oltinchi','yettinchi','sakkizinchi',"to'qqizinchi", "o'ninchi"],4) if word in t),None)
@@ -21,7 +21,7 @@ def features(text):
     value=re.search(r"\b(\d+(?:[,.]\d+)?)\s*(?:ta)?dan\s+(?:ko'p|kam)\b",t)
     if value:value=float(value[1].replace(',','.'))
     else:
-        value=next((n+.5 for word,n in [('bir',1),('ikki',2),('uch',3),('to.rt',4)] if re.search(r'\b'+word+r'\s+yarim',t)),None)
+        value=next((n+.5 for word,n in [('bir',1),('ikki',2),('uch',3),('to.rt',4)] if re.search(r'\b'+word+r'\s+(?:yarim|butun\s+besh)',t)),None)
     direction='under' if re.search(r'\bkam\b',t) else 'over' if "ko'p" in t else None
     return dict(chance=chance,double=double,winner=winner,total=total,cue=cue,ordinal=ordinal,value=value,direction=direction)
 
@@ -95,14 +95,35 @@ def score(candidate,owner,reference,index,owners,recap=True):
     if not recap and re.search(r'varia|qildik|qila qold',norm(candidate['text'])):strength+=3
     if others:strength-=9
     strength-=.035*(candidate['end']-candidate['start'])
-    review=matched<len(required) or (expected['value'] is not None and f['value'] is None) or strengths[index]<.85
+    review=bool(re.search(r'\b2\s*x\b',norm(candidate['text']))) or matched<len(required) or (expected['value'] is not None and f['value'] is None) or strengths[index]<.85
     return strength,review
 
 def match_forecasts(segments,lo,hi,owners,references,recap=True):
     candidates=windows(segments,lo,hi)
+    if recap and len(owners)>1:
+        # ASR may put several fixture recaps in one sentence. Split by ownership.
+        from .graphics import block_teams
+        for words in clauses(segments,lo,hi):
+            tagged=[]
+            for k,owner in enumerate(owners):
+                for team in block_teams(owner.title):
+                    tagged.extend((a,z,k) for a,z,strength in active_name_hits(team,words) if strength>=.88)
+            tagged.sort();starts=[];last=None
+            for a,z,k in tagged:
+                if k!=last:starts.append(a);last=k
+            if len(starts)<2:continue
+            starts[0]=0
+            for a,z in zip(starts,starts[1:]+[len(words)]):
+                selected=words[a:z]
+                if not selected:continue
+                text=' '.join(w['word'] for w in selected)
+                candidates.append(dict(start=selected[0]['start'],end=selected[-1]['end'],text=text,words=selected,features=features(text)))
     if not recap:
         # One analysis has its own known fixture; ordinals describe episode position.
-        for c in candidates:c['features']['ordinal']=None
+        for c in candidates:
+            c['features']['ordinal']=None
+            t=norm(c['text'])
+            if c['start']>=lo+(hi-lo)*.5 and re.search(r'kutilmoqda|yutqaz[ai]?m',t) and not re.search(r'olmagan|olmayman|yoqmagan',t):c['features']['cue']=True
     scored_choices=[]
     for index,owner in enumerate(owners):
         choices=[]

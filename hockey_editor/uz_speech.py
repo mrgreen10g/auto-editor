@@ -17,7 +17,7 @@ def recording_key(project):
     data=[]
     for name in project.host_paths():
         p=Path(name).resolve();s=p.stat();data.append([str(p),s.st_size,s.st_mtime_ns])
-    return hashlib.sha256(json.dumps([MODEL_REV,'selective-refine-v1',project.profile,[b.title for b in project.blocks],data]).encode()).hexdigest()
+    return hashlib.sha256(json.dumps([MODEL_REV,'beam5-vocabulary-v2',recognition_prompt(project),project.profile,[b.title for b in project.blocks],data]).encode()).hexdigest()
 
 def speech_key(project):
     return hashlib.sha256(json.dumps(['uz-speech-9-manual-review',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
@@ -56,7 +56,9 @@ def recognition_prompt(project):
         people=list(dict.fromkeys(re.findall(r'\b(?:[A-Z][a-z]+)+(?:\s+(?:[A-Z][a-z]+)+){1,2}\b',text)))
         names+='; '+'; '.join(people)
         terms="NHL, KHL, xokkey, shayba, gol, overtaym, bullit, asosiy vaqt, total, fora, power play, penalty kill, zveno, darvozabon"
-    return names[:600]+'. '+terms
+    from .speech_lexicon import script_names
+    people=script_names(project)
+    return names[:400]+'. '+people[:700]+'. '+terms
 
 
 def transcribe(project,cache,cancel,log):
@@ -72,7 +74,7 @@ def transcribe(project,cache,cancel,log):
     model=WhisperModel(str(model_dir),device='cpu',compute_type='int8',cpu_threads=min(4,os.cpu_count() or 2),local_files_only=True)
     result=[]
     try:
-        segments,_=model.transcribe(str(audio),language='uz',word_timestamps=True,beam_size=1,vad_filter=False,condition_on_previous_text=False)
+        segments,_=model.transcribe(str(audio),language='uz',word_timestamps=True,beam_size=5,vad_filter=False,condition_on_previous_text=False,initial_prompt=recognition_prompt(project))
         for s in segments:
             if cancel.is_set():raise Cancelled('Отменено.')
             words=[{'word':w.word,'start':w.start,'end':w.end,'probability':w.probability} for w in s.words if w.end>w.start]
@@ -172,7 +174,7 @@ def contextual_telegram_spans(block,segments,lo,hi):
 
 def recap_cue(text):
     t=norm(text)
-    return bool(re.search(r'qaytar|takror|yakun|xulosa|jaml',t) or
+    return bool(re.search(r'qaytar|takror|yakun|xulosa|jaml|(?:demak|deming).*bugungi.*tanlo',t) or
                 (re.search(r'eslat|isatib',t) and re.search(r'tanlovlar|variantlar',t) and re.search(r'yana|oxir|qisqacha',t)))
 
 def sections(project,segments):
@@ -351,6 +353,10 @@ def synchronize(project,cache,cancel,log):
         scans={m.id:GoalScanner(cancel=cancel,log=log).scan(m) for m in local}
         actual=copy.deepcopy(b);actual.script='\n'.join(l['text'] for l in b.asr_lines)
         b.events=propose(events(actual,local),scans,local,False)
+        for event in b.events:
+            if event.selection:
+                source=next(m for m in local if m.id==event.source_id)
+                event.selection.context_label='Архивные кадры · '+source.title
 
 
 
