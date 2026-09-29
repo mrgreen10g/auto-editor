@@ -62,7 +62,7 @@ def validate_plan(plan, check_files=True):
                 raise ValueError('Telegram должен занимать ровно фразу о канале и ссылке. Измените текст начала или конца и определите тайминги заново.')
         if not c.text.strip(): raise ValueError('Плашка пуста. Удалите её или введите текст.')
     if not plan.keep or any(not all(math.isfinite(v) for v in (a,b)) or a<0 or b<=a for a,b in plan.keep):
-        raise ValueError('Повреждена дорожка речи.')
+        raise ValueError('Некорректные интервалы в монтажной разметке речи. Это не означает повреждение аудиофайла. Определите тайминги заново.')
     if abs(sum(b-a for a,b in plan.keep)-plan.duration)>.07:
         raise ValueError('Длительность речи не совпадает с дорожкой.')
     if plan.media:

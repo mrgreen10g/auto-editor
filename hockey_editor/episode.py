@@ -45,7 +45,8 @@ def trim_overlap(plan,previous_end):
     """Remove duplicated source frames from padding, without losing spoken audio."""
     p=copy.deepcopy(plan);removed=0;keep=[]
     for a,b in p.keep:
-        cut=min(b,max(a,previous_end-p.source_start))
+        # Compare frame-aligned boundaries, not floating-point residues.
+        cut=frame(min(b,max(a,previous_end-p.source_start)))
         removed+=cut-a
         if b>cut:keep.append((frame(cut),b))
     if removed>1.0:raise AlignmentError('Разборы пересекаются в записи. Проверьте порядок сценариев и соответствие текстов речи.')
@@ -80,7 +81,9 @@ def crop_padding_at_next_speech(plan,next_plan):
     if next_plan.source_start>=last or not next_plan.lines:return p
     boundary=frame(source_time(next_plan,next_plan.lines[0].start))
     if not last-1<=boundary<last:return p
-    limit=boundary-p.source_start
+    # Subtraction can leave an epsilon beyond a cut (e.g. 109.3 seconds).
+    # Such a sliver becomes a zero-length interval in the combined timeline.
+    limit=frame(boundary-p.source_start)
     p.keep=[(a,min(b,limit)) for a,b in p.keep if a<limit]
     p.duration=frame(sum(b-a for a,b in p.keep));p.source_end=boundary
     if p.media:
@@ -265,4 +268,3 @@ class EpisodeEngine(Engine):
     def render(self,plan,target,draft=False):
         self.validate_all()
         return super().render(plan,target,draft)
-
