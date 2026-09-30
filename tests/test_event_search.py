@@ -1,4 +1,5 @@
 import copy
+import os
 import queue
 import tempfile
 import threading
@@ -7,7 +8,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from hockey_editor.event_rules import requests_for
-from hockey_editor.event_search import needs_search, record_completion
+from hockey_editor.event_search import needs_search, record_completion, search_key
 from hockey_editor.goals import Candidate, propose, unresolved, montage_block
 from hockey_editor.gui import App
 from hockey_editor.match_ui import MatchMixin
@@ -138,6 +139,19 @@ class EventSearchTests(unittest.TestCase):
         App.primary_action(app)
         app.edit_event.assert_called_once()
         app.start.assert_not_called()
+
+    def test_equivalent_paths_keep_search_status(self):
+        with tempfile.TemporaryDirectory() as d:
+            folder=Path(d);(folder/'nested').mkdir()
+            file=folder/'match.mp4';file.write_bytes(b'video')
+            source=MatchSource(str(folder/'nested'/'..'/'match.mp4'),'СКА','Лада')
+            block=Block(match_ids=[source.id],script='Мой выбор — победа СКА.')
+            key=search_key(block,[source],False)
+            source.path=str(file.resolve())
+            self.assertEqual(search_key(block,[source],False),key)
+            if os.name=='nt':
+                source.path=source.path.upper().replace('\\','/')
+                self.assertEqual(search_key(block,[source],False),key)
 
     def test_pending_block_does_not_replace_other_blocks(self):
         source = MatchSource('game.mp4', 'СКА', 'Лада')

@@ -2,7 +2,12 @@
 from dataclasses import asdict
 import hashlib
 import json
+import os
 from pathlib import Path
+
+
+def normalized_path(value):
+    return os.path.normcase(str(Path(value).resolve())) if value else ''
 
 
 def search_key(block, matches, use_manual):
@@ -19,10 +24,18 @@ def search_key(block, matches, use_manual):
             stamp = [stat.st_size, stat.st_mtime_ns]
         except OSError:
             stamp = None
-        sources.append([asdict(source), stamp])
+        metadata = asdict(source)
+        metadata['path'] = normalized_path(source.path)
+        sources.append([metadata, stamp])
+    clips = []
+    if use_manual:
+        for clip in block.clips:
+            metadata = asdict(clip)
+            for field in ('path', 'origin_path'):
+                metadata[field] = normalized_path(metadata[field])
+            clips.append(metadata)
     data = ['event-search-v1', block.title, block.script, block.language,
-            block.sport, sources, use_manual,
-            [asdict(c) for c in block.clips] if use_manual else []]
+            block.sport, sources, use_manual, clips]
     return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
 
 
