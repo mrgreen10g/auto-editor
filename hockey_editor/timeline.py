@@ -199,6 +199,9 @@ def placements(block,lines,clip_meta,duration,frequency='normal'):
             body=block.card_overrides[str(i)];title=title or 'ИНФОРМАЦИЯ'
         if title and body.strip() and l.end-l.start>=.15:
             cards.append(Card(l.start,l.end,title,body,i))
+    if block.language=='ru' or block.sport=='hockey':
+        from .nhl_players import cards as player_cards
+        cards.extend(player_cards(block,lines,cards))
     return inserts,cards,warnings
 
 def zoom_windows(duration,inserts):

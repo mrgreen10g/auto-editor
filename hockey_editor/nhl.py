@@ -24,7 +24,7 @@ Montreal Canadiens|Montreal|монреал\\w*|канадиенс|канадие
 Nashville Predators|Nashville|нэшвилл\\w*|нешвилл\\w*|предаторз
 New Jersey Devils|New Jersey|нью[- ]джерси|девилз
 New York Islanders|Islanders|нью[- ]йорк\\s+айлендерс|айлендерс\\w*
-New York Rangers|Rangers|нью[- ]йорк\\s+рейнджерс|рейнджерс\\w*|рэйнджерс\\w*
+New York Rangers|Rangers|нью[- ]йорк\\s+рейнджерс|рейнджер(?:с\\w*|\\s+с)?|рэйнджерс\\w*
 Ottawa Senators|Ottawa|оттав\\w*|сенаторз
 Philadelphia Flyers|Philadelphia|филадельфи\\w*|флайерз|флайерс
 Pittsburgh Penguins|Pittsburgh|питтсбург\\w*|питсбург\\w*|пингвинз

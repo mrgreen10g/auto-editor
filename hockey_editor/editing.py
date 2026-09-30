@@ -11,6 +11,7 @@ from .timeline import Plan
 def project_edit_key(project, index):
     block = asdict(project.blocks[index]); block.pop('edit_plan',None);block.pop('edit_key',None)
     block.pop('event_search_key',None)  # Search status does not change the montage.
+    if project.profile in ('ru_hockey','uz_hockey'):block['player_cards_version']='nhl-v1'
     for field in ('asr_lines','speech_key','speech_cards'):
         if not block.get(field):block.pop(field,None)
     if block.get('language')=='ru':block.pop('language',None)
@@ -29,7 +30,7 @@ def project_edit_key(project, index):
         if clip.get('origin_path'):clip['origin_path']=identity(clip['origin_path'])
     data=['workflow-0.7.15',block,structural,identity(project.host),
           [(m.id,m.home,m.away,identity(m.path),m.score_box) for m in project.matches if m.id in block['match_ids']]]
-    if project.full_video and project.profile=='ru_hockey':data.append('intro-boundary-v2')
+    if project.full_video and project.profile=='ru_hockey':data.append('intro-boundary-v3-exact-nhl')
     if project.profile!='ru_hockey':data.append(['uz-montage-v2',project.profile,project.recording_times,[(m.id,m.fighter,m.sport) for m in project.matches if m.id in block['match_ids']]])
     if len(project.host_paths())>1:data.append([identity(path) for path in project.host_paths()])
     return hashlib.sha256(json.dumps(data,ensure_ascii=False,sort_keys=True).encode()).hexdigest()

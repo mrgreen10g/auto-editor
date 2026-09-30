@@ -200,7 +200,10 @@ def preserve_edits(previous,plan):
     plan.cards=[c for c in plan.cards if c.review_id not in deleted]
     fresh={c.review_id:c for c in plan.cards}
     for ident,card in current.items():
-        if ident in baseline and asdict(card)==baseline[ident]:continue
+        authored=('start','end','title','text','asset','source_in','forecast_id')
+        # Confirming a card may clear its line/review metadata. That is not a
+        # manual timing edit and must not freeze an obsolete automatic boundary.
+        if ident in baseline and all(getattr(card,k)==baseline[ident].get(k,getattr(card,k)) for k in authored):continue
         changed=copy.deepcopy(card)
         changed.start=output_time(plan,source_time(old,card.start));changed.end=output_time(plan,source_time(old,card.end))
         if changed.end-changed.start<.15:

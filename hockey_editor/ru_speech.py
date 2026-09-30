@@ -39,7 +39,13 @@ def model_path(cancel,log):
 
 def recording_key(project):
     from .host_media import identity
-    return hashlib.sha256(json.dumps([MODEL_REV,[identity(p) for p in project.host_paths()]]).encode()).hexdigest()
+    return hashlib.sha256(json.dumps([MODEL_REV,'nhl-names-v1',recognition_prompt(project),[identity(p) for p in project.host_paths()]]).encode()).hexdigest()
+
+def recognition_prompt(project):
+    from .nhl_players import prompt_names
+    text='\n'.join(b.script for b in project.blocks)
+    names=prompt_names(text)
+    return '; '.join(names)[:1500] or None
 
 def transcribe(project,cache,cancel,log):
     folder=Path(cache)/'ru-speech';folder.mkdir(parents=True,exist_ok=True)
@@ -57,7 +63,7 @@ def transcribe(project,cache,cancel,log):
     result=[]
     log('Распознаю русскую речь на компьютере для проверки порядка частей…')
     try:
-        segments,_=model.transcribe(str(audio),language='ru',word_timestamps=True,beam_size=5,vad_filter=False,condition_on_previous_text=False)
+        segments,_=model.transcribe(str(audio),language='ru',word_timestamps=True,beam_size=5,vad_filter=False,condition_on_previous_text=False,initial_prompt=recognition_prompt(project))
         for s in segments:
             if cancel.is_set():raise Cancelled('Отменено.')
             words=[{'word':w.word,'start':w.start,'end':w.end} for w in s.words if w.end>w.start]
@@ -70,7 +76,8 @@ def transcribe(project,cache,cancel,log):
 
 def tokens(text):
     from .nhl import speech_names
-    text=speech_names(text.lower().replace('ё','е'))
+    from .nhl_players import normalize_speech
+    text=speech_names(normalize_speech(text.lower().replace('ё','е')))
     text=re.sub(r'(\d)\s*([,.])\s*(\d)',r'\1\2\3',text)
     text=re.sub(r'\bcska\b|\bцск\b','цска',text)
     text=re.sub(r'\b(?:ska|sk)\b','ска',text)
@@ -178,6 +185,8 @@ def prepare(project,blocks,cache,cancel,log):
 def speech_word_units(words):
     """Keep multiword club names/decimals intact across ASR word boundaries."""
     from .nhl import NHL
+    from .nhl_players import vocabulary,plain
+    player_pattern=vocabulary()[1]
     patterns=[re.compile('(?:'+p[0]+')',re.I) for p in NHL.values()]
     result=[];i=0
     while i<len(words):
@@ -186,7 +195,7 @@ def speech_word_units(words):
             window=words[i:i+size]
             if any(b['start']-a['end']>.8 for a,b in zip(window,window[1:])):continue
             value=' '.join(w['word'].strip() for w in window).strip(' .,!?:;«»').replace('ё','е')
-            if any(p.fullmatch(value) for p in patterns) or re.fullmatch(r'\d+\s*[,.]\s*\d+',value):
+            if any(p.fullmatch(value) for p in patterns) or player_pattern.fullmatch(plain(value)) or re.fullmatch(r'\d+\s*[,.]\s*\d+',value):
                 count=size;break
         window=words[i:i+count]
         result.append(dict(words[i],word=' '.join(w['word'].strip() for w in window),end=window[-1]['end']))

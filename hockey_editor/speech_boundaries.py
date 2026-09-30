@@ -3,6 +3,13 @@ import re
 from difflib import SequenceMatcher
 
 
+def token_similarity(a,b):
+    # NHL identity tokens differ by only one letter. Fuzzy comparison would
+    # treat Boston, Rangers and Tampa as the same club.
+    if a.startswith('nhl') or b.startswith('nhl'):return float(a==b)
+    return SequenceMatcher(None,a,b).ratio()
+
+
 def intro_floor(words,language='ru',limit=150):
     early=[w for w in words if w['start']<limit];floor=0.;promo=False
     for i,w in enumerate(early):
@@ -27,15 +34,17 @@ def first_analysis_start(blocks,segments):
     if len(targets)!=2:return None
     for i,w in enumerate(words):
         if not floor-.01<=w['start']<=min(floor+65,180):continue
-        if not any(any(SequenceMatcher(None,t,n).ratio()>=.65 for n in target) for target in targets for t in tokens(w['word'])):continue
+        if not any(any(token_similarity(t,n)>=.65 for n in target) for target in targets for t in tokens(w['word'])):continue
         hay=tokens(' '.join(v['word'] for v in words[i:i+18]));positions=[]
         for target in targets:
             choices=[]
             for j in range(len(hay)-len(target)+1):
-                scores=[SequenceMatcher(None,a,b).ratio() for a,b in zip(target,hay[j:j+len(target)])]
+                scores=[token_similarity(a,b) for a,b in zip(target,hay[j:j+len(target)])]
                 if min(scores)>=.65:choices.append((sum(scores)/len(scores),j))
-            positions.append(max(choices) if choices else None)
-        if all(positions) and min(p[0] for p in positions)>=.75 and 0<abs(positions[0][1]-positions[1][1])<=max(len(t) for t in targets)+3:return w['start']
+            positions.append(max(choices,key=lambda p:(p[0],-p[1])) if choices else None)
+        if all(positions) and min(p[0] for p in positions)>=.75 and 0<abs(positions[0][1]-positions[1][1])<=max(len(t) for t in targets)+3:
+            candidate=script_analysis_start(blocks,segments)
+            return min(w['start'],candidate) if candidate is not None and candidate>=floor-.01 else w['start']
     candidate=script_analysis_start(blocks,segments)
     return candidate if candidate is not None and candidate>=floor-.01 else None
 
@@ -63,7 +72,7 @@ def script_analysis_start(blocks,segments):
     from .ru_speech import tokens
     from .framing import prepared_script
     first=next((b for b in blocks if b.kind=='analysis'),None)
-    if first is None:return None
+    if first is None or not first.script.strip():return None
     body=[t for t in split_script(first.script) if t.strip('. ')!=first.title.strip('. ')]
     if not body:return None
     target=tokens(' '.join(body[:2]))[:24]
@@ -86,8 +95,11 @@ def script_analysis_start(blocks,segments):
     from .graphics import block_teams
     from .event_rules import team_position
     start=owners[i];names=block_teams(first.title)
+    floor=intro_floor(words)
     for j in range(max(0,start-10),start):
         phrase=' '.join(w['word'] for w in words[j:start])
-        if words[start]['start']-words[j]['start']<=6 and all(team_position(n,phrase,names) is not None for n in names):
+        if (words[j]['start']>=floor-.01 and words[start]['start']-words[j]['start']<=6
+                and any(team_position(n,words[j]['word'],names)==0 for n in names)
+                and all(team_position(n,phrase,names) is not None for n in names)):
             start=j;break
     return words[start]['start']

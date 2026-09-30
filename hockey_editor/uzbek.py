@@ -150,7 +150,7 @@ def events(block,matches):
 
 
 LABELS={'РАЗБОР МАТЧА':'O‘YIN TAHLILI','ПРОГНОЗ':'MENING TANLOVIM','УСЛОВИЯ ПРОГНОЗА':'TANLOV SHARTLARI','СТАТИСТИКА':'STATISTIKA','ИНФОРМАЦИЯ':'MA’LUMOT','СОСТАВ КОМАНДЫ':'JAMOA TARKIBI','ОЖИДАЕМЫЙ СЧЁТ':'KUTILAYOTGAN HISOB','СМЕНА МАТЧА':'KEYINGI O‘YIN','ИТОГИ ВЫПУСКА':'YAKUNIY TANLOVLAR','ВОПРОС ЗРИТЕЛЯМ':'FIKRINGIZNI YOZING','РЕЗУЛЬТАТ МАТЧА':'O‘YIN NATIJASI','КОЭФФИЦИЕНТЫ':'KOEFFITSIYENTLAR'}
-def card_label(title):return LABELS.get(title,'MA’LUMOT')
+def card_label(title):return 'NHL O‘YINCHILARI' if title=='ИГРОКИ NHL' else LABELS.get(title,'MA’LUMOT')
 
 
 def framing_cards_uz(project,block,lines,duration):
