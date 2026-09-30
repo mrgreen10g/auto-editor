@@ -77,7 +77,11 @@ def requests_for(block, matches, use_manual=True):
     names = list(dict.fromkeys([*TEAMS, *[n for m in sources for n in (m.home, m.away)]]))
     for i, phrase in enumerate(lines):
         text = clean(phrase)
-        if 'по счету жду' in text or 'мой выбор' in text: break
+        # A mention of a choice is not its announcement: «мой выбор стал
+        # интереснее» may introduce the entire analysis.
+        if 'по счету жду' in text or re.match(
+                r'^(?:(?:но|итак|поэтому|а)\s+)?(?:мой выбор|мой прогноз|основной прогноз)'
+                r'\s*(?:[—–:=-]|это\b)', text): break
         if clean(block.title) == text.rstrip('.'): continue
         if any(w in text for w in ('ставка проходит','ставка выигрывает','возврат')):
             active=False;continue

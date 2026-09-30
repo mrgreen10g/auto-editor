@@ -14,6 +14,7 @@ from tkinter import ttk, filedialog, messagebox, simpledialog
 from .model import Project, Block, Clip
 from .match_ui import MatchMixin
 from .goals import unresolved
+from .event_search import needs_search
 from .engine import Engine
 from .episode import EpisodeEngine,saved_episode
 from .media import Cancelled
@@ -417,7 +418,7 @@ class App(EpisodeMixin,MatchMixin):
         if self.page=='settings':return self.show_page('export' if self.plan else 'materials')
         for i in self.selected_indices():
             b=self.project.blocks[i]
-            if b.match_ids and not b.events and not (self.use_manual.get() and b.clips):
+            if needs_search(b,self.project.matches,self.use_manual.get()):
                 return self.search_matches()
         for i in self.selected_indices():
             b=self.project.blocks[i]
@@ -558,7 +559,7 @@ class App(EpisodeMixin,MatchMixin):
                   'export': 'Собрать MP4', 'settings': 'Готово · вернуться'}
         selected=[self.project.blocks[i] for i in self.selected_indices()]
         pending=sum(len(unresolved(b)) for b in selected)
-        unsearched=any(b.match_ids and not b.events and not (self.use_manual.get() and b.clips) for b in selected)
+        unsearched=any(needs_search(b,self.project.matches,self.use_manual.get()) for b in selected)
         if not missing:self.readiness.set(f'Разборов: {len(selected)} · Эпизодов для проверки: {pending}')
         if self.page!='settings':
             if unsearched:labels[self.page]='Найти голы →'

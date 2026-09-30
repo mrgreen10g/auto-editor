@@ -141,6 +141,10 @@ def events(block,matches,use_manual=True):
     from .event_rules import requests_for
     b=copy.deepcopy(block);b.language='ru';b.sport='';b.title=canonicalize(block.title);b.archive_context=True
     rows=[l['text'] for l in block.asr_lines] if block.asr_lines else split_script(clean_script(block.script))
+    # Apply these exclusions before the shared RU archive selector as well as
+    # the fallback below: calls to subscribe are not gameplay narration.
+    rows=[t for t in rows if classify(t)[0] not in ('ПРОГНОЗ','УСЛОВИЯ ПРОГНОЗА')
+          and not re.search(r'telegram|havola|obuna|layk|tanlo|varia|ko.rishguncha',norm(t))]
     rows=[t for t in rows if not (pair_in(block.title,t) and len(t.split())<=12 and not re.search(r'\d+\s*:\s*\d+|yut|mag.lub|g.alaba',norm(t)))]
     mapping={hockey_semantics(t):t for t in rows};b.script='\n'.join(mapping)
     for c in b.clips:c.phrase=hockey_semantics(c.phrase)

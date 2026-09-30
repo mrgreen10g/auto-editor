@@ -10,6 +10,7 @@ from .timeline import Plan
 
 def project_edit_key(project, index):
     block = asdict(project.blocks[index]); block.pop('edit_plan',None);block.pop('edit_key',None)
+    block.pop('event_search_key',None)  # Search status does not change the montage.
     for field in ('asr_lines','speech_key','speech_cards'):
         if not block.get(field):block.pop(field,None)
     if block.get('language')=='ru':block.pop('language',None)

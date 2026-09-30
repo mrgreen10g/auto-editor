@@ -8,6 +8,7 @@ from tkinter import ttk, filedialog, simpledialog, messagebox
 from . import ui
 from .model import MatchSource, EventRequest, EventSelection
 from .event_rules import requests_for, suggested_names
+from .event_search import needs_search, record_completion, EMPTY_SEARCH_NOTE
 from .goals import GoalScanner, Candidate, source_signature, scan_root, cut_candidate
 from .media import run, probe, Cancelled
 
@@ -197,7 +198,14 @@ class MatchMixin:
                 return
         events = requests_for(block, self.project.matches, self.project.settings.use_manual_clips)
         if not events:
-            return messagebox.showinfo('Сценарий', 'Не найдены фразы о голах или игре. Проверьте сценарий. Уже привязанные готовые вставки повторно не ищутся.')
+            block.events=[]
+            block.edit_plan=None;block.edit_key=''
+            record_completion(block,self.project.matches,self.project.settings.use_manual_clips,{})
+            self.invalidate();self.show_page('review');self.reviewtabs.select(self.events_page)
+            self.refresh_events();self.update_summary()
+            self.review_summary.set('Поиск завершён · нет запросов на игровые вставки')
+            self.review_note.set(EMPTY_SEARCH_NOTE);self.status.set(EMPTY_SEARCH_NOTE)
+            return
         sources = copy.deepcopy([m for m in self.project.matches if m.id in block.match_ids])
         allow_other = self.project.settings.allow_other_matches
         self.invalidate(); self.show_page('review'); self.reviewtabs.select(self.events_page)
@@ -217,16 +225,17 @@ class MatchMixin:
     def search_episode_matches(self):
         self.collect()
         blocks=copy.deepcopy(self.project.blocks)
-        pending=[b for b in blocks if b.match_ids and not b.events]
+        pending=[b for b in blocks if needs_search(b,self.project.matches,self.project.settings.use_manual_clips)]
         if not pending:
             if not messagebox.askyesno('Повторить поиск','Заменить подбор эпизодов и заново сформировать дорожки всех разборов?'):return
             pending=[b for b in blocks if b.match_ids]
         if not pending:return messagebox.showinfo('Материалы','Добавьте исходные матчи к разборам.')
         if any(len(b.script.strip())<30 for b in pending):
             return messagebox.showinfo('Материалы','Добавьте сценарий к каждому разбору перед поиском.')
-        ids={mid for b in pending for mid in b.match_ids}
-        sources=copy.deepcopy([m for m in self.project.matches if m.id in ids])
         manual=self.project.settings.use_manual_clips;allow=self.project.settings.allow_other_matches
+        requests={b.uid:requests_for(b,self.project.matches,manual) for b in pending}
+        ids={mid for b in pending if requests[b.uid] for mid in b.match_ids}
+        sources=copy.deepcopy([m for m in self.project.matches if m.id in ids])
         self.invalidate();self.show_page('review');self.reviewtabs.select(self.events_page)
         self.review_summary.set('Ищем эпизоды для всех разборов…')
         def work():
@@ -239,7 +248,7 @@ class MatchMixin:
                 except Exception as error:errors.append(source.title+': '+str(error))
             for block in pending:
                 local=[s for s in sources if s.id in block.match_ids]
-                output[block.uid]=propose_events(requests_for(block,local,manual),scans,local,allow)
+                output[block.uid]=propose_events(requests[block.uid],scans,local,allow)
             self.jobs.put(('episode_goals',(output,scans,errors)))
         self.match_job('goals',work)
 
@@ -249,14 +258,18 @@ class MatchMixin:
             for b in self.project.blocks:
                 if b.uid in output:
                     b.events=output[b.uid];b.edit_plan=None;b.edit_key=''
+                    record_completion(b,self.project.matches,self.project.settings.use_manual_clips,scans)
             self.refresh_events();self.update_summary()
             self.review_summary.set(f'Подготовлено разборов: {len(output)}')
             self.review_note.set(errors[0] if errors else 'Все эпизоды показаны в одном списке. Столбец «Разбор» указывает принадлежность. Затем определите тайминги выпуска.')
+            empty=[b.title for b in self.project.blocks if b.uid in output and not b.events and b.event_search_key]
+            if empty and not errors:self.review_note.set('Без игровых вставок: '+', '.join(empty)+'. '+EMPTY_SEARCH_NOTE)
             self.log_lines.extend(errors);self.status.set('Поиск по всем разборам завершён.');return True
         if kind == 'goals':
             events, scans, errors = value
             block=self.project.blocks[self.index]
             block.events=events;block.edit_plan=None;block.edit_key='';self.scans.update(scans)
+            record_completion(block,self.project.matches,self.project.settings.use_manual_clips,scans)
             self.refresh_events(); self.update_summary()
             count = sum(not e.skipped and (not e.selection or not e.selection.accepted) for e in events)
             self.review_summary.set(f'Найдено привязок: {sum(e.selection is not None for e in events)} · Для проверки: {count}')

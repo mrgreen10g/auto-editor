@@ -359,9 +359,10 @@ def cut_candidate(source, selection, directory, cancel):
 
 
 def montage_block(project, index, cache, cancel):
+    from .event_search import needs_search
     block = copy.deepcopy(project.blocks[index])
     if not project.settings.use_manual_clips: block.clips = []
-    if block.match_ids and not block.events and not block.clips and block.sport!='combat':
+    if needs_search(block,project.matches,project.settings.use_manual_clips) and block.sport!='combat':
         raise ValueError('Сначала выполните поиск голов в исходных матчах.')
     if unresolved(block) and block.sport!='combat':
         raise ValueError(f'Проверьте найденные эпизоды: {len(unresolved(block))}. Можно оставить ведущего вместо вставки.')
