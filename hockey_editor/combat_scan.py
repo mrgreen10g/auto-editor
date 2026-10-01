@@ -41,16 +41,31 @@ def scan(source,scanner):
         if data.get('signature')==signature and data.get('detector_version')==DETECTOR_VERSION and data.get('fighter')==source.fighter:return data
     info=probe(source.path);duration=info['duration']
     if not info['video'] or not 5<=duration<=4*3600:raise ValueError('Нужна видеозапись боя от 5 секунд до 4 часов.')
-    visual=folder/'combat-frames';visual.mkdir(exist_ok=True)
+    visual=folder/'combat-frames-v1';visual.mkdir(exist_ok=True)
+    complete=False
     scanner.log('Бои: ищу идущие раунды по таймеру и активные размены. Уверенные фрагменты будут выбраны автоматически.')
     try:
         from rapidocr_onnxruntime import RapidOCR
+        from .speech_cache import cpu_threads
         import onnxruntime
         onnxruntime.disable_telemetry_events()
-        ocr=RapidOCR(intra_op_num_threads=2,inter_op_num_threads=1,det_limit_type='max',det_limit_side_len=960)
-        run(['-y','-i',source.path,'-an','-vf','fps=2,scale=960:540','-q:v','3','-start_number','0',visual/'%06d.jpg'],scanner.cancel)
-        files=sorted(visual.glob('*.jpg'));observations=[];motion=[];cuts=[];previous=None;clock_box=None
-        for i,path in enumerate(files):
+        ocr=RapidOCR(intra_op_num_threads=min(4,cpu_threads()),inter_op_num_threads=1,det_limit_type='max',det_limit_side_len=960)
+        from .scan_cache import single_frames
+        from .processing_cache import read_json,write_json
+        files=single_frames(source,visual,duration,2,'960:540',scanner.cancel,scanner.log)
+        checkpoint=folder/'combat-analysis-v1.json'
+        state=read_json(checkpoint,{})
+        if state.get('count')!=len(files):state={}
+        observations=state.get('observations',[]);motion=state.get('motion',[]);cuts=state.get('cuts',[])
+        previous=None;clock_box=state.get('clock_box')
+        if motion:
+            with Image.open(files[len(motion)-1]) as im:rgb=np.asarray(im.convert('RGB'))
+            previous=cv2.cvtColor(cv2.resize(rgb,(240,135)),cv2.COLOR_RGB2GRAY)
+            scanner.log(f'Продолжаю анализ боя с {len(motion)/2:.1f} с.')
+        def save():
+            write_json(checkpoint,dict(count=len(files),observations=observations,motion=motion,cuts=cuts,clock_box=clock_box))
+        for i in range(len(motion),len(files)):
+            path=files[i]
             scanner.check()
             with Image.open(path) as im:rgb=np.asarray(im.convert('RGB'))
             gray=cv2.cvtColor(cv2.resize(rgb,(240,135)),cv2.COLOR_RGB2GRAY)
@@ -74,7 +89,9 @@ def scan(source,scanner):
                         clock_box=(max(0,int(min(xs))-5),max(0,int(min(ys))-3),min(960,int(max(xs))+5),min(540,int(max(ys))+3));value=found;certainty=float(confidence);break
                     if value is not None:break
             observations.append([i/2,value,certainty])
-            if i%120==0:scanner.log(f'Боевая запись: проверено {i/2:.0f} с')
+            if i%120==0:
+                save();scanner.log(f'Боевая запись: проверено {i/2:.0f} с')
+        save()
         ranges=live_ranges(observations,duration);candidates=[]
         for lo,hi in ranges:
             start=lo
@@ -88,8 +105,10 @@ def scan(source,scanner):
                 start=end+2
         data={'detector_version':DETECTOR_VERSION,'fighter':source.fighter,'signature':signature,'duration':duration,'candidates':[asdict(c) for c in candidates],'observations':observations,'gameplay_ranges':ranges,'ranges':ranges,'box':None,'note':'Если таймер не виден, задайте фрагмент вручную. Уверенные активные фрагменты выбираются автоматически; сомнительные требуют проверки.'}
         tmp=saved.with_suffix('.tmp');tmp.write_text(json.dumps(data,ensure_ascii=False),encoding='utf-8');tmp.replace(saved)
+        complete=True
         scanner.log(f'Боевых фрагментов для просмотра: {len(candidates)}');return data
-    finally:shutil.rmtree(visual,ignore_errors=True)
+    finally:
+        if complete:shutil.rmtree(visual,ignore_errors=True)
 
 
 def confident_action(start,end,observations,motion,cuts):

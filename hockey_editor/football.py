@@ -52,12 +52,18 @@ def scan(source,scanner):
     info=probe(source.path);duration=info['duration']
     if not info['video'] or not 5<=duration<=4*3600:raise ValueError('Нужна запись матча от 5 секунд до 4 часов.')
     scanner.log('Футбол: ищу непрерывную игру на поле, исключаю заставки, трибуны и крупные планы…')
-    visual=folder/'football-frames';visual.mkdir(exist_ok=True)
+    visual=folder/'football-frames-v1';visual.mkdir(exist_ok=True)
+    complete=False
     try:
-        run(['-y','-i',source.path,'-an','-vf','fps=4,scale=480:270','-q:v','3','-start_number','0',visual/'%06d.jpg'],scanner.cancel)
-        ranges=gameplay_ranges(sorted(visual.glob('*.jpg')),duration,scanner.cancel)
+        from .scan_cache import single_frames
+        from .processing_cache import stage
+        files=single_frames(source,visual,duration,4,'480:270',scanner.cancel,scanner.log)
+        with stage(folder,'Анализ футбольных сцен',scanner.log):
+            ranges=gameplay_ranges(files,duration,scanner.cancel)
         candidates=candidates_from_ranges(ranges)
         data={'signature':signature,'duration':duration,'candidates':[asdict(c) for c in candidates],'observations':[], 'note':'Футбольные игровые сцены; счёт не используется.','gameplay_ranges':ranges,'ranges':ranges,'box':None}
         tmp=saved.with_suffix('.tmp');tmp.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8');tmp.replace(saved)
+        complete=True
         scanner.log(f'Найдено игровых сцен: {len(candidates)}.');return data
-    finally:shutil.rmtree(visual,ignore_errors=True)
+    finally:
+        if complete:shutil.rmtree(visual,ignore_errors=True)

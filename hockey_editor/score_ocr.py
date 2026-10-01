@@ -1,6 +1,8 @@
 """Local scoreboard OCR. Models ship with RapidOCR; no uploads or API keys."""
 import re
 import sys
+import hashlib
+from collections import OrderedDict
 import numpy as np
 
 
@@ -35,11 +37,14 @@ class ScoreReader:
             import onnxruntime
             onnxruntime.disable_telemetry_events()
             from rapidocr_onnxruntime import RapidOCR
-            ocr = RapidOCR(intra_op_num_threads=2, inter_op_num_threads=1,
+            from .speech_cache import cpu_threads
+            ocr = RapidOCR(intra_op_num_threads=min(4,cpu_threads()), inter_op_num_threads=1,
                            det_limit_type='max', det_limit_side_len=960)
         self.ocr = ocr
         self.box = self.clock_box = self.period_box = None
         self.colors = None
+        self._text_cache = OrderedDict()
+        self.cache_hits = self.ocr_calls = 0
 
     @staticmethod
     def crop(image, box):
@@ -50,8 +55,20 @@ class ScoreReader:
     def text(self, image):
         if not image.size:
             return '', 0.
+        # Exact pixels only: never reuse an approximately similar score digit.
+        key = (image.shape, str(image.dtype), hashlib.blake2b(image.tobytes(), digest_size=16).digest())
+        if key in self._text_cache:
+            self.cache_hits += 1
+            self._text_cache.move_to_end(key)
+            return self._text_cache[key]
         result, _ = self.ocr(image, use_det=False, use_cls=False)
-        return (str(result[0][0]), float(result[0][1])) if result else ('', 0.)
+        self.ocr_calls += 1
+        value = (str(result[0][0]), float(result[0][1])) if result else ('', 0.)
+        if value[1] >= .65:
+            self._text_cache[key] = value
+            if len(self._text_cache) > 512:
+                self._text_cache.popitem(last=False)
+        return value
 
     def read_score(self, crop):
         text, confidence = self.text(crop)
@@ -106,6 +123,8 @@ class ScoreReader:
 
     def locate(self, images, cancel, log, manual=None):
         from .media import Cancelled
+        self.box = self.clock_box = self.period_box = None
+        self.colors = None
         clusters = []
         all_tokens = []
         for image in images:

@@ -102,8 +102,18 @@ class Engine:
         start=max(math.ceil(source_floor*30)/30,math.floor((source[0].start-.15)*30)/30)
         end=min(math.floor(info['duration']*30)/30,math.ceil((source[-1].end+.15)*30)/30)
         self.log(f'Найден разбор в исходнике: {start:.2f}–{end:.2f} с.')
-        silence_log=run(['-ss',start,'-t',end-start,'-i',audio_source,'-vn','-af','silencedetect=noise=-35dB:d=0.30','-f','null','-'],self.cancel)
-        spans=[(float(a),float(b)) for a,b in re.findall(r'silence_start: ([\d.]+).*?silence_end: ([\d.]+)',silence_log,re.S)]
+        from .host_media import identity
+        from .processing_cache import read_json, write_json, stage
+        silence_key=hashlib.sha256(json.dumps([identity(audio_source),start,end,'-35dB:.30']).encode()).hexdigest()
+        silence_file=self.cache/'silence'/f'{silence_key}.json'
+        spans=read_json(silence_file)
+        if spans is None:
+            with stage(self.cache,'Поиск пауз',self.log):
+                silence_log=run(['-ss',start,'-t',end-start,'-i',audio_source,'-vn','-af','silencedetect=noise=-35dB:d=0.30','-f','null','-'],self.cancel)
+                spans=[(float(a),float(b)) for a,b in re.findall(r'silence_start: ([\d.]+).*?silence_end: ([\d.]+)',silence_log,re.S)]
+                write_json(silence_file,spans)
+        else:
+            self.log('Использую сохранённые границы пауз.')
         if protected_tail is not None:
             limit=protected_tail-start
             spans=[(a,min(b,limit)) for a,b in spans if a<limit and min(b,limit)>a]

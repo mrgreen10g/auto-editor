@@ -91,11 +91,11 @@ class UzbekUpdateTests(unittest.TestCase):
   from hockey_editor.uz_speech import transcribe
   from unittest.mock import MagicMock
   decoder=MagicMock()
-  decoder.transcribe.return_value=([SimpleNamespace(text='Erling Haaland hujum qiladi.',end=2,words=[SimpleNamespace(word='Haaland',start=0,end=2,probability=.9)])],None)
+  decoder.transcribe.return_value=([SimpleNamespace(seek=0,text='Erling Haaland hujum qiladi.',end=2,words=[SimpleNamespace(word='Haaland',start=0,end=2,probability=.9)])],None)
   constructor=MagicMock(return_value=decoder)
   with tempfile.TemporaryDirectory() as d:
    host=Path(d)/'host';host.touch();p=Project(host=str(host),profile='uz_football',blocks=[Block(title='Uels — Norvegiya',script='Erling Haaland hujum qiladi.')])
-   with patch.dict('sys.modules',{'faster_whisper':SimpleNamespace(WhisperModel=constructor)}), patch('hockey_editor.uz_speech.model_path',return_value=Path(d)), patch('hockey_editor.host_media.analysis_source',return_value=(host,None,None)), patch('hockey_editor.uz_speech.run'), patch('hockey_editor.uz_refine.refine',side_effect=lambda model,audio,result,*args:result):
+   with patch.dict('sys.modules',{'faster_whisper':SimpleNamespace(WhisperModel=constructor)}), patch('hockey_editor.uz_speech.model_path',return_value=Path(d)), patch('hockey_editor.host_media.analysis_source',return_value=(host,None,None)), patch('hockey_editor.speech_cache.prepared_audio',return_value=host), patch('hockey_editor.uz_refine.refine',side_effect=lambda model,audio,result,*args:result):
     first=transcribe(p,d,threading.Event(),lambda x:None)
     self.assertEqual(transcribe(p,d,threading.Event(),lambda x:None),first)
    self.assertEqual(decoder.transcribe.call_count,1)

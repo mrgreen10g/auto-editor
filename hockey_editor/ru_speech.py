@@ -55,21 +55,11 @@ def transcribe(project,cache,cancel,log):
         return json.loads(saved.read_text(encoding='utf-8'))
     os.environ['HF_HUB_DISABLE_TELEMETRY']='1';os.environ['DO_NOT_TRACK']='1'
     model_dir=model_path(cancel,log)
-    from .host_media import analysis_source
-    source,_,_=analysis_source(project,folder,cancel,log)
-    audio=folder/'voice.wav';run(['-y','-i',source,'-vn','-ac','1','-ar','16000','-c:a','pcm_s16le',audio],cancel)
-    from faster_whisper import WhisperModel
-    model=WhisperModel(str(model_dir),device='cpu',compute_type='int8',cpu_threads=min(4,os.cpu_count() or 2),local_files_only=True)
-    result=[]
-    log('Распознаю русскую речь на компьютере для проверки порядка частей…')
-    try:
-        segments,_=model.transcribe(str(audio),language='ru',word_timestamps=True,beam_size=5,vad_filter=False,condition_on_previous_text=False,initial_prompt=recognition_prompt(project))
-        for s in segments:
-            if cancel.is_set():raise Cancelled('Отменено.')
-            words=[{'word':w.word,'start':w.start,'end':w.end} for w in s.words if w.end>w.start]
-            if words:result.append({'text':s.text,'start':words[0]['start'],'end':words[-1]['end'],'words':words})
-            log(f'Русская речь: {int(s.end)//60:02}:{int(s.end)%60:02}')
-    finally:del model
+    from .speech_cache import prepared_audio, recognize
+    audio=prepared_audio(project,folder,cancel,log)
+    from .speech_cache import with_model
+    result=with_model(model_dir,lambda model:recognize(model,audio,saved.with_suffix('.raw.json'),
+                      'ru',recognition_prompt(project),cancel,log),log)
     # Empty ASR is handled by a fully reviewable script draft, not a lost episode.
     temp=saved.with_suffix('.tmp');temp.write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8');temp.replace(saved)
     return result
@@ -201,3 +191,4 @@ def speech_word_units(words):
         result.append(dict(words[i],word=' '.join(w['word'].strip() for w in window),end=window[-1]['end']))
         i+=count
     return result
+

@@ -66,27 +66,20 @@ def transcribe(project,cache,cancel,log):
     if saved.exists():return json.loads(saved.read_text(encoding='utf-8'))
     os.environ['HF_HUB_DISABLE_TELEMETRY']='1';os.environ['DO_NOT_TRACK']='1'
     model_dir=model_path(cancel,log)
-    from .host_media import analysis_source
-    source,_,_=analysis_source(project,folder,cancel,log)
-    audio=folder/'voice.wav';run(['-y','-i',source,'-vn','-ac','1','-ar','16000','-c:a','pcm_s16le',audio],cancel)
-    from faster_whisper import WhisperModel
-    log('Распознаю узбекскую речь на компьютере. Это может занять несколько минут…')
-    model=WhisperModel(str(model_dir),device='cpu',compute_type='int8',cpu_threads=min(4,os.cpu_count() or 2),local_files_only=True)
-    result=[]
-    try:
-        segments,_=model.transcribe(str(audio),language='uz',word_timestamps=True,beam_size=5,vad_filter=False,condition_on_previous_text=False,initial_prompt=recognition_prompt(project))
-        for s in segments:
-            if cancel.is_set():raise Cancelled('Отменено.')
-            words=[{'word':w.word,'start':w.start,'end':w.end,'probability':w.probability} for w in s.words if w.end>w.start]
-            if not words:continue
-            result.append({'start':words[0]['start'],'end':words[-1]['end'],'text':s.text,'words':words})
-            log(f'Распознана речь до {int(s.end)//60:02}:{int(s.end)%60:02}')
+    from .speech_cache import prepared_audio, recognize
+    from .processing_cache import stage
+    audio=prepared_audio(project,folder,cancel,log)
+    from .speech_cache import with_model
+    def work(model):
+        result=recognize(model,audio,saved.with_suffix('.raw.json'),'uz',recognition_prompt(project),cancel,log)
         from .uz_refine import refine
-        result=refine(model,audio,result,project,cancel,log)
+        with stage(folder,'Уточнение узбекской речи',log):
+            result=refine(model,audio,result,project,cancel,log)
         if project.profile=='uz_combat':
             from .combat import recover_gaps
             result=recover_gaps(model,audio,result,cancel,log)
-    finally:del model;gc.collect()
+        return result
+    result=with_model(model_dir,work,log)
     # Empty recognition is converted to a script draft for manual review.
     temp=saved.with_suffix('.tmp');temp.write_text(json.dumps(result,ensure_ascii=False),encoding='utf-8');temp.replace(saved)
     return result

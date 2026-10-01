@@ -1,6 +1,7 @@
 """FFmpeg execution, cancellation and bounded metadata reads."""
 from pathlib import Path
 import subprocess, threading, re, os, shutil
+from functools import lru_cache
 
 class Cancelled(Exception): pass
 
@@ -51,6 +52,13 @@ def run(args, cancel=None, log_path=None, progress=None):
     return output
 
 def probe(path):
+    p = Path(path).resolve()
+    st = p.stat()
+    return dict(_probe_cached(str(p), st.st_size, st.st_mtime_ns))
+
+
+@lru_cache(maxsize=256)
+def _probe_cached(path, size, modified):
     flags = subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0
     r=subprocess.run([ffmpeg(),'-hide_banner','-i',str(path)],capture_output=True,
                      encoding='utf-8',errors='replace',creationflags=flags,timeout=25)

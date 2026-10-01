@@ -166,24 +166,12 @@ class GoalScanner:
         info = probe(source.path); duration = info['duration']
         if not info['video'] or not 5 <= duration <= 4*3600:
             raise ValueError('Нужна видеозапись матча длительностью от 5 секунд до 4 часов.')
-        frames = folder/'frames'; ready = folder/'frames-ready'
-        if not ready.exists():
-            if frames.exists(): shutil.rmtree(frames)
-            frames.mkdir()
-            run(['-y', '-i', source.path, '-an', '-vf', 'fps=1/2,scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2',
-                 '-q:v', '3', '-start_number', '0', frames/'%06d.jpg'], self.cancel,
-                progress=lambda t: self.log(f'Кадры: {min(100,int(t/duration*100))}%'))
-            ready.touch()
-        files = sorted(frames.glob('*.jpg'))
-        if not files: raise ValueError('Не удалось прочитать кадры матча.')
-        from .gameplay import gameplay_ranges, candidates_from_ranges, bound_goal
+        from .scan_cache import hockey_frames, hockey_ranges
+        from .gameplay import candidates_from_ranges, bound_goal
+        files, visual_files = hockey_frames(source, folder, duration, self.cancel, self.log)
         self.log('Подбираю игровые сцены независимо от табло…')
-        visual = folder/'visual'; visual.mkdir(exist_ok=True)
-        run(['-y','-i',source.path,'-an','-vf','fps=2,scale=320:180',
-             '-q:v','3','-start_number','0',visual/'%06d.jpg'],self.cancel)
-        ranges = gameplay_ranges(sorted(visual.glob('*.jpg')),duration,self.cancel,.5)
+        ranges = hockey_ranges(folder, visual_files, duration, self.cancel, self.log)
         gameplay = candidates_from_ranges(ranges)
-        shutil.rmtree(visual)
         observations = []; scan_note = ''
         try:
             if self.reader is None:
@@ -193,12 +181,8 @@ class GoalScanner:
             sample = sorted(set(min(len(files)-1,int((a+b)/4)) for a,b in ranges))
             sample = sample[::max(1,len(sample)//12)][:12] or [int(len(files)*v) for v in (.2,.4,.6,.8)]
             self.reader.locate([read_image(files[i]) for i in sample], self.cancel, self.log, source.score_box)
-            observations = []
-            for i, file in enumerate(files):
-                self.check()
-                observations.append(self.reader.read(read_image(file), i*2.))
-                if i % 10 == 0:
-                    self.log(f'Поиск голов: {int((i+1)/len(files)*100)}%')
+            from .scan_cache import observations as scan_observations
+            observations = scan_observations(self.reader, files, folder, self.cancel, self.log)
         except Cancelled:
             raise
         except Exception as error:
@@ -209,7 +193,16 @@ class GoalScanner:
         for candidate in candidates:
             if candidate.kind != 'goal': continue
             try:
-                self.check(); self.log('Уточняю момент: '+candidate.label)
+                self.check()
+                from .processing_cache import read_json, write_json
+                detail_key = hashlib.sha256(json.dumps(asdict(candidate), sort_keys=True).encode()).hexdigest()
+                checkpoint = folder/'details-v1'/(detail_key+'.json')
+                refined = read_json(checkpoint)
+                if refined is not None:
+                    candidate.time = refined['time']; candidate.start = refined['start']; candidate.end = refined['end']
+                    candidate.confidence = refined['confidence']; candidate.note = refined['note']
+                    continue
+                self.log('Уточняю момент: '+candidate.label)
                 detail = folder/'detail'
                 if detail.exists(): shutil.rmtree(detail)
                 detail.mkdir()
@@ -234,6 +227,7 @@ class GoalScanner:
                     candidate.confidence = min(candidate.confidence, .72)
                     candidate.note += ' Момент гола приблизительный.'
                 candidate.start = max(0, candidate.time-7); candidate.end = min(duration, candidate.time+5)
+                write_json(checkpoint, asdict(candidate))
                 shutil.rmtree(detail)
             except Cancelled:
                 raise
