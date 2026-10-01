@@ -5,11 +5,17 @@ from .uzbek import norm
 def compact(text):return re.sub(r'[^a-z0-9]','',norm(text))
 
 def features(text):
-    t=norm(text);c=compact(text)
+    t=norm(text)
+    # ASR commonly separates a decimal into two tokens ("3 ,5") and
+    # contracts yarim+dan. Normalize only number/market forms, not prose.
+    t=re.sub(r'(\d)\s*([,.])\s*(\d)',r'\1\2\3',t)
+    t=re.sub(r"\b(bir|ikki|uch)\s*(?:yarim|yarm|yam)(?:t?i?dan(?:an)?|tana|danan|dan)?\b",r'\1 yarim',t)
+    t=re.sub(r'\btanan\b','dan',t)
+    c=compact(t)
     chance='x2' if re.search(r'x(?:2|ikki)|[ei]ks?ik{1,2}i|sikki|2x',c) else '1x' if re.search(r"\b1\s*x\b|\bbir\s*(?:iks|eks)\b",t) else '12' if re.search(r"\b12(?=\s+(?:va|variant)\b|$)",t) else None
     double=chance is not None or bool(re.search(r'yutqaz[ai]?m',c))
     winner=bool(re.search(r'[gq]alab',c)) and not double
-    cue=bool(re.search(r'tanlo|varia|qildik|qilaqold',c))
+    cue=bool(re.search(r'tanlo|talno|variy?a|qildik|qilardik|qilaqold',c))
     phonetic_total=bool(cue and re.search(r"\bko'l\b",t) and ("ko'p" in t or re.search(r'\bkam\b',t)))
     total='total' in t or bool(re.search(r'g[ou]i?l',c) or ('umumiy' in c and ("ko'p" in t or 'son' in c)) or phonetic_total)
     ordinal=next((n for pattern,n in ((r'\bbirinchi',0),(r'\b(?:ikkinchi|ikinchi|kinchi|ekin(?:chi|ji))',1),(r'\buch(?:i|ri)nchi',2),(r'\b(?:tortinchi|to.rt.inchi)',3),(r'\boxirgi',-1)) if re.search(pattern,t)),None)
@@ -94,12 +100,25 @@ def score(candidate,owner,reference,index,owners,recap=True):
     strength=matched*6+(4 if own and recap else 0)+(2 if ordinal is not None else 0)+(1 if f['cue'] else 0)
     if not recap and re.search(r'varia|qildik|qila qold',norm(candidate['text'])):strength+=3
     if others:strength-=9
+    if not recap and re.match(r'\s*(?:tanlo|talno)',norm(candidate['text'])):strength+=4
     strength-=.035*(candidate['end']-candidate['start'])
-    review=bool(re.search(r'\b2\s*x\b',norm(candidate['text']))) or matched<len(required) or (expected['value'] is not None and f['value'] is None) or strengths[index]<.85
+    review=bool(re.search(r'\b2\s*x\b',norm(candidate['text']))) or matched<len(required) or (expected['value'] is not None and f['value'] is None) or (recap and strengths[index]<.85)
+    numeric=[w for w in candidate['words'] if re.search(r'\d',w['word'])]
+    if numeric and min(w.get('probability',1.) for w in numeric)<.55:review=True
     return strength,review
 
-def match_forecasts(segments,lo,hi,owners,references,recap=True):
+def match_forecasts(segments,lo,hi,owners,references,recap=True,partial=False):
     candidates=windows(segments,lo,hi)
+    # A single ASR sentence may reject one market and then announce another.
+    # Start a separate candidate at the explicit personal choice, keeping its
+    # own words and times instead of inheriting the rejected first number.
+    for unit in clauses(segments,lo,hi):
+        for k,w in enumerate(unit):
+            if not re.search(r'\b(?:tanlo|talno)[vy]?(?:im|yim|v|y)',norm(w['word'])):continue
+            selected=unit[k:]
+            if selected[-1]['end']-selected[0]['start']>24:continue
+            text=' '.join(w['word'].strip() for w in selected)
+            candidates.append(dict(start=selected[0]['start'],end=selected[-1]['end'],text=text,words=selected,features=features(text)))
     if recap and len(owners)>1:
         # ASR may put several fixture recaps in one sentence. Split by ownership.
         from .graphics import block_teams
@@ -135,8 +154,9 @@ def match_forecasts(segments,lo,hi,owners,references,recap=True):
                 # A split compound bet must not hide a contradictory second half.
                 conflict=False
                 for longer in candidates:
-                    if longer['start']!=c['start'] or not c['end']<longer['end']<=c['end']+10:continue
-                    f=longer['features']
+                    if longer['start']>c['start'] or not c['end']<longer['end']<=c['end']+10:continue
+                    tail=[w for w in longer['words'] if w['start']>=c['start']]
+                    f=features(' '.join(w['word'] for w in tail))
                     if f['value'] is None or f['value']==expected['value']:continue
                     from .uz_speech import name_hits
                     from .graphics import block_teams
@@ -144,8 +164,9 @@ def match_forecasts(segments,lo,hi,owners,references,recap=True):
                     if not foreign and f['ordinal'] in (None,index):conflict=True;break
                 if conflict:continue
             value,review=scored
-            choices.append((value,{**c,'needs_review':review,'forecast_id':owner.uid}))
-        if not choices:
+            reason='Число или условие ставки распознано неуверенно. Проверьте только эту плашку.' if review else ''
+            choices.append((value,{**c,'needs_review':review,'forecast_id':owner.uid,'review_reason':reason}))
+        if not choices and not partial:
             raise ValueError('Не удалось связать '+('повтор прогноза' if recap else 'прогноз')+' «'+owner.title+'» с распознанной речью. Проверьте фразу ставки и границы раздела; количество разборов само по себе не является ошибкой.')
         scored_choices.append(choices)
     if len(owners)>8:
@@ -154,9 +175,11 @@ def match_forecasts(segments,lo,hi,owners,references,recap=True):
         chosen={};used=[]
         for index in sorted(range(len(owners)),key=lambda i:len(scored_choices[i])):
             feasible=[(v,c) for v,c in scored_choices[index] if all(c['end']<=a+.001 or c['start']>=b-.001 for a,b in used)]
-            if not feasible:raise ValueError('Повторы требуют ручного распределения интервалов.')
+            if not feasible:
+                if partial:continue
+                raise ValueError('Повторы требуют ручного распределения интервалов.')
             _,c=max(feasible,key=lambda pair:pair[0]);chosen[index]=c;used.append((c['start'],c['end']))
-        return [chosen[i] for i in range(len(owners))]
+        return [chosen.get(i) for i in range(len(owners))]
     # One disjoint spoken interval per fixture, in any spoken order.
     states={0:[(0.,-1.,{})]};full=(1<<len(owners))-1
     for mask in range(full+1):
@@ -171,7 +194,31 @@ def match_forecasts(segments,lo,hi,owners,references,recap=True):
                 if not eligible:continue
                 previous=max(eligible,key=lambda s:s[0])
                 states.setdefault(mask|(1<<index),[]).append((previous[0]+value,c['end'],{**previous[2],index:c}))
+    if not states.get(full) and partial:
+        available=[(mask,max(rows,key=lambda row:row[0])) for mask,rows in states.items() if rows]
+        _,best=max(available,key=lambda item:(item[0].bit_count(),item[1][0]))
+        return [best[2].get(i) for i in range(len(owners))]
     if not states.get(full):
         raise ValueError('Не удалось разнести повторы ставок по времени без пересечений. Проверьте речь в итогах и выбранные границы.')
     chosen=max(states[full],key=lambda s:s[0])[2]
     return [chosen[i] for i in range(len(owners))]
+
+
+def missing_forecast(segments,lo,hi,owner,occupied=()):
+    """One explicitly uncertain placeholder; never downgrade unrelated cards."""
+    words=[w for s in segments for w in s['words'] if lo<=w['start']<hi]
+    free=[w for w in words if all(w['end']<=a or w['start']>=b for a,b in occupied)]
+    if not free:return None
+    from .graphics import block_teams
+    named=[h for team in block_teams(owner.title) for h in active_name_hits(team,free)]
+    cues=[i for i,w in enumerate(free) if re.search(r'tanlo|talno',norm(w['word']))]
+    index=cues[-1] if cues else named[0][0] if named else max(0,len(free)-8)
+    selected=[free[index]]
+    for w in free[index+1:]:
+        if w['start']-selected[-1]['end']>1 or w['end']-selected[0]['start']>5:break
+        selected.append(w)
+    a,z=selected[0]['start'],min(hi,selected[-1]['end'])
+    if z-a<.15:return None
+    return dict(start=a,end=z,text=' '.join(w['word'] for w in selected),words=selected,
+                needs_review=True,forecast_id=owner.uid,
+                review_reason='Не удалось уверенно распознать эту ставку: '+owner.title+'. Проверьте текст и время только этой плашки.')

@@ -197,7 +197,10 @@ def preserve_edits(previous,plan):
     baseline={c['review_id']:c for c in old.edit_baseline.get('cards',[])}
     current={c.review_id:c for c in old.cards}
     deleted=set(baseline)-set(current)
-    plan.cards=[c for c in plan.cards if c.review_id not in deleted]
+    def same_card(old,new):
+        return old and all(old.get(k,'')==getattr(new,k) for k in ('title','text','forecast_id'))
+    applied_deleted={c.review_id for c in plan.cards if c.review_id in deleted and same_card(baseline.get(c.review_id),c)}
+    plan.cards=[c for c in plan.cards if c.review_id not in applied_deleted]
     fresh={c.review_id:c for c in plan.cards}
     for ident,card in current.items():
         authored=('start','end','title','text','asset','source_in','forecast_id')
@@ -234,10 +237,17 @@ def preserve_edits(previous,plan):
     ids={x['id'] for x in plan.review_items}
     for item in plan.review_items:
         prior=old_tasks.get(item['id'])
-        if prior and prior['status']!='pending':item['status']=prior['status']
-        if item['id'] in deleted:item['status']='deleted'
+        card=next((c for c in plan.cards if c.review_id==item['id']),None)
+        authored=current.get(item['id'])
+        compatible=card is not None and (item['id'] not in baseline or same_card(baseline.get(item['id']),card)
+                     or (authored is not None and same_card(asdict(authored),card)))
+        if prior and prior['status']!='pending' and compatible:item['status']=prior['status']
+        if item['id'] in applied_deleted:item['status']='deleted'
+    current_ids={c.review_id for c in plan.cards}
     for ident,item in old_tasks.items():
-        if ident not in ids:plan.review_items.append(copy.deepcopy(item))
+        # Resolved decisions remain history; obsolete automatic doubts do not
+        # resurrect review tasks after successful re-alignment.
+        if ident not in ids and (item['status']!='pending' or ident in current_ids):plan.review_items.append(copy.deepcopy(item))
     return plan
 
 

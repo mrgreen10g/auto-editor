@@ -20,7 +20,7 @@ def recording_key(project):
     return hashlib.sha256(json.dumps([MODEL_REV,'beam5-vocabulary-v2',recognition_prompt(project),project.profile,[b.title for b in project.blocks],data]).encode()).hexdigest()
 
 def speech_key(project):
-    return hashlib.sha256(json.dumps(['uz-speech-9-manual-review',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['uz-speech-10-local-forecast-review',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
 
 def model_path(cancel,log):
     folder=Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'Models'/'uzbek-turbo'
@@ -119,6 +119,25 @@ def pair_hits(title,words):
     a,b=block_teams(title);left=name_hits(a,words,(a,b));right=name_hits(b,words,(a,b))
     choices=[(min(i[0],j[0]),max(i[1],j[1]),i[2]+j[2]) for i in left for j in right if abs(i[0]-j[0])<=8 and (i[1]<j[0] or j[1]<i[0])]
     return [(a,b) for a,b,_ in sorted(choices,key=lambda v:(-v[2],v[0],v[1]-v[0]))]
+
+def intro_sequence_spans(blocks, words):
+    """Prefer a compact ordered fixture list over earlier hook/statistics mentions."""
+    if len(blocks)<2:return None
+    choices=[]
+    for block in blocks:
+        spans=list(dict.fromkeys((words[a]['start'],words[z]['end']) for a,z in pair_hits(block.title,words)))
+        if not spans:return None
+        choices.append(sorted(spans))
+    chains=[]
+    for first in choices[0]:
+        chain=[first]
+        for spans in choices[1:]:
+            later=[span for span in spans if span[0]>=chain[-1][1]-.01]
+            if not later:break
+            chain.append(min(later,key=lambda span:(span[0],span[1])))
+        if len(chain)==len(blocks):chains.append(chain)
+    return min(chains,key=lambda chain:chain[-1][1]-chain[0][0]) if chains else None
+
 
 def telegram_spans(words):
     result=[]
@@ -232,7 +251,7 @@ def make_lines(segments,lo,hi,annotations):
 
 def _prepare(project,segments):
     from .framing import forecast_text
-    from .uz_forecasts import match_forecasts
+    from .uz_forecasts import match_forecasts,missing_forecast
     bounds,tg,words=sections(project,segments);key=speech_key(project)
     ranges=list(zip(bounds,bounds[1:]))
     if project.recording_times.strip():
@@ -241,10 +260,11 @@ def _prepare(project,segments):
     picks={b.uid:forecast_text(b) for b in project.blocks}
     if any(not v for v in picks.values()):raise ValueError('Укажите основной прогноз в сценарии каждого разбора: Mening tanlovim — …')
     for index,b in enumerate([project.intro,*project.blocks,project.outro]):
-        lo,hi=ranges[index];annotations=[];local=[s for s in segments if lo<=s['start']<hi];forecast_review=[];forecast_owners={}
+        lo,hi=ranges[index];annotations=[];local=[s for s in segments if lo<=s['start']<hi];forecast_review=[];forecast_owners={};forecast_reasons={}
         if b.kind=='intro':
             subset=[w for w in words if lo<=w['start']<hi]
             matched=[];uncertain=set()
+            sequence=intro_sequence_spans(project.blocks,subset)
             for owner in project.blocks:
                 hits=pair_hits(owner.title,subset)
                 if hits:
@@ -257,6 +277,7 @@ def _prepare(project,segments):
                         a,z,_=max(single,key=lambda hit:hit[2]);matched.append((subset[a]['start'],subset[min(len(subset)-1,z+2)]['end']))
                     else:matched.append(None)
                     uncertain.add(owner.title)
+            if sequence is not None:matched=sequence
             for j,owner in enumerate(project.blocks):
                 span=matched[j]
                 if span is None:
@@ -270,13 +291,19 @@ def _prepare(project,segments):
                 z=min(z,next_start)
                 if z-a>=.15:annotations.append((a,z,'РАЗБОР МАТЧА',owner.title))
         elif b.kind=='analysis':
-            s=match_forecasts(segments,lo,hi,[b],picks,recap=False)[0]
+            s=match_forecasts(segments,lo,hi,[b],picks,recap=False,partial=True)[0]
+            if s is None:
+                s=missing_forecast(segments,lo,hi,b) or dict(start=lo,end=hi,text='',needs_review=True,review_reason='В этом разделе не найдены слова ставки. Проверьте только эту плашку.')
+                forecast_reasons[(s['start'],s['end'])]=s['review_reason']
             spoken_total=re.search(r'(\d+[,.]\d+)\s*(?:ta)?dan',norm(s['text']))
             reference_total=re.search(r'(\d+[,.]\d+)\s+dan',norm(picks[b.uid]))
             if spoken_total and reference_total and spoken_total[1].replace(',','.')!=reference_total[1].replace(',','.'):
-                raise ValueError('Значение ставки в речи отличается от сценария: '+b.title)
+                s['needs_review']=True
+                forecast_reasons[(s['start'],s['end'])]='Значение ставки в речи отличается от сценария: '+b.title
             annotations.append((s['start'],s['end'],'ПРОГНОЗ',picks[b.uid]))
-            if s['needs_review']:forecast_review.append((s['start'],s['end']))
+            if s['needs_review']:
+                forecast_review.append((s['start'],s['end']))
+                forecast_reasons.setdefault((s['start'],s['end']),s.get('review_reason','Слова ставки распознаны неуверенно.'))
             for phrase in local:
                 if phrase['start']<s['end'] and phrase['end']>s['start']:continue
                 t=norm(phrase['text']).replace("go'l",'gol').replace("go'il",'gol')
@@ -286,11 +313,19 @@ def _prepare(project,segments):
                         body=picks[b.uid].splitlines()[0].replace(' X2',' yutadi yoki durang')+'\n'+body
                     annotations.append((phrase['start'],phrase['end'],'УСЛОВИЯ ПРОГНОЗА',body))
         else:
-            recap=match_forecasts(segments,lo,hi,project.blocks,picks)
+            recap=match_forecasts(segments,lo,hi,project.blocks,picks,partial=True)
+            occupied=[(v['start'],v['end']) for v in recap if v]+[(a,z) for a,z in tg if lo<=a<hi]
             for owner,s in zip(project.blocks,recap):
+                if s is None:
+                    s=missing_forecast(segments,lo,hi,owner,occupied)
+                    if s is None:continue  # framing_draft supplies only this missing pick
+                    occupied.append((s['start'],s['end']))
+                    forecast_reasons[(s['start'],s['end'])]=s['review_reason']
                 annotations.append((s['start'],s['end'],'ПРОГНОЗ',picks[owner.uid]))
                 forecast_owners[(s['start'],s['end'])]=owner.uid
-                if s['needs_review']:forecast_review.append((s['start'],s['end']))
+                if s['needs_review']:
+                    forecast_review.append((s['start'],s['end']))
+                    forecast_reasons.setdefault((s['start'],s['end']),s.get('review_reason','Слова повтора ставки распознаны неуверенно.'))
         promos=[(a,z) for a,z in tg if lo<=a<z<=hi]
         promo_review=[]
         if not promos:
@@ -298,9 +333,13 @@ def _prepare(project,segments):
         for a,z in promos:
             if not any(a<end and z>start for start,end,_,_ in annotations):annotations.append((a,z,'ТЕЛЕГРАМ','Telegram'))
         b.asr_lines,b.speech_cards=make_lines(segments,lo,hi,annotations);b.speech_key=key
+        if not b.asr_lines:
+            b.asr_lines=[dict(text='',start=lo,end=hi,agreement=1.,review_reason='В разделе не распознаны слова.')]
+            if b.kind=='analysis':b.speech_cards={'0':dict(title='ПРОГНОЗ',text=picks[b.uid],needs_review=True)}
         for i,card in b.speech_cards.items():
             line=b.asr_lines[int(i)]
             if (card['title']=='ПРОГНОЗ' and (line['start'],line['end']) in forecast_review) or (card['title']=='ТЕЛЕГРАМ' and (line['start'],line['end']) in promo_review):card['needs_review']=True
+            if (line['start'],line['end']) in forecast_reasons:card['review_reason']=forecast_reasons[(line['start'],line['end'])]
         if b.kind=='intro':
             for card in b.speech_cards.values():
                 if card['title']=='РАЗБОР МАТЧА' and card['text'] in uncertain:card['needs_review']=True
