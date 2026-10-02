@@ -10,6 +10,7 @@ from .timeline import Plan
 
 def project_edit_key(project, index):
     block = asdict(project.blocks[index]); block.pop('edit_plan',None);block.pop('edit_key',None)
+    if not block.get('archive_pool'):block.pop('archive_pool',None)
     block.pop('event_search_key',None)  # Search status does not change the montage.
     if project.profile in ('ru_hockey','uz_hockey'):block['player_cards_version']='nhl-v1'
     for field in ('asr_lines','speech_key','speech_cards'):

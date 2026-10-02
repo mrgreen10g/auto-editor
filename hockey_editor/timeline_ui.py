@@ -354,7 +354,7 @@ class TimelineEditor:
         self.player.stop();self.busy=True;self.cancel.clear();self.preview_current=False
         for b in self.buttons:b.configure(state='disabled')
         self.cancel_button.configure(state='normal')
-        self.status.set('Собираю полный предпросмотр 640×360 со звуком. Это может занять несколько минут.')
+        self.status.set('Собираю предпросмотр '+('360×640' if self.project.profile=='uz_football_shorts' else '640×360')+' со звуком. Это может занять несколько минут.')
         from .live_cards import base_plan,base_key
         key=base_key(self.plan)
         project=copy.deepcopy(self.project);plan=base_plan(self.plan)

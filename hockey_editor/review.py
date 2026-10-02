@@ -92,7 +92,7 @@ def fallback_cards(project, block, lines, duration, reason):
         low=norm(line.text);title,body=classify(line.text) if block.language=='uz' else (classify_card(line.text),'')
         if title and not body:body=summarize_card(title,line.text)
         pairs=[b for b in owners if (mentions(b.title,line.text) if block.language=='uz' else pair_matches(line.text,b))]
-        if block.kind=='intro' and pairs:
+        if block.kind=='intro' and pairs and project.profile!='uz_football_shorts':
             for b in pairs:
                 cards.append(Card(line.start,line.end,'РАЗБОР МАТЧА',b.title,i,review_reason=reason));seen.add(b.uid)
             continue
@@ -113,7 +113,7 @@ def fallback_cards(project, block, lines, duration, reason):
     if block.kind in ('intro','outro'):
         for k,b in enumerate(owners):
             if b.uid in seen:continue
-            if block.kind=='intro' and not expected_intro_pair(block,b):continue
+            if block.kind=='intro' and (project.profile=='uz_football_shorts' or not expected_intro_pair(block,b)):continue
             # Keep every expected overlay, but never describe this slot as confirmed.
             start=max(0,min(duration-.2,duration*k/max(1,len(owners))))
             end=min(duration,start+max(.2,min(4,duration/max(1,len(owners)))))
@@ -294,7 +294,7 @@ def framing_draft(project,block,lines,duration):
         cards,warnings=fallback_cards(project,block,lines,duration,str(error))
     # The ASR path may succeed while omitting a scripted CTA or recap. Keep a
     # provisional card for each expected event rather than silently dropping it.
-    if block.kind=='intro':
+    if block.kind=='intro' and project.profile!='uz_football_shorts':
         owners=[b for b in project.blocks if b.kind=='analysis']
         for k,b in enumerate(owners):
             if not expected_intro_pair(block,b):continue
@@ -390,6 +390,10 @@ def describe_card(card,task,project,plan):
     where={'intro':'Вступление','outro':'Повтор ставок','analysis':'Разбор'}.get(kind,kind)
     if block and kind=='analysis':where+=' · '+block.title
     if card is None:return 'Удалённая плашка',where
+    if project.profile=='uz_football_shorts':
+        if card.asset:return card.title.capitalize()+' · видео-вставка',where+' · полный экран'
+        if card.title=='РАЗБОР МАТЧА':return 'Представление пары',where+' · над головой'
+        return ('Ставка' if card.title=='ПРОГНОЗ' else card.title.capitalize()),where+' · на уровне груди'
     if card.asset:return card.title.capitalize()+' · видео-вставка',where+' · анимация'
     if card.title=='РАЗБОР МАТЧА':return ('Представление пары' if kind=='intro' else 'Пара разбора'),where+' · внизу по центру'
     if card.title=='ПРОГНОЗ':return 'Ставка',where+' · внизу по центру'
@@ -445,3 +449,4 @@ def expected_intro_pair(intro,owner):
     from .event_rules import team_position
     names=block_teams(owner.title)
     return any(n and team_position(n,intro.script,names) is not None for n in names)
+

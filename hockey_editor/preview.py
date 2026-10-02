@@ -22,6 +22,8 @@ class PreviewPlayer:
 
     def load(self,path,audio,duration,position=0):
         self.stop();self.path=Path(path);self.audio=Path(audio) if audio else None;self.duration=duration
+        from .media import probe
+        info=probe(path);self.frame_size=(360,640) if info['height']>info['width'] else (640,360)
         self.seek(position)
 
     def stop(self):
@@ -46,6 +48,7 @@ class PreviewPlayer:
         if not self.path or self.closed:return
         self.stop();self.position=max(0,min(float(position),max(0,self.duration-.04)))
         self.base=self.position;self.playing=play;self.started=None;self.index=0;self.pending=None
+        fw,fh=getattr(self,'frame_size',(640,360))
         generation=self.generation;frames=queue.Queue(4);self.queue=frames
         path,audio=self.path,self.audio;position=self.position
         def put(value):
@@ -67,11 +70,11 @@ class PreviewPlayer:
                 if generation!=self.generation:return
                 flags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0
                 args=[ffmpeg(),'-hide_banner','-loglevel','error','-nostdin','-ss',str(position),'-i',str(path),
-                      '-an','-vf','fps=15,scale=640:360','-pix_fmt','rgb24','-f','rawvideo','pipe:1']
+                      '-an','-vf',f'fps=15,scale={fw}:{fh}','-pix_fmt','rgb24','-f','rawvideo','pipe:1']
                 proc=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,creationflags=flags)
                 if generation!=self.generation:proc.terminate();return
                 self.proc=proc
-                size=640*360*3
+                size=fw*fh*3
                 while generation==self.generation:
                     data=bytearray()
                     while len(data)<size:
@@ -79,7 +82,7 @@ class PreviewPlayer:
                         if not chunk:break
                         data.extend(chunk)
                     if len(data)<size:break
-                    put(('frame',Image.frombytes('RGB',(640,360),bytes(data)),segment))
+                    put(('frame',Image.frombytes('RGB',(fw,fh),bytes(data)),segment))
                     if not play:break
                 put(('end',None,None))
             except Exception as error:put(('error',str(error),None))

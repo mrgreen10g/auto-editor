@@ -26,7 +26,7 @@ class LiveCards:
         self.images={}
 
     def artwork(self,card):
-        key=(card.title,card.text)
+        key=(card.title,card.text,card.fixture)
         if key not in self.images:
             filename=self.cache/(hashlib.sha256(repr(key).encode()).hexdigest()+'.png')
             x,y=card_image(card,filename,self.project.team_logos,self.project.profile)
@@ -36,11 +36,15 @@ class LiveCards:
         return self.images[key]
 
     def compose(self,source,t,plan):
-        result=source.convert('RGBA');sx=result.width/1280;sy=result.height/720;s=self.project.settings
+        result=source.convert('RGBA');s=self.project.settings
+        cw,ch=(720,1280) if self.project.profile=='uz_football_shorts' else (1280,720)
+        sx=result.width/cw;sy=result.height/ch
         for i,c in enumerate(plan.cards):
             if c.asset or c.title in ('АРХИВНЫЕ КАДРЫ','КАДРЫ МАТЧА') or not c.start<=t<c.end:continue
             if c.title=='РАЗБОР МАТЧА' and any(v.start<=t<=v.end+tail for v,tail,_,_ in game_transitions(plan)):continue
             image,x,y=self.artwork(c);elapsed=t-c.start;left=c.end-t
+            if self.project.profile=='uz_football_shorts' and c.title!='РАЗБОР МАТЧА' and any(v.start<=t<v.end+tail for v,tail,_,_ in game_transitions(plan)):
+                y=min(1130-image.height,y+70)
             divider=c.title in ('СМЕНА МАТЧА','ИТОГИ ВЫПУСКА');edge=min(.25,(c.end-c.start)/3)
             animate=(s.transitions if divider else s.animate_cards) and c.title!='ПОДПИСКА'
             image=image.resize((max(1,round(image.width*sx)),max(1,round(image.height*sy))),Image.Resampling.BILINEAR)

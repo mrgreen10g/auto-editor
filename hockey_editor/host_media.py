@@ -71,6 +71,7 @@ def slice_media(media,start,end):
 def prepare_base(engine,plan,base):
     """Decode original files into one concat filter, with per-part orientation."""
     p=engine.project;s=p.settings
+    width,height=(720,1280) if p.profile=='uz_football_shorts' else (1280,720)
     groups=[]
     for segment in plan.media:
         if groups and all(segment.get(k)==groups[-1][-1].get(k) for k in ('path','rotation','kind')) and segment['start']>=groups[-1][-1]['end']-.001:
@@ -85,7 +86,7 @@ def prepare_base(engine,plan,base):
         if rot==180:video+=',hflip,vflip'
         elif rot==90:video+=',transpose=clock'
         elif rot==270:video+=',transpose=cclock'
-        video+=',scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p'
+        video+=f',scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p'
         if s.color and m.get('kind')!='disclaimer':video+=',eq=contrast=1.045:saturation=1.035:brightness=-0.004'
         duration=sum(v['end']-v['start'] for v in group)
         # One video stream per source keeps memory bounded, even with hundreds of speech cuts.

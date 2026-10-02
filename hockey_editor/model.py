@@ -94,6 +94,7 @@ class Block:
     forecast: str = ''
     featured_pairs: list[str] = field(default_factory=list)
     event_search_key: str = ''
+    archive_pool: list[dict] = field(default_factory=list)
 
 @dataclass
 class Project:
@@ -127,10 +128,10 @@ class Project:
         if not 0 <= index < len(self.blocks):
             raise ValueError('Выберите разбор.')
         block = self.blocks[index]
-        if self.profile not in ('ru_hockey','uz_football','uz_combat','uz_hockey'):raise ValueError('Неизвестный шаблон выпуска.')
+        if self.profile not in ('ru_hockey','uz_football','uz_combat','uz_hockey','uz_football_shorts'):raise ValueError('Неизвестный шаблон выпуска.')
         expected='uz' if self.profile.startswith('uz_') else 'ru'
         if block.language!=expected:raise ValueError('Язык блока не совпадает с шаблоном ведущего.')
-        if len(block.script.strip()) < 30:
+        if len(block.script.strip()) < (3 if self.profile=='uz_football_shorts' else 30):
             raise ValueError('Вставьте сценарий выбранного разбора.')
         if self.music and not Path(self.music).is_file():
             raise ValueError('Музыка не найдена. Выберите файл заново или очистите поле.')
@@ -173,8 +174,9 @@ class Project:
             raise ValueError('Некорректная настройка масштаба или очистки звука.')
         if s.rotate not in (0, 90, 180, 270):
             raise ValueError('Поворот должен быть 0, 90, 180 или 270 градусов.')
-        if (s.width, s.height, s.fps) not in [(1280,720,30),(1920,1080,30)]:
-            raise ValueError('Поддерживается 720p или 1080p при 30 кадрах/с.')
+        sizes=[(720,1280,30),(1080,1920,30)] if self.profile=='uz_football_shorts' else [(1280,720,30),(1920,1080,30)]
+        if (s.width,s.height,s.fps) not in sizes:
+            raise ValueError('Выберите 720p или 1080p при 30 кадрах/с; Shorts — вертикальное видео 9:16.')
         if not math.isfinite(s.music_db) or not -60 <= s.music_db <= -15:
             raise ValueError('Громкость музыки должна быть от −60 до −15 дБ.')
 
@@ -227,7 +229,7 @@ class Project:
         blocks = [Block(title=b['title'],script=b['script'],uid=b.get('uid') or uuid.uuid4().hex[:12],
                   sport=b.get('sport','combat' if data.get('profile')=='uz_combat' else 'hockey' if data.get('profile')=='uz_hockey' else ''),forecast=b.get('forecast',''),featured_pairs=b.get('featured_pairs',[]),kind=b.get('kind','analysis'),language=b.get('language','uz' if data.get('profile','').startswith('uz_') else 'ru'),source_hint=b.get('source_hint',[]),asr_lines=b.get('asr_lines',[]),speech_key=b.get('speech_key',''),speech_cards=b.get('speech_cards',{}), clips=[Clip(**{**c,'path':resolve(c['path']),'origin_path':resolve(c.get('origin_path',''))}) for c in b.get('clips',[])],
                   card_overrides=b.get('card_overrides',{}), match_ids=b.get('match_ids', []),
-                  edit_plan=b.get('edit_plan'), edit_key=b.get('edit_key',''),event_search_key=b.get('event_search_key',''),
+                  archive_pool=b.get('archive_pool',[]),edit_plan=b.get('edit_plan'), edit_key=b.get('edit_key',''),event_search_key=b.get('event_search_key',''),
                   events=[EventRequest(**{**e, 'selection': EventSelection(**e['selection']) if e.get('selection') else None}) for e in b.get('events', [])]) for b in data['blocks']]
         if not blocks: raise ValueError('В проекте нет разборов.')
         for block in blocks:

@@ -1,7 +1,7 @@
 """Optional user-verified recording sections, distinct from authored script times."""
 import re
 
-def parse_times(text,count,include_outro=True):
+def parse_times(text,count,include_outro=True,allow_promos=False):
     rows=[]
     pattern=r'^\s*(\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d+)?)\s+(\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d+)?)\s+(.+?)\s*$'
     def seconds(value):
@@ -18,6 +18,14 @@ def parse_times(text,count,include_outro=True):
         if b<=a:raise ValueError('Конец раздела должен быть позже начала.')
         if rows and a<rows[-1][1]:raise ValueError('Разделы таймкодов пересекаются или идут не по порядку.')
         rows.append((a,b,match[3]))
+    if allow_promos:
+        folded=[]
+        for a,b,label in rows:
+            if re.search(r'(?i)telegram|телеграм|\bтг\b|\btg\b',label):
+                if not folded:raise ValueError('Перед строкой Telegram укажите начало или разбор.')
+                start,_,name=folded[-1];folded[-1]=(start,b,name)
+            else:folded.append((a,b,label))
+        rows=folded
     if not include_outro and len(rows)!=count+1:
         raise ValueError(f'Нужно: начало и {count} разбора по порядку. В этом сценарии нет завершения.')
     if include_outro and len(rows) not in (count+2,count+3):
@@ -25,7 +33,7 @@ def parse_times(text,count,include_outro=True):
     return rows
 
 def recording_ranges(project,segments):
-    rows=parse_times(project.recording_times,len(project.blocks))
+    rows=parse_times(project.recording_times,len(project.blocks),allow_promos=project.profile=='uz_football_shorts')
     last=max(w['end'] for s in segments for w in s['words'])
     if rows[-1][1]>last+3:raise ValueError('Таймкоды выходят за запись. Укажите время исходного видео, не примерное время из сценария.')
     # User labels are descriptive; actual project blocks retain their canonical names.
@@ -45,7 +53,7 @@ def recording_ranges(project,segments):
         limit=bounds[i+1] if i+1<len(bounds) else last
         nearby=[v for v in ends if abs(v-anchor)<=2.5 and start<v<=limit]
         end=max(nearby) if nearby else min(anchor,limit)
-        if end-start<3:raise ValueError('Уточнённые разделы пересекаются или слишком короткие. Проверьте таймкоды записи.')
+        if end-start<(.15 if project.profile=='uz_football_shorts' else 3):raise ValueError('Уточнённые разделы пересекаются или слишком короткие. Проверьте таймкоды записи.')
         ranges.append((start,end))
     return ranges
 

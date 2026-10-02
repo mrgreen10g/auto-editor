@@ -127,11 +127,14 @@ class Engine:
         lines=[Line(l.text,frame(map_time(l.start-start,keep)),frame(map_time(l.end-start,keep)),l.agreement,l.review_reason,l.recognized,l.review_id) for l in source]
         meta={c.path:probe(c.path) for c in block.clips}
         if any(not x['video'] for x in meta.values()):raise ValueError('Игровая вставка должна содержать видео.')
-        inserts,cards,extra=placements(block,lines,meta,duration,p.settings.insert_frequency)
+        inserts,cards,extra=placements(block,lines,meta,duration,p.settings.insert_frequency,shorts=p.profile=='uz_football_shorts')
         if block.kind!='analysis':
             from .framing import framing_cards
             from .review import framing_draft
             inserts=[];cards,extra=framing_draft(p,block,lines,duration)
+        if p.profile=='uz_football_shorts':
+            from .shorts import finish_cards
+            cards,inserts=finish_cards(p,block,lines,cards,inserts,duration)
         from .orientation import detect_rotation
         rotation=detect_rotation(p.host,self.cache,self.cancel,self.log) if p.settings.auto_rotate else p.settings.rotate
         plan=Plan(start,end,keep,lines,inserts,cards,list(warnings)+extra,duration,rotation)
@@ -158,6 +161,7 @@ class Engine:
         from .editing import validate_plan
         validate_plan(plan)
         target=Path(target).resolve();p=self.project;s=p.settings
+        shorts=p.profile=='uz_football_shorts';cw,ch=(720,1280) if shorts else (1280,720)
         protected=p.host_paths()+list(p.assets.values())+[p.music]+[c.path for b in p.blocks for c in b.clips]+[m.path for m in p.matches]+list(p.team_logos.values())
         if any(target==Path(f).resolve() for f in protected if f):raise ValueError('Нельзя записывать результат поверх исходного файла.')
         if target.exists():raise ValueError('Файл результата уже существует. Выберите новое имя.')
@@ -177,7 +181,7 @@ class Engine:
             if rotation==180:video+=',hflip,vflip'
             elif rotation==90:video+=',transpose=clock'
             elif rotation==270:video+=',transpose=cclock'
-            video+=',scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1'
+            video+=f',scale={cw}:{ch}:force_original_aspect_ratio=decrease,pad={cw}:{ch}:(ow-iw)/2:(oh-ih)/2,setsar=1'
             if s.color:video+=',eq=contrast=1.045:saturation=1.035:brightness=-0.004'
             fl=[f'[0:v]{video}[video]','[0:a]asplit='+str(n)+''.join(f'[s{i}]' for i in range(n))]
             for i,(a,b) in enumerate(plan.keep):fl.append(f'[s{i}]atrim=start={a:.6f}:end={b:.6f},asetpts=PTS-STARTPTS[a{i}]')
@@ -219,15 +223,21 @@ class Engine:
                 a,b,c,d=[round(t*30) for t in (a,b,c,d)]
                 parts.append(f'if(between(on,{a},{b}),(1-cos(PI*(on-{a})/{b-a}))/2,if(between(on,{b},{c}),1,if(between(on,{c},{d}),(1+cos(PI*(on-{c})/{d-c}))/2,0)))')
             z='1+'+str(s.zoom_max-1)+'*('+'+'.join(parts)+')'
-            fl.append(f"[0:v]scale=2560:1440,zoompan=z='{z}':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s=1280x720:fps=30[zv]");v='zv'
+            fl.append(f"[0:v]scale={cw*2}:{ch*2},zoompan=z='{z}':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s={cw}x{ch}:fps=30[zv]");v='zv'
         from .timeline import game_transitions
+        if shorts and plan.inserts:
+            enabled='+'.join(f'gte(t,{c.start:.6f})*lt(t,{c.end+tail:.6f})' for c,tail,_,_ in game_transitions(plan))
+            fl.append(f'[{v}]split=2[portrait][lower]')
+            fl.append('[lower]crop=720:875:0:340,pad=720:1280:0:405:color=0x102D38[splitview]')
+            fl.append(f"[portrait][splitview]overlay=0:0:enable='{enabled}'[gamebase]");v='gamebase'
         for i,(c,tail,joined_before,joined_after) in enumerate(game_transitions(plan)):
             meta=probe(c.path);fade=.20 if s.transitions else 0
             # Transitions stay INSIDE the selected shot, never pull crowd frames in.
             pre=post=0
             start=c.start;source_length=c.end-c.start;length=source_length+tail
             args+=['-threads','1','-ss',f'{c.source_in:.6f}','-t',f'{source_length:.6f}','-i',c.path]
-            filt=f'trim=duration={source_length:.6f},setpts=PTS-STARTPTS,fps=30,scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1'
+            gw,gh=(720,404) if shorts else (1280,720)
+            filt=f'trim=duration={source_length:.6f},setpts=PTS-STARTPTS,fps=30,scale={gw}:{gh}:force_original_aspect_ratio=decrease,pad={gw}:{gh}:(ow-iw)/2:(oh-ih)/2,setsar=1'
             if tail:filt+=f',tpad=stop_mode=clone:stop_duration={tail:.6f}'
             filt+=',format=rgba'
             if fade:
@@ -241,8 +251,12 @@ class Engine:
             length=card.end-card.start
             if length<.15:continue
             if card.asset:
-                from .framing import asset_filter
-                filt,x,y=asset_filter(card,self.cache,self.cancel)
+                if shorts:
+                    from .shorts_graphics import asset_filter
+                    filt,x,y=asset_filter(card)
+                else:
+                    from .framing import asset_filter
+                    filt,x,y=asset_filter(card,self.cache,self.cancel)
                 args+=['-threads','1','-ss',card.source_in,'-i',card.asset]
             else:
                 image=self.cache/f'card-{i}.png';x,y=card_image(card,image,p.team_logos,p.profile)
@@ -255,6 +269,11 @@ class Engine:
             if s.wobble and not divider and card.title!='ПОДПИСКА':filt+=f",rotate='0.00349*sin(2*PI*t/4+{i})':ow=iw:oh=ih:c=none"
             fl.append(f'[{inputs}:v]{filt},setpts=PTS+{card.start:.6f}/TB[card{i}]');inputs+=1
             xpos=str(x);ypos=str(y)
+            if shorts and not card.asset and card.title!='РАЗБОР МАТЧА' and plan.inserts:
+                from PIL import Image
+                with Image.open(image) as artwork:lower=min(1130-artwork.height,int(y)+70)
+                active='+'.join(f'gte(t,{c.start:.6f})*lt(t,{c.end+tail:.6f})' for c,tail,_,_ in game_transitions(plan))
+                ypos=f'if({active},{lower},{y})'
             if s.wobble and not divider and card.title!='ПОДПИСКА':
                 xpos+=f'+3*sin(2*PI*(t-{card.start:.6f})/3.7+{i})'
                 ypos+=f'+2*sin(2*PI*(t-{card.start:.6f})/4.3+{i})'
@@ -264,7 +283,7 @@ class Engine:
             if card.title=='РАЗБОР МАТЧА':
                 enabled+=''.join(f'*not(between(t,{c.start:.6f},{c.end+tail:.6f}))' for c,tail,_,_ in game_transitions(plan))
             nv=f'panel{i}';fl.append(f"[{v}][card{i}]overlay=x='{xpos}':y='{ypos}':eof_action=pass:repeatlast=0:enable='{enabled}'[{nv}]");v=nv
-        width,height=(640,360) if draft else (s.width,s.height)
+        width,height=((360,640) if shorts else (640,360)) if draft else (s.width,s.height)
         fl.append(f'[{v}]scale={width}:{height},format=yuv420p[final]')
         graph=self.cache/'final-filter.txt';graph.write_text(';\n'.join(fl),encoding='utf-8')
         temp=target.with_name(target.stem+'.partial.mp4')

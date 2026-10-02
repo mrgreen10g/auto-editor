@@ -63,7 +63,7 @@ class EpisodeMixin:
             scroll=ttk.Scrollbar(area,command=field.yview);field.configure(yscrollcommand=scroll.set)
             scroll.pack(side='right',fill='y');field.pack(fill='both',expand=True);field.insert('1.0',getattr(draft,key).script);fields[key]=field
         page=ttk.Frame(tabs,padding=16);tabs.add(page,text='Постоянные материалы')
-        for key,label in [('disclaimer','Дисклеймер · целиком в начале'),('telegram','Telegram · слева, под речь'),('subscribe','Подписка · полная анимация')]:
+        for key,label in [('disclaimer','Дисклеймер · целиком в начале'),('telegram','Telegram · весь экран в Shorts, слева в лонгах'),('subscribe','Подписка · полная анимация')]:
             ttk.Label(page,text=label,style='CardTitle.TLabel').pack(anchor='w',pady=(14,5))
             row=ttk.Frame(page);row.pack(fill='x');var=tk.StringVar(value=draft.assets.get(key,''));asset_vars[key]=var
             ttk.Entry(row,textvariable=var).pack(side='left',fill='x',expand=True)
@@ -76,7 +76,7 @@ class EpisodeMixin:
         timing_field=None
         if draft.profile.startswith('uz_'):
             timing_page=ttk.Frame(tabs,padding=12);tabs.add(timing_page,text='Таймкоды записи')
-            ttk.Label(timing_page,text='Необязательно. Вставьте проверенное время исходного видео: начало, разборы в порядке проекта, итоги и прощание. Пустое поле — автоматический поиск.',wraplength=710).pack(anchor='w',pady=(0,10))
+            ttk.Label(timing_page,text='Необязательно. Вставьте проверенное время исходного видео: начало, разборы в порядке проекта, итоги и прощание. Пустое поле — автоматический поиск. В Shorts рекламу можно указать отдельной строкой «ТГ канал».',wraplength=710).pack(anchor='w',pady=(0,10))
             ttk.Label(timing_page,text='Пример: 00:32 02:08 Augsburg Bayer\nНазвания — подписи для удобства. Итоги и концовку можно указать одной или двумя строками.\nПромежутки между разделами допустимы: укажите начало и конец каждого нужного блока.\nОкруглённые границы уточняются по ближайшей речи в пределах 2,5 секунды.',wraplength=710).pack(anchor='w',pady=(0,10))
             timing_field=tk.Text(timing_page,wrap='word',font=('Segoe UI',11),undo=True,height=9,padx=10,pady=10)
             timing_field.pack(fill='both',expand=True);timing_field.insert('1.0',draft.recording_times)
@@ -88,7 +88,8 @@ class EpisodeMixin:
                 from .script_input import read_script
                 text=read_script(path);parsed=None
                 if draft.profile.startswith('uz_'):
-                    if draft.profile=='uz_hockey':from .uz_hockey import parse_script
+                    if draft.profile=='uz_football_shorts':from .shorts import parse_script
+                    elif draft.profile=='uz_hockey':from .uz_hockey import parse_script
                     elif draft.profile=='uz_combat':from .combat import parse_script
                     else:from .uzbek import parse_script
                     start,parsed,end=parse_script(text);intro=start.script;outro=end.script;blocks=[(b.title,b.script) for b in parsed]
@@ -118,13 +119,13 @@ class EpisodeMixin:
                 if draft.recording_times:
                     try:
                         from .recording_times import parse_times
-                        parse_times(draft.recording_times,len(draft.blocks),include_outro=draft.profile!='uz_combat' or bool(fields['outro'].get('1.0','end').strip()))
+                        parse_times(draft.recording_times,len(draft.blocks),allow_promos=draft.profile=='uz_football_shorts',include_outro=draft.profile!='uz_combat' or bool(fields['outro'].get('1.0','end').strip()))
                     except ValueError as error:return messagebox.showerror('Таймкоды записи',str(error),parent=w)
             for key,field in fields.items():getattr(draft,key).script=field.get('1.0','end').strip()
             draft.assets={k:v.get().strip() for k,v in asset_vars.items()};draft.full_video=enabled.get()
             if draft.full_video:
-                if any(len(getattr(draft,k).script)<30 for k in fields if not (draft.profile=='uz_combat' and k=='outro' and not draft.outro.script)):return messagebox.showerror('Тексты','Заполните начало и завершение.',parent=w)
-                required=('disclaimer',) if draft.profile.startswith('uz_') else ('disclaimer','telegram','subscribe')
+                if any(len(getattr(draft,k).script)<(3 if draft.profile=='uz_football_shorts' else 30) for k in fields if not (draft.profile=='uz_combat' and k=='outro' and not draft.outro.script)):return messagebox.showerror('Тексты','Заполните начало и завершение.',parent=w)
+                required=() if draft.profile=='uz_football_shorts' else ('disclaimer',) if draft.profile.startswith('uz_') else ('disclaimer','telegram','subscribe')
                 if any(not draft.assets.get(k) or not Path(draft.assets[k]).is_file() for k in required):return messagebox.showerror('Материалы','Выберите дисклеймер.' if draft.profile.startswith('uz_') else 'Выберите дисклеймер, Telegram и подписку.',parent=w)
                 if any(v and not Path(v).is_file() for v in draft.assets.values()):return messagebox.showerror('Материалы','Один из выбранных файлов не найден.',parent=w)
                 draft.whole_episode=True

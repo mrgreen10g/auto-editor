@@ -184,6 +184,7 @@ def framing_cards_uz(project,block,lines,duration):
                 cards.append(Card(line.start,line.end,'ПРОГНОЗ',text,i,forecast_id=owner.uid));seen.add(owner.uid);continue
             if 'obuna' in t or 'layk bos' in t:
                 asset=project.assets.get('subscribe','')
+                if not asset and project.profile=='uz_football_shorts':continue
                 if not asset:raise ValueError('Добавьте анимацию подписки узбекского ведущего.')
                 end=frame(line.start+probe(asset)['duration'])
                 cards.append(Card(line.start,end,'ПОДПИСКА','Obuna bo‘ling',i,asset))
@@ -221,6 +222,7 @@ def asr_framing_cards(project,block,lines,duration):
         if block.kind=='outro':
             if 'obuna' in t or 'layk bos' in t:
                 asset=project.assets.get('subscribe','')
+                if not asset and project.profile=='uz_football_shorts':continue
                 if not asset:raise ValueError('Добавьте анимацию подписки узбекского ведущего.')
                 end=frame(line.start+probe(asset)['duration'])
                 cards.append(Card(line.start,end,'ПОДПИСКА','Obuna bo‘ling',i,asset))

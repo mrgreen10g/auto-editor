@@ -131,6 +131,9 @@ def section_card(card,path,profile='ru_hockey'):
 
 
 def card_image(card, path, logos=None,profile='ru_hockey'):
+    if profile=='uz_football_shorts':
+        from .shorts_graphics import card_image as short_card
+        return short_card(card,path,logos)
     if profile=='uz_combat':
         from .combat_graphics import card_image as combat_card
         return combat_card(card,path)

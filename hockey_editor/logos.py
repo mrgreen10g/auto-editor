@@ -5,7 +5,7 @@ from .graphics import block_teams
 
 
 def identity(name,profile):
-    if profile=='uz_football':return football_identity(name)
+    if profile.startswith('uz_football'):return football_identity(name)
     if profile=='uz_hockey':
         from .hockey_names import identity as hockey_identity
         return hockey_identity(name)

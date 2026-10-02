@@ -190,6 +190,9 @@ def recap_cue(text):
                 (re.search(r'eslat|isatib',t) and re.search(r'tanlovlar|variantlar',t) and re.search(r'yana|oxir|qisqacha',t)))
 
 def sections(project,segments):
+    if project.profile=='uz_football_shorts':
+        from .shorts import sections as short_sections
+        return short_sections(project,segments)
     words=[w for s in segments for w in s['words']];tg=telegram_spans(words);starts=[]
     if project.recording_times.strip():
         from .recording_times import recording_bounds
@@ -257,11 +260,16 @@ def _prepare(project,segments):
     if project.recording_times.strip():
         from .recording_times import recording_ranges
         ranges=recording_ranges(project,segments)
+    if project.profile=='uz_football_shorts':
+        from .shorts import promo_spans
+        tg=promo_spans(project,segments,ranges,tg)
     picks={b.uid:forecast_text(b) for b in project.blocks}
     if any(not v for v in picks.values()):raise ValueError('Укажите основной прогноз в сценарии каждого разбора: Mening tanlovim — …')
     for index,b in enumerate([project.intro,*project.blocks,project.outro]):
         lo,hi=ranges[index];annotations=[];local=[s for s in segments if lo<=s['start']<hi];forecast_review=[];forecast_owners={};forecast_reasons={}
-        if b.kind=='intro':
+        if b.kind=='intro' and project.profile=='uz_football_shorts':
+            uncertain=set()  # Hook facts are not a list of the episode fixtures.
+        elif b.kind=='intro':
             subset=[w for w in words if lo<=w['start']<hi]
             matched=[];uncertain=set()
             sequence=intro_sequence_spans(project.blocks,subset)
@@ -382,7 +390,10 @@ def synchronize(project,cache,cancel,log):
         if b.events:continue
         local=[m for m in project.matches if m.id in b.match_ids]
         if not local:log('Нет игровой записи: '+b.title+'. Останется ведущий.');continue
-        scans={m.id:GoalScanner(cancel=cancel,log=log).scan(m) for m in local}
+        from .shorts import archive_scans
+        reused=archive_scans(b,local) if project.profile=='uz_football_shorts' else {}
+        scans={m.id:reused[m.id] if m.id in reused else GoalScanner(cancel=cancel,log=log).scan(m) for m in local}
+        if reused:log('Использую проверенные эпизоды из лонга: '+b.title)
         actual=copy.deepcopy(b);actual.script='\n'.join(l['text'] for l in b.asr_lines)
         b.events=propose(events(actual,local),scans,local,False)
         for event in b.events:
@@ -437,3 +448,4 @@ def prepare(project,segments,review=False,duration=None):
         old.events=new.events
     project.episode_key=''
     return bounds
+

@@ -34,6 +34,7 @@ class Card:
     asset: str = ''
     source_in: float = 0.
     forecast_id: str = ''
+    fixture: str = ''
     review_id: str = ""
     review_reason: str = ""
 
@@ -113,7 +114,7 @@ def map_time(t,keep):
 
 def norm(text):return re.sub(r'\s+',' ',text.lower().replace('ё','е')).strip()
 
-def placements(block,lines,clip_meta,duration,frequency='normal'):
+def placements(block,lines,clip_meta,duration,frequency='normal',shorts=False):
     from .event_rules import explicit_reference,topic_for_phrase,suggested_names
     warnings=[];matched=[]
     for clip in block.clips:
@@ -125,7 +126,7 @@ def placements(block,lines,clip_meta,duration,frequency='normal'):
         matched.append((found[0],clip))
     matched.sort(key=lambda x:x[0]);used=set();inserts=[];last_play_source=None
     early=[lines[i].start for i,c in matched if lines[i].start>0 and explicit_reference(c.phrase)]
-    intro_end=min([5,duration]+early)
+    intro_end=min([2.2 if shorts else 5,duration]+early)
     for number,(idx,clip) in enumerate(matched):
         if idx in used:
             warnings.append(f'Две вставки к одной фразе: «{clip.phrase}» пропущена.');continue
@@ -137,7 +138,7 @@ def placements(block,lines,clip_meta,duration,frequency='normal'):
         length=clip_meta[clip.path]['duration']
         start=max(start,intro_end)  # The introduction belongs to the presenter.
         if clip.kind=='play' and not explicit_reference(clip.phrase):
-            gap,maximum={'low':(15,3.5),'normal':(8,5),'high':(3,7)}[frequency]
+            gap,maximum=({'low':(6,3),'normal':(3,4),'high':(1.5,4)} if shorts else {'low':(15,3.5),'normal':(8,5),'high':(3,7)})[frequency]
             if inserts and start-inserts[-1].end<gap: continue
             source=clip.origin_path or clip.path
             flexible=clip.flexible_source or clip.context_label.startswith('Архив')

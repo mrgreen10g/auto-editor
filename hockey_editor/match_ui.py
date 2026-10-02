@@ -123,12 +123,12 @@ class MatchMixin:
                 if self.project.profile=='uz_hockey':
                     from .hockey_names import mentioned,display
                     names=[display(n) for n in mentioned(Path(path).stem)]+['','']
-                if self.project.profile=='uz_football':
+                if self.project.profile.startswith('uz_football'):
                     from .graphics import block_teams
                     from .team_names import football_names
                     found=football_names(Path(path).stem)
                     names=found if len(found)==2 else block_teams(Path(path).stem)
-                source = MatchSource(path, names[0], names[1],sport='football' if self.project.profile=='uz_football' else 'hockey')
+                source = MatchSource(path, names[0], names[1],sport='football' if self.project.profile.startswith('uz_football') else 'hockey')
                 if self.project.profile=='uz_combat':source.sport='combat'
                 from .graphics import block_teams
                 dialog = SourceDialog(self.root, source,block_teams(self.project.blocks[self.index].title))

@@ -140,7 +140,7 @@ class App(EpisodeMixin,MatchMixin):
             self.button(bar, label, cmd).pack(side='right', padx=(8, 0))
         profilebar=ttk.Frame(main);profilebar.pack(fill='x',pady=(0,8))
         ttk.Label(profilebar,text='Шаблон ведущего',style='Muted.TLabel').pack(side='left',padx=(0,8))
-        self.profilebox=ttk.Combobox(profilebar,values=['Хоккей · русский','Футбол · узбекский','Бои · узбекский','Хоккей · узбекский'],state='readonly',width=28)
+        self.profilebox=ttk.Combobox(profilebar,values=['Хоккей · русский','Футбол · узбекский','Бои · узбекский','Хоккей · узбекский','Футбол · УЗ Shorts'],state='readonly',width=28)
         self.profilebox.pack(side='left');self.controls.append(self.profilebox)
         self.profilebox.bind('<<ComboboxSelected>>',self.switch_profile)
         ui.Tooltip(self.profilebox,'Язык речи и плашек, вид спорта и отдельные материалы канала. Футбол: очные и архивные встречи для каждого разбора.')
@@ -189,6 +189,7 @@ class App(EpisodeMixin,MatchMixin):
         self.button(presenter,'Восстановить ссылки',self.relink_media).pack(anchor='w',pady=(6,0))
         framing=ui.card(page,'Начало и завершение','Дисклеймер, представление команд, Telegram, итоги и подписка.')
         self.button(framing,'Настроить полный выпуск…',self.edit_framing).pack(anchor='w')
+        self.button(framing,'Shorts · взять матчи из лонга…',self.import_long_matches).pack(anchor='w',pady=(6,0))
         self.framing_hint=ttk.Label(framing,style='CardMuted.TLabel',wraplength=650);self.framing_hint.pack(anchor='w',pady=(8,0))
         script = ui.card(page, 'Сценарий разбора', 'Вставьте текст так, как его произносит ведущий. Таймкоды не нужны.', '02')
         row = ttk.Frame(script, style='Card.TFrame')
@@ -487,13 +488,14 @@ class App(EpisodeMixin,MatchMixin):
         p.settings.noise_reduction = {'Выключено': 10, 'Мягко': 6, 'Обычно': 10, 'Сильнее': 14}[self.noise.get()]
         p.settings.music_db = {'Очень тихо': -32, 'Тихо': -28, 'Заметнее': -24}[self.level.get()]
         p.settings.width, p.settings.height = (1920, 1080) if self.resolution.get() == '1080p' else (1280, 720)
+        if p.profile=='uz_football_shorts':p.settings.width,p.settings.height=p.settings.height,p.settings.width
         from .logos import assign
         assign(p)
 
     def refresh(self):
         self.refreshing = True
         p = self.project
-        self.profilebox.current(('ru_hockey','uz_football','uz_combat','uz_hockey').index(p.profile))
+        self.profilebox.current(('ru_hockey','uz_football','uz_combat','uz_hockey','uz_football_shorts').index(p.profile))
         block = p.blocks[self.index]
         self.scope.set("Все разборы" if p.whole_episode else "Текущий разбор")
         self.host.set(p.host)
@@ -516,7 +518,7 @@ class App(EpisodeMixin,MatchMixin):
             var.set(getattr(p.settings, key))
         self.noise.set('Выключено' if not p.settings.denoise else 'Мягко' if p.settings.noise_reduction < 8 else 'Сильнее' if p.settings.noise_reduction > 12 else 'Обычно')
         self.level.set('Очень тихо' if p.settings.music_db <= -30 else 'Заметнее' if p.settings.music_db >= -26 else 'Тихо')
-        self.resolution.set('1080p' if p.settings.width == 1920 else '720p')
+        self.resolution.set('1080p' if max(p.settings.width,p.settings.height) == 1920 else '720p')
         from .preferences import presets
         self.presetbox.configure(values=sorted(presets(p.profile)))
         if self.presetbox.get() not in presets(p.profile):self.presetbox.set('')
@@ -807,9 +809,23 @@ class App(EpisodeMixin,MatchMixin):
         else:self.project.team_logos.pop(name,None)
         self.invalidate();self.update_summary()
 
+    def import_long_matches(self):
+        if self.busy:return
+        self.collect()
+        if self.project.profile!='uz_football_shorts':
+            return messagebox.showinfo('Матчи из лонга','Выберите шаблон «Футбол · УЗ Shorts» и загрузите сценарий шортса.',parent=self.root)
+        path=filedialog.askopenfilename(parent=self.root,title='Проект лонга с найденными эпизодами',filetypes=[('Проект','*.hockeyproj')])
+        if not path:return
+        try:
+            from .shorts import import_archives
+            count,notes=import_archives(self.project,Project.load(path))
+            self.scans.clear();self.invalidate();self.refresh()
+            messagebox.showinfo('Матчи из лонга',f'Перенесено проверенных эпизодов: {count}.\n'+'\n'.join(notes),parent=self.root)
+        except (OSError,ValueError) as e:messagebox.showerror('Матчи из лонга',str(e),parent=self.root)
+
     def switch_profile(self,event=None):
         if self.busy:return
-        profile=('ru_hockey','uz_football','uz_combat','uz_hockey')[self.profilebox.current()]
+        profile=('ru_hockey','uz_football','uz_combat','uz_hockey','uz_football_shorts')[self.profilebox.current()]
         if profile==self.project.profile:return
         self.collect()
         from .profiles import apply_profile

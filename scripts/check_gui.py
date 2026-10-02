@@ -405,6 +405,18 @@ def check():
         app.profilebox.current(0)
         with patch('hockey_editor.profiles.kit_path',return_value=tmp/'ru-kit.json'):app.switch_profile()
         root.update();assert app.logos_panel.winfo_manager()
+        # Shorts is a first-class portrait profile, including collection and saved projects.
+        app.profilebox.current(4)
+        with patch('hockey_editor.profiles.kit_path',return_value=tmp/'shorts-kit.json'):app.switch_profile()
+        root.update();app.collect()
+        assert app.project.profile=='uz_football_shorts'
+        assert (app.project.settings.width,app.project.settings.height)==(1080,1920)
+        assert app.project.full_video and app.project.whole_episode
+        app.project.save(tmp/'shorts.hockeyproj')
+        assert Project.load(tmp/'shorts.hockeyproj').profile=='uz_football_shorts'
+        app.profilebox.current(0)
+        with patch('hockey_editor.profiles.kit_path',return_value=tmp/'ru-kit.json'):app.switch_profile()
+        app.collect();assert app.project.settings.width>app.project.settings.height
         assert not errors, errors
         app.close()
     (out / 'gui-check.json').write_text(json.dumps({'status': 'ok', 'checks': ['v1-project-compatibility', 'block-switching', 'card-editing', 'stale-plan-invalidation', 'busy-control-restoration', 'worker-queue-flow', 'compact-window-layout', 'multiple-source-review-flow', 'v2-project-roundtrip', 'review-retains-custom-trim','episode-editor-roundtrip','seek-after-edit-rebuild-save','source-visual-trim','persistent-block-navigation','all-block-events-own-source','per-block-logo-tabs','ordered-host-sources','full-video-dialog-roundtrip']}, indent=2), encoding='utf-8')

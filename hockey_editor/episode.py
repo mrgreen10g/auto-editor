@@ -132,7 +132,7 @@ def combine(project,plans):
         review_items.extend(tasks)
         for name in baseline:baseline[name].extend(base.get(name,[]))
         media.extend(p.media)
-        if cursor>0:
+        if cursor>0 and project.profile!='uz_football_shorts':
             title='ИТОГИ ВЫПУСКА' if block.kind=='outro' else 'СМЕНА МАТЧА'
             text=('Tanlovlarni takrorlaymiz' if block.language=='uz' else 'Повторим прогнозы') if block.kind=='outro' else block.title
             cards.append(Card(cursor,frame(cursor+min(.8,p.duration)),title,text))
@@ -204,7 +204,7 @@ class EpisodeEngine(Engine):
         if self.project.full_video:
             # Uzbek scripts can contain CTAs omitted in the actual recording.
             # Spoken overlays validate their assets in asr_framing_cards.
-            required=('disclaimer',) if self.project.profile.startswith('uz_') else ('disclaimer','telegram','subscribe')
+            required=() if self.project.profile=='uz_football_shorts' else ('disclaimer',) if self.project.profile.startswith('uz_') else ('disclaimer','telegram','subscribe')
             for key in required:
                 if not self.project.assets.get(key) or not Path(self.project.assets[key]).is_file():raise ValueError('Добавьте материал полного выпуска: '+{'disclaimer':'дисклеймер','telegram':'Telegram','subscribe':'подписка'}[key])
             for key,path in self.project.assets.items():
@@ -270,7 +270,7 @@ class EpisodeEngine(Engine):
             store_plan(runtime,i,p)
             plans.append(p);previous=p.source_end
         plan=combine(runtime,plans)
-        if self.project.full_video:plan=prepend_disclaimer(plan,self.project.assets['disclaimer'])
+        if self.project.full_video and self.project.assets.get('disclaimer'):plan=prepend_disclaimer(plan,self.project.assets['disclaimer'])
         store_episode(self.project,plan);self.save_plan(plan)
         self.log(f'Выпуск готов к проверке: {len(plans)} разбора, {plan.duration:.1f} с.')
         return plan

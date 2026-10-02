@@ -75,6 +75,9 @@ def optional_subscription(cards,duration):
 
 
 def framing_cards(project,block,lines,duration):
+    if project.profile=='uz_football_shorts':
+        from .uzbek import asr_framing_cards
+        return asr_framing_cards(project,block,lines,duration)
     if project.profile=='uz_hockey':
         from .uz_hockey import framing_cards as hockey_cards
         return hockey_cards(project,block,lines,duration)
