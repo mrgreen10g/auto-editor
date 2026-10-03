@@ -212,8 +212,10 @@ class Engine:
                 run(args,self.cancel,self.cache/'base-render.log',lambda t:self.log(f'Подготовка ведущего: {min(100,int(t/plan.duration*100))}%'))
                 ready.write_text(base_key)
             else:self.log('Использую подготовленную дорожку ведущего.')
+        from .media import normalize_encoded_orientation
+        normalize_encoded_orientation(base,self.cancel)
         self.check();self.log('Собираю игровые вставки, наезды до 120% и анимацию…')
-        args=['-y','-threads','2','-i',base];fl=[];v='0:v';inputs=1
+        args=['-y','-threads','2','-display_rotation:v:0','0','-noautorotate','-i',base];fl=[];v='0:v';inputs=1
         windows=zoom_windows(plan.duration,plan.inserts) if s.zoom else []
         intro_head=next((m['end']-m['start'] for m in plan.media if m.get('kind')=='disclaimer'),0)
         windows=[w for w in windows if w[0]>=intro_head]
@@ -284,7 +286,7 @@ class Engine:
                 enabled+=''.join(f'*not(between(t,{c.start:.6f},{c.end+tail:.6f}))' for c,tail,_,_ in game_transitions(plan))
             nv=f'panel{i}';fl.append(f"[{v}][card{i}]overlay=x='{xpos}':y='{ypos}':eof_action=pass:repeatlast=0:enable='{enabled}'[{nv}]");v=nv
         width,height=((360,640) if shorts else (640,360)) if draft else (s.width,s.height)
-        fl.append(f'[{v}]scale={width}:{height},format=yuv420p[final]')
+        fl.append(f'[{v}]scale={width}:{height},setsar=1,format=yuv420p[final]')
         graph=self.cache/'final-filter.txt';graph.write_text(';\n'.join(fl),encoding='utf-8')
         temp=target.with_name(target.stem+'.partial.mp4')
         if temp.exists():temp.unlink()
@@ -292,6 +294,10 @@ class Engine:
         try:
             run(args,self.cancel,self.cache/'final-render.log',lambda t:self.log(f'Экспорт: {min(100,int(t/plan.duration*100))}%'))
             self.check()
+            normalize_encoded_orientation(temp,self.cancel)
+            info=probe(temp)
+            if (info['width'],info['height'])!=(width,height) or info['sample_aspect_ratio']!=[1,1] or abs(info['rotation'])>=.01:
+                raise ValueError('Неверная ориентация или пропорции готового видео. Экспорт не сохранён.')
             if target.exists():raise ValueError('Файл с выбранным именем появился во время экспорта. Выберите другое имя.')
             # Rename only a successfully closed MP4. Existing exports are never overwritten.
             temp.rename(target)

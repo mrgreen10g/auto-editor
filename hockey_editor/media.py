@@ -67,9 +67,32 @@ def _probe_cached(path, size, modified):
     video=next((l for l in text.splitlines() if 'Video:' in l),'')
     size=re.search(r'\b(\d{2,5})x(\d{2,5})\b',video)
     if not duration: raise ValueError(f'Не удалось прочитать длительность: {Path(path).name}')
-    return {'duration':int(duration[1])*3600+int(duration[2])*60+float(duration[3]),
+    rotation=re.search(r'displaymatrix:\s*rotation of\s*([-+\d.]+)',text)
+    sar=re.search(r'\bSAR\s+(\d+):(\d+)',video)
+    return {'rotation':float(rotation[1]) if rotation else 0.,
+            'sample_aspect_ratio':[int(sar[1]),int(sar[2])] if sar else [1,1],
+            'duration':int(duration[1])*3600+int(duration[2])*60+float(duration[3]),
             'video':bool(video),'audio':'Audio:' in text,
             'width':int(size[1]) if size else 0,'height':int(size[2]) if size else 0}
 
 def audio_extract(path,target,cancel=None):
     run(['-y','-i',path,'-vn','-ac','1','-ar','16000','-c:a','pcm_s16le',target],cancel)
+
+
+def normalize_encoded_orientation(path,cancel=None):
+    """Only for our already oriented intermediates, never camera originals.
+
+    FFmpeg may preserve the input stream display matrix even after applying its
+    rotation to decoded frames. Remove that stale matrix without re-encoding.
+    The input override is intentional: output rotate metadata alone is ignored
+    by some supported FFmpeg builds.
+    """
+    path=Path(path)
+    if abs(probe(path)['rotation'])<.01:return
+    temp=path.with_name(path.stem+'.orientation.partial.mp4')
+    try:
+        run(['-y','-display_rotation:v:0','0','-noautorotate','-i',path,
+             '-map','0','-c','copy','-map_metadata','-1','-movflags','+faststart',temp],cancel)
+        if abs(probe(temp)['rotation'])>=.01:raise ValueError('Не удалось очистить повторный поворот подготовленного видео.')
+        temp.replace(path)
+    finally:temp.unlink(missing_ok=True)
