@@ -12,6 +12,8 @@ from .timeline import Plan,Card,frame
 def assembly_project(project):
     runtime=copy.copy(project)
     runtime.blocks=([project.intro]+project.blocks+([project.outro] if project.outro.script.strip() or project.profile!='uz_combat' else [])) if project.full_video else project.blocks
+    if project.profile.endswith('_shorts'):
+        runtime.blocks=[b for b in runtime.blocks if b.kind=='analysis' or b.script.strip()]
     return runtime
 
 
@@ -132,7 +134,7 @@ def combine(project,plans):
         review_items.extend(tasks)
         for name in baseline:baseline[name].extend(base.get(name,[]))
         media.extend(p.media)
-        if cursor>0 and project.profile!='uz_football_shorts':
+        if cursor>0 and not project.profile.endswith('_shorts'):
             title='ИТОГИ ВЫПУСКА' if block.kind=='outro' else 'СМЕНА МАТЧА'
             text=('Tanlovlarni takrorlaymiz' if block.language=='uz' else 'Повторим прогнозы') if block.kind=='outro' else block.title
             cards.append(Card(cursor,frame(cursor+min(.8,p.duration)),title,text))
@@ -204,7 +206,7 @@ class EpisodeEngine(Engine):
         if self.project.full_video:
             # Uzbek scripts can contain CTAs omitted in the actual recording.
             # Spoken overlays validate their assets in asr_framing_cards.
-            required=() if self.project.profile=='uz_football_shorts' else ('disclaimer',) if self.project.profile.startswith('uz_') else ('disclaimer','telegram','subscribe')
+            required=() if self.project.profile.endswith('_shorts') else ('disclaimer',) if self.project.profile.startswith('uz_') else ('disclaimer','telegram','subscribe')
             for key in required:
                 if not self.project.assets.get(key) or not Path(self.project.assets[key]).is_file():raise ValueError('Добавьте материал полного выпуска: '+{'disclaimer':'дисклеймер','telegram':'Telegram','subscribe':'подписка'}[key])
             for key,path in self.project.assets.items():
@@ -224,13 +226,13 @@ class EpisodeEngine(Engine):
         runtime=assembly_project(self.project)
         snapshot=[(copy.deepcopy(b.edit_plan),b.edit_key) for b in runtime.blocks]
         try:
-            if self.project.profile=='ru_hockey' and (self.project.full_video or self.project.settings.cut_pauses) and runtime.blocks[0].script.strip():
+            if self.project.profile in ('ru_hockey','ru_hockey_shorts') and (self.project.full_video or self.project.settings.cut_pauses) and runtime.blocks[0].script.strip():
                 from .ru_speech import prepare
                 return self._assemble(runtime,prepare(self.project,runtime.blocks,self.cache,self.cancel,self.log))
             return self._assemble(runtime)
         except AlignmentError:
             for block,(plan,key) in zip(runtime.blocks,snapshot):block.edit_plan=plan;block.edit_key=key
-            if self.project.profile!='ru_hockey':raise
+            if self.project.profile not in ('ru_hockey','ru_hockey_shorts'):raise
             from .ru_speech import prepare
             self.log('Обычная разметка неустойчива. Проверяю весь выпуск по словам и порядку частей…')
             speech=prepare(self.project,runtime.blocks,self.cache,self.cancel,self.log)

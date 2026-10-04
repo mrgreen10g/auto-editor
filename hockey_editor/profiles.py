@@ -4,15 +4,16 @@ from pathlib import Path
 
 
 def kit_path(profile='ru_hockey'):
-    if profile=='uz_football_shorts':return Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'asset-kit-uz-shorts.json'
+    if profile=='ru_hockey_shorts':return Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'asset-kit-ru-shorts.json'
+    if profile.endswith('_shorts'):return Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'asset-kit-uz-shorts.json'
     return Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/('asset-kit-uz-hockey.json' if profile=='uz_hockey' else 'asset-kit-uz-combat.json' if profile=='uz_combat' else 'asset-kit-uz-football.json' if profile.startswith('uz_football') else 'asset-kit.json')
 
 
 def apply_profile(project,profile):
-    if profile not in ('ru_hockey','uz_football','uz_combat','uz_hockey','uz_football_shorts'):raise ValueError('Неизвестный шаблон.')
+    if profile not in ('ru_hockey','uz_football','uz_combat','uz_hockey','uz_football_shorts','ru_hockey_shorts'):raise ValueError('Неизвестный шаблон.')
     if project.profile==profile:return
-    was_short=project.profile=='uz_football_shorts'
-    if profile=='uz_football_shorts':
+    was_short=project.profile.endswith('_shorts')
+    if profile.endswith('_shorts'):
         project.settings.width,project.settings.height=1080,1920
         project.settings.wobble=False;project.settings.insert_frequency='high'
         project.full_video=True;project.whole_episode=True

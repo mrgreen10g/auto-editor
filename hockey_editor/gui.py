@@ -140,7 +140,7 @@ class App(EpisodeMixin,MatchMixin):
             self.button(bar, label, cmd).pack(side='right', padx=(8, 0))
         profilebar=ttk.Frame(main);profilebar.pack(fill='x',pady=(0,8))
         ttk.Label(profilebar,text='Шаблон ведущего',style='Muted.TLabel').pack(side='left',padx=(0,8))
-        self.profilebox=ttk.Combobox(profilebar,values=['Хоккей · русский','Футбол · узбекский','Бои · узбекский','Хоккей · узбекский','Футбол · УЗ Shorts'],state='readonly',width=28)
+        self.profilebox=ttk.Combobox(profilebar,values=['Хоккей · русский','Футбол · узбекский','Бои · узбекский','Хоккей · узбекский','Футбол · УЗ Shorts','Хоккей · РУ Shorts'],state='readonly',width=28)
         self.profilebox.pack(side='left');self.controls.append(self.profilebox)
         self.profilebox.bind('<<ComboboxSelected>>',self.switch_profile)
         ui.Tooltip(self.profilebox,'Язык речи и плашек, вид спорта и отдельные материалы канала. Футбол: очные и архивные встречи для каждого разбора.')
@@ -488,14 +488,14 @@ class App(EpisodeMixin,MatchMixin):
         p.settings.noise_reduction = {'Выключено': 10, 'Мягко': 6, 'Обычно': 10, 'Сильнее': 14}[self.noise.get()]
         p.settings.music_db = {'Очень тихо': -32, 'Тихо': -28, 'Заметнее': -24}[self.level.get()]
         p.settings.width, p.settings.height = (1920, 1080) if self.resolution.get() == '1080p' else (1280, 720)
-        if p.profile=='uz_football_shorts':p.settings.width,p.settings.height=p.settings.height,p.settings.width
+        if p.profile.endswith('_shorts'):p.settings.width,p.settings.height=p.settings.height,p.settings.width
         from .logos import assign
         assign(p)
 
     def refresh(self):
         self.refreshing = True
         p = self.project
-        self.profilebox.current(('ru_hockey','uz_football','uz_combat','uz_hockey','uz_football_shorts').index(p.profile))
+        self.profilebox.current(('ru_hockey','uz_football','uz_combat','uz_hockey','uz_football_shorts','ru_hockey_shorts').index(p.profile))
         block = p.blocks[self.index]
         self.scope.set("Все разборы" if p.whole_episode else "Текущий разбор")
         self.host.set(p.host)
@@ -825,7 +825,7 @@ class App(EpisodeMixin,MatchMixin):
 
     def switch_profile(self,event=None):
         if self.busy:return
-        profile=('ru_hockey','uz_football','uz_combat','uz_hockey','uz_football_shorts')[self.profilebox.current()]
+        profile=('ru_hockey','uz_football','uz_combat','uz_hockey','uz_football_shorts','ru_hockey_shorts')[self.profilebox.current()]
         if profile==self.project.profile:return
         self.collect()
         from .profiles import apply_profile

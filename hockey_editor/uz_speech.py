@@ -20,7 +20,7 @@ def recording_key(project):
     return hashlib.sha256(json.dumps([MODEL_REV,'beam5-vocabulary-v2',recognition_prompt(project),project.profile,[b.title for b in project.blocks],data]).encode()).hexdigest()
 
 def speech_key(project):
-    return hashlib.sha256(json.dumps(['uz-speech-10-local-forecast-review',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['uz-shorts-promo-v2' if project.profile=='uz_football_shorts' else 'uz-speech-10-local-forecast-review',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
 
 def model_path(cancel,log):
     folder=Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'Models'/'uzbek-turbo'
@@ -170,9 +170,9 @@ def telegram_spans(words):
         if not result or span[0]>result[-1][1]:result.append(span)
     return result
 
-def contextual_telegram_spans(block,segments,lo,hi):
+def contextual_telegram_spans(block,segments,lo,hi,allow_analysis=False):
     """A script-confirmed promo can survive an unrecognized Telegram name."""
-    if block.kind not in ('intro','outro') or 'telegram' not in norm(block.script):return []
+    if (block.kind not in ('intro','outro') and not allow_analysis) or 'telegram' not in norm(block.script):return []
     result=[]
     for segment in segments:
         words=[w for w in segment['words'] if lo<=w['start'] and w['end']<=hi]
@@ -337,7 +337,7 @@ def _prepare(project,segments):
         promos=[(a,z) for a,z in tg if lo<=a<z<=hi]
         promo_review=[]
         if not promos:
-            promo_review=contextual_telegram_spans(b,segments,lo,hi);promos=promo_review
+            promo_review=contextual_telegram_spans(b,segments,lo,hi,allow_analysis=project.profile=='uz_football_shorts');promos=promo_review
         for a,z in promos:
             if not any(a<end and z>start for start,end,_,_ in annotations):annotations.append((a,z,'ТЕЛЕГРАМ','Telegram'))
         b.asr_lines,b.speech_cards=make_lines(segments,lo,hi,annotations);b.speech_key=key

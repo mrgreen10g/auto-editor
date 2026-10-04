@@ -23,11 +23,11 @@ class Engine:
             s=Path(p).stat();return [str(Path(p).resolve()),s.st_size,s.st_mtime_ns]
         from .framing import prepared_script
         data={'version':ALIGNMENT_VERSION,'host':stat(self.project.host) if len(self.project.host_paths())==1 else [stat(v) for v in self.project.host_paths()],'script':prepared_script(self.project.blocks[self.index]),'floor':frame(source_floor)}
-        if self.project.profile!='ru_hockey':data['profile']=self.project.profile
+        if self.project.profile not in ('ru_hockey','ru_hockey_shorts'):data['profile']=self.project.profile
         return hashlib.sha256(json.dumps(data,ensure_ascii=False).encode()).hexdigest()
 
     def analyze(self,source_floor=0,speech=None,recover=True):
-        if recover and speech is None and self.project.profile=='ru_hockey' and self.project.settings.cut_pauses and getattr(self,'recover_speech',True):
+        if recover and speech is None and self.project.profile in ('ru_hockey','ru_hockey_shorts') and self.project.settings.cut_pauses and getattr(self,'recover_speech',True):
             self.project.validate(self.index)
             from .ru_speech import prepare
             found=prepare(self.project,self.project.blocks,self.cache,self.cancel,self.log)
@@ -127,12 +127,12 @@ class Engine:
         lines=[Line(l.text,frame(map_time(l.start-start,keep)),frame(map_time(l.end-start,keep)),l.agreement,l.review_reason,l.recognized,l.review_id) for l in source]
         meta={c.path:probe(c.path) for c in block.clips}
         if any(not x['video'] for x in meta.values()):raise ValueError('Игровая вставка должна содержать видео.')
-        inserts,cards,extra=placements(block,lines,meta,duration,p.settings.insert_frequency,shorts=p.profile=='uz_football_shorts')
+        inserts,cards,extra=placements(block,lines,meta,duration,p.settings.insert_frequency,shorts=p.profile.endswith('_shorts'))
         if block.kind!='analysis':
             from .framing import framing_cards
             from .review import framing_draft
             inserts=[];cards,extra=framing_draft(p,block,lines,duration)
-        if p.profile=='uz_football_shorts':
+        if p.profile.endswith('_shorts'):
             from .shorts import finish_cards
             cards,inserts=finish_cards(p,block,lines,cards,inserts,duration)
         from .orientation import detect_rotation
@@ -161,7 +161,7 @@ class Engine:
         from .editing import validate_plan
         validate_plan(plan)
         target=Path(target).resolve();p=self.project;s=p.settings
-        shorts=p.profile=='uz_football_shorts';cw,ch=(720,1280) if shorts else (1280,720)
+        shorts=p.profile.endswith('_shorts');cw,ch=(720,1280) if shorts else (1280,720)
         protected=p.host_paths()+list(p.assets.values())+[p.music]+[c.path for b in p.blocks for c in b.clips]+[m.path for m in p.matches]+list(p.team_logos.values())
         if any(target==Path(f).resolve() for f in protected if f):raise ValueError('Нельзя записывать результат поверх исходного файла.')
         if target.exists():raise ValueError('Файл результата уже существует. Выберите новое имя.')
@@ -227,13 +227,16 @@ class Engine:
             z='1+'+str(s.zoom_max-1)+'*('+'+'.join(parts)+')'
             fl.append(f"[0:v]scale={cw*2}:{ch*2},zoompan=z='{z}':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s={cw}x{ch}:fps=30[zv]");v='zv'
         from .timeline import game_transitions
-        if shorts and plan.inserts:
-            enabled='+'.join(f'gte(t,{c.start:.6f})*lt(t,{c.end+tail:.6f})' for c,tail,_,_ in game_transitions(plan))
+        from .shorts import panel_intervals,panel_motion
+        split_spans=panel_intervals(plan) if shorts else []
+        if split_spans:
+            # Move the presenter down continuously; at rest this matches the
+            # former crop, without switching abruptly between two compositions.
+            motion=panel_motion(plan,s.transitions)
             fl.append(f'[{v}]split=2[portrait][lower]')
-            fl.append('[lower]crop=720:875:0:340,pad=720:1280:0:405:color=0x102D38[splitview]')
-            fl.append(f"[portrait][splitview]overlay=0:0:enable='{enabled}'[gamebase]");v='gamebase'
+            fl.append(f"[portrait][lower]overlay=0:y='65*({motion})':eval=frame[gamebase]");v='gamebase'
         for i,(c,tail,joined_before,joined_after) in enumerate(game_transitions(plan)):
-            meta=probe(c.path);fade=.20 if s.transitions else 0
+            meta=probe(c.path);fade=(.35 if shorts else .20) if s.transitions else 0
             # Transitions stay INSIDE the selected shot, never pull crowd frames in.
             pre=post=0
             start=c.start;source_length=c.end-c.start;length=source_length+tail
@@ -264,22 +267,22 @@ class Engine:
                 image=self.cache/f'card-{i}.png';x,y=card_image(card,image,p.team_logos,p.profile)
                 args+=['-loop','1','-framerate','30','-i',image]
                 filt=f'trim=duration={length:.6f},setpts=PTS-STARTPTS,format=rgba'
-            edge=min(.25,length/3)
+            edge=min(.35 if shorts and card.asset else .25,length/3)
             divider=card.title in ('СМЕНА МАТЧА','ИТОГИ ВЫПУСКА')
-            animate=(s.transitions if divider else s.animate_cards) and card.title!='ПОДПИСКА'
+            animate=(s.transitions if divider or (shorts and card.asset) else s.animate_cards) and card.title!='ПОДПИСКА'
             if animate:filt+=f',fade=t=in:d={edge:.6f}:alpha=1,fade=t=out:st={length-edge:.6f}:d={edge:.6f}:alpha=1'
-            if s.wobble and not divider and card.title!='ПОДПИСКА':filt+=f",rotate='0.00349*sin(2*PI*t/4+{i})':ow=iw:oh=ih:c=none"
+            if s.wobble and not divider and card.title!='ПОДПИСКА' and not (shorts and card.asset):filt+=f",rotate='0.00349*sin(2*PI*t/4+{i})':ow=iw:oh=ih:c=none"
             fl.append(f'[{inputs}:v]{filt},setpts=PTS+{card.start:.6f}/TB[card{i}]');inputs+=1
             xpos=str(x);ypos=str(y)
-            if shorts and not card.asset and card.title!='РАЗБОР МАТЧА' and plan.inserts:
+            if shorts and not card.asset and card.title!='РАЗБОР МАТЧА' and split_spans:
                 from PIL import Image
                 with Image.open(image) as artwork:lower=min(1130-artwork.height,int(y)+70)
-                active='+'.join(f'gte(t,{c.start:.6f})*lt(t,{c.end+tail:.6f})' for c,tail,_,_ in game_transitions(plan))
-                ypos=f'if({active},{lower},{y})'
-            if s.wobble and not divider and card.title!='ПОДПИСКА':
+                active=panel_motion(plan,s.transitions)
+                ypos=f'{y}+({lower}-{y})*({active})'
+            if s.wobble and not divider and card.title!='ПОДПИСКА' and not (shorts and card.asset):
                 xpos+=f'+3*sin(2*PI*(t-{card.start:.6f})/3.7+{i})'
                 ypos+=f'+2*sin(2*PI*(t-{card.start:.6f})/4.3+{i})'
-            if animate and not divider:ypos+=f'+16*pow(max(0,1-(t-{card.start:.6f})/{edge:.6f}),2)+16*pow(max(0,1-({card.end:.6f}-t)/{edge:.6f}),2)'
+            if animate and not divider and not (shorts and card.asset):ypos+=f'+16*pow(max(0,1-(t-{card.start:.6f})/{edge:.6f}),2)+16*pow(max(0,1-({card.end:.6f}-t)/{edge:.6f}),2)'
             if animate and divider:xpos+=f'+1280*pow(max(0,1-(t-{card.start:.6f})/{edge:.6f}),2)'
             enabled=f'gte(t,{card.start:.6f})*lt(t,{card.end:.6f})'
             if card.title=='РАЗБОР МАТЧА':

@@ -87,7 +87,10 @@ class EpisodeMixin:
             try:
                 from .script_input import read_script
                 text=read_script(path);parsed=None
-                if draft.profile.startswith('uz_'):
+                if draft.profile=='ru_hockey_shorts':
+                    from .shorts import parse_ru_script
+                    start,parsed,end=parse_ru_script(text);intro=start.script;outro=end.script;blocks=[(b.title,b.script) for b in parsed]
+                elif draft.profile.startswith('uz_'):
                     if draft.profile=='uz_football_shorts':from .shorts import parse_script
                     elif draft.profile=='uz_hockey':from .uz_hockey import parse_script
                     elif draft.profile=='uz_combat':from .combat import parse_script
@@ -101,12 +104,12 @@ class EpisodeMixin:
                     if b.script!=script:b.events=[];b.edit_plan=None;b.edit_key=''
                     b.script=script
                     if parsed:
-                        b.language='uz';b.source_hint=parsed[len(updated)].source_hint
+                        b.language=parsed[len(updated)].language;b.source_hint=parsed[len(updated)].source_hint
                         b.sport=parsed[len(updated)].sport;b.forecast=parsed[len(updated)].forecast
                     updated.append(b)
                 draft.blocks=updated
                 if parsed:
-                    draft.intro.language=draft.outro.language='uz'
+                    draft.intro.language=draft.outro.language=start.language
                     draft.intro.source_hint=start.source_hint;draft.outro.source_hint=end.source_hint
                     for old,new in ((draft.intro,start),(draft.outro,end)):
                         old.sport=new.sport;old.featured_pairs=new.featured_pairs
@@ -124,8 +127,8 @@ class EpisodeMixin:
             for key,field in fields.items():getattr(draft,key).script=field.get('1.0','end').strip()
             draft.assets={k:v.get().strip() for k,v in asset_vars.items()};draft.full_video=enabled.get()
             if draft.full_video:
-                if any(len(getattr(draft,k).script)<(3 if draft.profile=='uz_football_shorts' else 30) for k in fields if not (draft.profile=='uz_combat' and k=='outro' and not draft.outro.script)):return messagebox.showerror('Тексты','Заполните начало и завершение.',parent=w)
-                required=() if draft.profile=='uz_football_shorts' else ('disclaimer',) if draft.profile.startswith('uz_') else ('disclaimer','telegram','subscribe')
+                if any(len(getattr(draft,k).script)<(3 if draft.profile.endswith('_shorts') else 30) for k in fields if not (draft.profile.endswith('_shorts') and not getattr(draft,k).script) and not (draft.profile=='uz_combat' and k=='outro' and not draft.outro.script)):return messagebox.showerror('Тексты','Заполните начало и завершение.',parent=w)
+                required=() if draft.profile.endswith('_shorts') else ('disclaimer',) if draft.profile.startswith('uz_') else ('disclaimer','telegram','subscribe')
                 if any(not draft.assets.get(k) or not Path(draft.assets[k]).is_file() for k in required):return messagebox.showerror('Материалы','Выберите дисклеймер.' if draft.profile.startswith('uz_') else 'Выберите дисклеймер, Telegram и подписку.',parent=w)
                 if any(v and not Path(v).is_file() for v in draft.assets.values()):return messagebox.showerror('Материалы','Один из выбранных файлов не найден.',parent=w)
                 draft.whole_episode=True

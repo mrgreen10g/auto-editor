@@ -4,6 +4,7 @@ from pathlib import Path
 from PIL import Image
 from .graphics import card_image
 from .timeline import game_transitions
+from .shorts import panel_intervals
 
 
 def base_plan(plan):
@@ -37,14 +38,19 @@ class LiveCards:
 
     def compose(self,source,t,plan):
         result=source.convert('RGBA');s=self.project.settings
-        cw,ch=(720,1280) if self.project.profile=='uz_football_shorts' else (1280,720)
+        cw,ch=(720,1280) if self.project.profile.endswith('_shorts') else (1280,720)
         sx=result.width/cw;sy=result.height/ch
         for i,c in enumerate(plan.cards):
             if c.asset or c.title in ('АРХИВНЫЕ КАДРЫ','КАДРЫ МАТЧА') or not c.start<=t<c.end:continue
             if c.title=='РАЗБОР МАТЧА' and any(v.start<=t<=v.end+tail for v,tail,_,_ in game_transitions(plan)):continue
             image,x,y=self.artwork(c);elapsed=t-c.start;left=c.end-t
-            if self.project.profile=='uz_football_shorts' and c.title!='РАЗБОР МАТЧА' and any(v.start<=t<v.end+tail for v,tail,_,_ in game_transitions(plan)):
-                y=min(1130-image.height,y+70)
+            if self.project.profile.endswith('_shorts') and c.title!='РАЗБОР МАТЧА':
+                for a,b in panel_intervals(plan):
+                    if a<=t<b:
+                        edge=min(.35,(b-a)/3)
+                        amount=(1-math.cos(math.pi*min(1,(t-a)/edge,(b-t)/edge)))/2 if s.transitions else 1
+                        y+=(min(1130-image.height,y+70)-y)*amount
+                        break
             divider=c.title in ('СМЕНА МАТЧА','ИТОГИ ВЫПУСКА');edge=min(.25,(c.end-c.start)/3)
             animate=(s.transitions if divider else s.animate_cards) and c.title!='ПОДПИСКА'
             image=image.resize((max(1,round(image.width*sx)),max(1,round(image.height*sy))),Image.Resampling.BILINEAR)

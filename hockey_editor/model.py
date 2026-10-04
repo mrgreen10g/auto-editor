@@ -128,10 +128,10 @@ class Project:
         if not 0 <= index < len(self.blocks):
             raise ValueError('Выберите разбор.')
         block = self.blocks[index]
-        if self.profile not in ('ru_hockey','uz_football','uz_combat','uz_hockey','uz_football_shorts'):raise ValueError('Неизвестный шаблон выпуска.')
+        if self.profile not in ('ru_hockey','uz_football','uz_combat','uz_hockey','uz_football_shorts','ru_hockey_shorts'):raise ValueError('Неизвестный шаблон выпуска.')
         expected='uz' if self.profile.startswith('uz_') else 'ru'
         if block.language!=expected:raise ValueError('Язык блока не совпадает с шаблоном ведущего.')
-        if len(block.script.strip()) < (3 if self.profile=='uz_football_shorts' else 30):
+        if len(block.script.strip()) < (3 if self.profile.endswith('_shorts') else 30):
             raise ValueError('Вставьте сценарий выбранного разбора.')
         if self.music and not Path(self.music).is_file():
             raise ValueError('Музыка не найдена. Выберите файл заново или очистите поле.')
@@ -174,7 +174,7 @@ class Project:
             raise ValueError('Некорректная настройка масштаба или очистки звука.')
         if s.rotate not in (0, 90, 180, 270):
             raise ValueError('Поворот должен быть 0, 90, 180 или 270 градусов.')
-        sizes=[(720,1280,30),(1080,1920,30)] if self.profile=='uz_football_shorts' else [(1280,720,30),(1920,1080,30)]
+        sizes=[(720,1280,30),(1080,1920,30)] if self.profile.endswith('_shorts') else [(1280,720,30),(1920,1080,30)]
         if (s.width,s.height,s.fps) not in sizes:
             raise ValueError('Выберите 720p или 1080p при 30 кадрах/с; Shorts — вертикальное видео 9:16.')
         if not math.isfinite(s.music_db) or not -60 <= s.music_db <= -15:

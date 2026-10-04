@@ -71,7 +71,7 @@ def slice_media(media,start,end):
 def prepare_base(engine,plan,base):
     """Decode original files into one concat filter, with per-part orientation."""
     p=engine.project;s=p.settings
-    width,height=(720,1280) if p.profile=='uz_football_shorts' else (1280,720)
+    width,height=(720,1280) if p.profile.endswith('_shorts') else (1280,720)
     groups=[]
     for segment in plan.media:
         if groups and all(segment.get(k)==groups[-1][-1].get(k) for k in ('path','rotation','kind')) and segment['start']>=groups[-1][-1]['end']-.001:

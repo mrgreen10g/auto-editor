@@ -75,6 +75,13 @@ def optional_subscription(cards,duration):
 
 
 def framing_cards(project,block,lines,duration):
+    if project.profile=='ru_hockey_shorts':
+        cards=[]
+        for i,line in enumerate(lines):
+            title=classify_card(line.text)
+            if title and line.end-line.start>=.15:
+                cards.append(Card(line.start,line.end,title,summarize_card(title,line.text),i))
+        return cards,[]  # The shared Shorts pass adds the aligned channel promo.
     if project.profile=='uz_football_shorts':
         from .uzbek import asr_framing_cards
         return asr_framing_cards(project,block,lines,duration)

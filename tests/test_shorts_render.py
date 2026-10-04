@@ -25,9 +25,27 @@ class ShortsRenderTests(unittest.TestCase):
                 self.assertGreater(im.getpixel((360,180))[0],200)
                 self.assertGreater(im.getpixel((360,800))[2],200)
             with Image.open(d/'5.png') as im:
-                # Short promo holds its final frame; no leak of the blue host.
-                red,green,blue=im.getpixel((360,640));self.assertGreater(green,80);self.assertLess(blue,40)
+                # Short promo holds its final frame above the presenter.
+                red,green,blue=im.getpixel((360,180));self.assertGreater(green,80);self.assertLess(blue,40)
+                self.assertGreater(im.getpixel((360,800))[2],200)
             engine.render(plan,d/'draft.mp4',draft=True)
             self.assertEqual((probe(d/'draft.mp4')['width'],probe(d/'draft.mp4')['height']),(360,640))
 
 if __name__=='__main__':unittest.main()
+
+class SmoothRuShortsTests(unittest.TestCase):
+    def test_presenter_moves_gradually_during_upper_panel_fade(self):
+        with tempfile.TemporaryDirectory() as folder:
+            d=Path(folder)
+            run(['-y','-f','lavfi','-i','color=c=blue:s=180x320:r=30:d=4','-f','lavfi','-i','sine=f=220:r=48000:d=4','-vf','drawbox=x=0:y=140:w=180:h=4:color=white:t=fill','-t',4,'-c:v','libx264','-c:a','aac',d/'host.mp4'])
+            run(['-y','-f','lavfi','-i','color=c=red:s=320x180:r=30:d=2','-c:v','libx264',d/'game.mp4'])
+            p=Project(host=str(d/'host.mp4'),profile='ru_hockey_shorts',blocks=[Block(title='Трактор — Амур',script='Мой прогноз — победа Трактора.')],settings=Settings(width=720,height=1280,auto_rotate=False,zoom=False,transitions=True,animate_cards=False,wobble=False,color=False))
+            plan=Plan(0,4,[(0,4)],[Line('Test',0,4)],[Insert(str(d/'game.mp4'),1,3,0,'Game')],[],[],4,0)
+            Engine(p,0,d/'cache',threading.Event()).render(plan,d/'result.mp4',draft=True)
+            positions=[]
+            for j,t in enumerate((.8,1.1667,1.6)):
+                path=d/f'frame-{j}.png';run(['-y','-ss',t,'-i',d/'result.mp4','-frames:v',1,path])
+                with Image.open(path) as im:
+                    positions.append(next(y for y in range(250,350) if min(im.getpixel((180,y)))>170))
+            self.assertLess(positions[0]+5,positions[1]);self.assertLess(positions[1]+5,positions[2])
+            self.assertAlmostEqual(positions[2]-positions[0],32.5,delta=3)

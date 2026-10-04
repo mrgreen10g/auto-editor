@@ -83,7 +83,7 @@ def game_transitions(plan):
     for a,b in zip(clips,clips[1:]):
         gap=frame(b.start-a.end)
         same=not any(a.start<s['start']<=b.start for s in plan.sections)
-        links.append(same and 0<=gap<=.35)
+        links.append(same and 0<=gap<=.35 and not any(c.asset and c.start<b.start and c.end>a.end for c in plan.cards))
     for i,c in enumerate(clips):
         before=i>0 and links[i-1];after=i<len(links) and links[i]
         # Hold only a validated game frame across a very short gap, never pull

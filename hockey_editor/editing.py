@@ -29,6 +29,7 @@ def project_edit_key(project, index):
     for clip in block['clips']:
         clip['path']=identity(clip['path'])
         if clip.get('origin_path'):clip['origin_path']=identity(clip['origin_path'])
+    if project.profile.endswith('_shorts'):structural['shorts_revision']='ru-promo-split-v2'
     data=['workflow-0.7.15',block,structural,identity(project.host),
           [(m.id,m.home,m.away,identity(m.path),m.score_box) for m in project.matches if m.id in block['match_ids']]]
     if project.full_video and project.profile=='ru_hockey':data.append('intro-boundary-v3-exact-nhl')

@@ -16,10 +16,14 @@ def events(block,matches):
     catalog=set(FOOTBALL)|set().union(*teams.values())
     current=None;subject=None;counts={m.id:0 for m in sources};result=[]
     speech=[l['text'] for l in block.asr_lines] if block.asr_lines else split_script(block.script)
+    from .shorts import promo_line_ranges
+    from .timeline import Line
+    promo_indices={i for a,z in promo_line_ranges([Line(t,n,n+1) for n,t in enumerate(speech)]) for i in range(a,z+1)}
     for i,text in enumerate(speech):
+        if i in promo_indices:continue
         t=norm(text);title,_=classify(text)
         title=block.speech_cards.get(str(i),{}).get('title',title)
-        if title in ('ПРОГНОЗ','УСЛОВИЯ ПРОГНОЗА','СОСТАВ КОМАНДЫ') or re.search(r'telegram|obuna|layk|tanlov',t):continue
+        if title in ('ПРОГНОЗ','УСЛОВИЯ ПРОГНОЗА','СОСТАВ КОМАНДЫ','ТЕЛЕГРАМ') or re.search(r'telegram|obuna|layk|tanlov',t):continue
         hits=sorted((a,n) for n in catalog for a,z in football_positions(n,text))
         named=list(dict.fromkeys(n for a,n in hits))
         if len(named)>=2:

@@ -361,6 +361,19 @@ def check():
         with patch('hockey_editor.profiles.kit_path',return_value=tmp/'ru-kit.json'):app.switch_profile()
         root.update();assert app.project.profile=='ru_hockey'
         assert app.find_events_button.cget('text')=='Найти голы'
+        # Russian Shorts share portrait output while retaining Russian analysis.
+        app.profilebox.current(5)
+        with patch('hockey_editor.profiles.kit_path',return_value=tmp/'ru-short-kit.json'):app.switch_profile()
+        root.update();app.collect()
+        assert app.project.profile=='ru_hockey_shorts'
+        assert app.project.settings.width<app.project.settings.height
+        assert all(b.language=='ru' for b in [app.project.intro,*app.project.blocks,app.project.outro])
+        app.edit_framing();root.update()
+        app.framing_fields['intro'].delete('1.0','end');app.framing_fields['outro'].delete('1.0','end')
+        with patch('hockey_editor.episode_ui.kit_path',return_value=tmp/'ru-short-kit.json'):app.apply_framing()
+        root.update();assert not app.project.intro.script and not app.project.outro.script
+        app.project.save(tmp/'ru-shorts.hockeyproj')
+        assert Project.load(tmp/'ru-shorts.hockeyproj').profile=='ru_hockey_shorts'
         # Review queue: edit timing/text, delete/undo and persist without another ASR run.
         from hockey_editor.review import attach,pending
         from hockey_editor.review_ui import ReviewDialog

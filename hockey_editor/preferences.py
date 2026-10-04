@@ -43,7 +43,7 @@ def apply_preset(project,name,path=None):
     value=presets(project.profile,path).get(name)
     if value is None:raise ValueError('Выберите сохранённый шаблон настроек.')
     settings=Settings(**{k:v for k,v in value['settings'].items() if k in {f.name for f in fields(Settings)}})
-    if project.profile=='uz_football_shorts':settings.width,settings.height=sorted((settings.width,settings.height))
+    if project.profile.endswith('_shorts'):settings.width,settings.height=sorted((settings.width,settings.height))
     else:settings.width,settings.height=sorted((settings.width,settings.height),reverse=True)
     project.settings=settings;project.music=value.get('music','');project.logo_folder=value.get('logo_folder','')
     from .logos import assign
