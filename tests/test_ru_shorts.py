@@ -70,6 +70,16 @@ class RuShortsTests(unittest.TestCase):
         self.assertTrue({'ПРОГНОЗ','ОЖИДАЕМЫЙ СЧЁТ','КОЭФФИЦИЕНТ ИЗ РАЗБОРА'}<={c.title for c in cards})
         validate_plan(Plan(0,27,[(0,27)],lines,clips,cards,[],27),check_files=False)
 
+    def test_only_telegram_changes_to_fullscreen(self):
+        from hockey_editor.shorts_graphics import asset_filter
+        with patch('hockey_editor.media.probe',return_value={'duration':10}):
+            tg=Card(0,3,'ТЕЛЕГРАМ','tg',asset='tg')
+            sub=Card(0,3,'ПОДПИСКА','sub',asset='sub')
+            self.assertIn('scale=720:1280',asset_filter(tg)[0])
+            self.assertIn('scale=720:404',asset_filter(sub)[0])
+        plan=Plan(0,3,[(0,3)],[],[],[sub],[],3)
+        self.assertEqual(panel_intervals(plan),[(0,3)])
+
     def test_promo_requires_asset_and_not_youtube_subscription(self):
         lines=[Line('Канал интересный. Подписывайтесь!',0,3)]
         self.assertEqual(promo_line_ranges(lines),[])

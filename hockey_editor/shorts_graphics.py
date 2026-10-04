@@ -52,5 +52,6 @@ def asset_filter(card):
     available=info['duration']-card.source_in
     filt='setpts=PTS-STARTPTS,fps=30'
     if available<length:filt+=f',tpad=stop_mode=clone:stop_duration={length-available:.6f}'
-    filt+=f',trim=duration={length:.6f},scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2:color=0x102D38,setsar=1,format=rgba'
+    height=1280 if card.title=='ТЕЛЕГРАМ' else 404
+    filt+=f',trim=duration={length:.6f},scale=720:{height}:force_original_aspect_ratio=decrease,pad=720:{height}:(ow-iw)/2:(oh-ih)/2:color=0x102D38,setsar=1,format=rgba'
     return filt,'0','0'

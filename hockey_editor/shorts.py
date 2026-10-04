@@ -305,6 +305,7 @@ def panel_intervals(plan):
     from .timeline import game_transitions
     spans=[(c.start,c.end+tail) for c,tail,_,_ in game_transitions(plan)]
     # Full-screen Telegram does not move the presenter into a split view.
+    spans += [(c.start,c.end) for c in plan.cards if c.asset and c.title!='ТЕЛЕГРАМ']
     merged=[]
     for a,b in sorted(spans):
         if merged and a<=merged[-1][1]+.001:merged[-1]=(merged[-1][0],max(b,merged[-1][1]))

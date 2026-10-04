@@ -391,7 +391,7 @@ def describe_card(card,task,project,plan):
     if block and kind=='analysis':where+=' · '+block.title
     if card is None:return 'Удалённая плашка',where
     if project.profile.endswith('_shorts'):
-        if card.asset:return card.title.capitalize()+' · видео-вставка',where+' · полный экран'
+        if card.asset:return card.title.capitalize()+' · видео-вставка',where+(' · полный экран' if card.title=='ТЕЛЕГРАМ' else ' · верхняя половина')
         if card.title=='РАЗБОР МАТЧА':return 'Представление пары',where+' · над головой'
         return ('Ставка' if card.title=='ПРОГНОЗ' else card.title.capitalize()),where+' · на уровне груди'
     if card.asset:return card.title.capitalize()+' · видео-вставка',where+' · анимация'
