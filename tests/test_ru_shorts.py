@@ -25,6 +25,16 @@ class RuShortsTests(unittest.TestCase):
             saved=Project.load(Path(d)/'project.hockeyproj')
             self.assertEqual(saved.profile,'ru_hockey_shorts');self.assertEqual(saved.blocks[0].title,blocks[0].title)
 
+    def test_replacing_telegram_invalidates_cached_analysis(self):
+        from hockey_editor.editing import project_edit_key
+        with tempfile.TemporaryDirectory() as d:
+            host=Path(d)/'host';host.touch()
+            tg=Path(d)/'tg';tg.write_bytes(b'first')
+            p=Project(host=str(host),profile='ru_hockey_shorts',assets={'telegram':str(tg)})
+            before=project_edit_key(p,0)
+            tg.write_bytes(b'replacement promo')
+            self.assertNotEqual(before,project_edit_key(p,0))
+
     def test_any_number_of_explicit_fixtures(self):
         text='Привет, сегодня несколько встреч.\nТрактор — Амур\nМой прогноз — победа Трактора.\nСКА — ЦСКА\nМой прогноз — победа СКА.\nЛада — Сочи\nМой прогноз — тотал меньше 5.5.'
         a,b,z=parse_ru_script(text)
