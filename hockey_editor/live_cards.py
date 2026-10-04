@@ -12,12 +12,15 @@ def base_plan(plan):
     return result
 
 
-def base_key(plan):
+def base_key(plan,project=None):
     data=base_plan(plan).to_dict()
     # These annotations don't alter video or audio.
     for key in ('review_items','edit_baseline','input_key','warnings','lines'):data.pop(key,None)
     for c in data['cards']:
         for key in ('review_id','review_reason','forecast_id','line'):c.pop(key,None)
+    if project and project.profile=='ru_hockey_shorts' and project.settings.subtitles:
+        data['subtitles']=[dict(text=l.text,recognized=l.recognized,start=l.start,end=l.end,words=l.words) for l in plan.lines]
+    data['layout_version']='fullscreen-tg-v3'
     return json.dumps(data,sort_keys=True,ensure_ascii=False)
 
 

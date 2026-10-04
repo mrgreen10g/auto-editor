@@ -63,6 +63,7 @@ class Settings:
     zoom: bool = True
     transitions: bool = True
     animate_cards: bool = True
+    subtitles: bool = False
     wobble: bool = True
     denoise: bool = True
     noise_reduction: int = 10

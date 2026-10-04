@@ -72,6 +72,8 @@ def trim_overlap(plan,previous_end):
             trimmed=max(0,removed-item.start)
             item.start=frame(max(0,item.start-removed));item.end=frame(item.end-removed)
             if name=='inserts':item.source_in+=trimmed
+            if name=='lines' and trimmed:
+                item.words=[dict(w,start=max(0,w['start']-trimmed),end=w['end']-trimmed) for w in item.words if w['end']>trimmed]
             if item.end-item.start>=(1/60 if name=='lines' else .15):output.append(item)
         setattr(p,name,output)
     remap_lines(p,original)

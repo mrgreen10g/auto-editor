@@ -366,6 +366,8 @@ def check():
         with patch('hockey_editor.profiles.kit_path',return_value=tmp/'ru-short-kit.json'):app.switch_profile()
         root.update();app.collect()
         assert app.project.profile=='ru_hockey_shorts'
+        app.effect_vars['subtitles'].set(True);app.collect();assert app.project.settings.subtitles
+        app.effect_vars['subtitles'].set(False);app.collect();assert not app.project.settings.subtitles
         assert app.project.settings.width<app.project.settings.height
         assert all(b.language=='ru' for b in [app.project.intro,*app.project.blocks,app.project.outro])
         app.edit_framing();root.update()

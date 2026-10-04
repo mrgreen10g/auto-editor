@@ -217,7 +217,8 @@ def parse_ru_script(text):
     rows=[r.strip() for r in text.splitlines() if r.strip() and not re.match(r'^\s*\[.*\]\s*$',r)]
     headers=[]
     for i,row in enumerate(rows):
-        pair=re.split(r'\s+[—–-]\s+',row.rstrip('.:'),maxsplit=1)
+        heading=re.sub(r'^\s*(?:матч|пара|разбор)\s*:\s*','',row,flags=re.I)
+        pair=re.split(r'\s*[—–]\s*|\s+-\s+',heading.rstrip('.:'),maxsplit=1)
         if len(pair)==2 and all(len(p.split())<=5 and len(suggested_names(p))==1 for p in pair):
             names=[suggested_names(p)[0] for p in pair]
             if names[0]!=names[1]:headers.append((i,' — '.join(names)))
@@ -225,7 +226,7 @@ def parse_ru_script(text):
     outro=Block(title='Завершение',uid='outro',kind='outro',language='ru')
     if headers:
         intro.script='\n'.join(rows[:headers[0][0]])
-        blocks=[Block(title=title,script='\n'.join(rows[start:(headers[j+1][0] if j+1<len(headers) else len(rows))]),language='ru') for j,(start,title) in enumerate(headers)]
+        blocks=[Block(title=title,script='\n'.join([title,*rows[start+1:(headers[j+1][0] if j+1<len(headers) else len(rows))]]),language='ru') for j,(start,title) in enumerate(headers)]
         return intro,blocks,outro
     # A historical rival mentioned in the hook is not necessarily today's rival.
     # Prefer the bet's team and repeated direct encounters involving that team.
@@ -240,6 +241,19 @@ def parse_ru_script(text):
     if not scores:
         names=list(dict.fromkeys(teams('\n'.join(rows))))
         if len(names)==2:scores[frozenset(names)]=1
+    # Separate paragraphs can describe today's two teams. Historical results
+    # are not evidence that a past rival is today's opponent.
+    if len(set(owners))==1:
+        owner=owners[0];candidates={}
+        for row in rows:
+            names=list(dict.fromkeys(teams(row)))
+            if len(names)!=1 or names[0]==owner:continue
+            if re.search(r'\d+\s*[:：]\s*\d+|вчера|прошл|предыдущ|последн.*(?:игр|матч)|перед поражением',row,re.I):continue
+            cue=bool(re.search(r'списывать|недооцен|но\b.*(?:здесь|сегодня)|если\b|соперник|против|в гостях|на выезде',row,re.I))
+            candidates[names[0]]=candidates.get(names[0],0)+(4 if cue else 1)
+        ranked_teams=sorted(candidates,key=candidates.get,reverse=True)
+        if ranked_teams and candidates[ranked_teams[0]]>=4 and (len(ranked_teams)==1 or candidates[ranked_teams[0]]>=candidates[ranked_teams[1]]+3):
+            scores[frozenset((owner,ranked_teams[0]))]=max(scores.values(),default=0)+5
     ranked=sorted(scores,key=scores.get,reverse=True)
     if not ranked or (len(ranked)>1 and scores[ranked[0]]==scores[ranked[1]]):
         raise ValueError('Не удалось однозначно определить пару шортса. Добавьте отдельную строку «Команда — Команда» перед разбором.')
@@ -290,7 +304,7 @@ def panel_intervals(plan):
     """Join adjacent game/promo panels so the presenter moves only once."""
     from .timeline import game_transitions
     spans=[(c.start,c.end+tail) for c,tail,_,_ in game_transitions(plan)]
-    spans += [(c.start,c.end) for c in plan.cards if c.asset]
+    # Full-screen Telegram does not move the presenter into a split view.
     merged=[]
     for a,b in sorted(spans):
         if merged and a<=merged[-1][1]+.001:merged[-1]=(merged[-1][0],max(b,merged[-1][1]))

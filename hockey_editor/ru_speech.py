@@ -162,7 +162,9 @@ def prepare(project,blocks,cache,cancel,log):
         lines,_=result[b.uid]
         if lines:lines[0].omit=list(cuts)
         for line in lines:
-            line.recognized=' '.join(w['word'].strip() for s in segments for w in s['words'] if line.start<=w['start']<line.end)
+            words=[w for s in segments for w in s['words'] if line.start<=w['start']<line.end]
+            line.recognized=' '.join(w['word'].strip() for w in words)
+            line.words=[dict(word=w['word'].strip(),start=max(0,w['start']-line.start),end=min(line.end,w['end'])-line.start) for w in words if w['end']>w['start']]
             if line.agreement>.8 and not line.review_reason:line.review_reason='Неуверенное совпадение со сценарием.'
             from .review import semantic_conflict
             conflict=semantic_conflict(line.text,line.recognized)

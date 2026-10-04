@@ -273,7 +273,7 @@ class TimelineEditor:
 
     def update_preview_state(self):
         from .live_cards import base_key
-        self.preview_current=self.built_key is not None and self.built_key==base_key(self.plan)
+        self.preview_current=self.built_key is not None and self.built_key==base_key(self.plan,self.project)
         if self.preview_current:
             self.player.redraw();self.status.set('Плашки обновлены в предпросмотре. Правки можно применить к проекту.')
         else:
@@ -356,7 +356,7 @@ class TimelineEditor:
         self.cancel_button.configure(state='normal')
         self.status.set('Собираю предпросмотр '+('360×640' if self.project.profile.endswith('_shorts') else '640×360')+' со звуком. Это может занять несколько минут.')
         from .live_cards import base_plan,base_key
-        key=base_key(self.plan)
+        key=base_key(self.plan,self.project)
         project=copy.deepcopy(self.project);plan=base_plan(self.plan)
         root=self.app.cache_path()/'timeline-preview';root.mkdir(parents=True,exist_ok=True)
         target=root/f'preview-{uuid.uuid4().hex[:10]}.mp4';audio=target.with_suffix('.wav')

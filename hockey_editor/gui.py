@@ -288,8 +288,9 @@ class App(EpisodeMixin,MatchMixin):
                            ('animate_cards', 'Плавное появление и уход плашек'),
                            ('wobble', 'Лёгкое покачивание плашек'),
                            ('cut_pauses', 'Сокращать паузы и повторные неудачные дубли'),
-                           ('color', 'Лёгкая цветокоррекция')]:
-            var = tk.BooleanVar(value=True)
+                           ('color', 'Лёгкая цветокоррекция'),
+                           ('subtitles', 'Субтитры · РУ Shorts (экспериментально)')]:
+            var = tk.BooleanVar(value=key!='subtitles')
             self.effect_vars[key] = var
             widget = ttk.Checkbutton(look, text=label, variable=var)
             widget.pack(anchor='w', pady=2)

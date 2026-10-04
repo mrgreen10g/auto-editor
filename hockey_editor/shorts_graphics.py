@@ -45,12 +45,12 @@ def card_image(card,path,logos=None,language="uz"):
 
 
 def asset_filter(card):
-    """Upper-panel channel recording, preserving the entire source and host voice."""
+    """Full-screen channel recording, preserving the entire source and host voice."""
     from .media import probe
     length=card.end-card.start;info=probe(card.asset)
     if info['duration']<=card.source_in:raise ValueError('Начало вставки выходит за видео Telegram.')
     available=info['duration']-card.source_in
     filt='setpts=PTS-STARTPTS,fps=30'
     if available<length:filt+=f',tpad=stop_mode=clone:stop_duration={length-available:.6f}'
-    filt+=f',trim=duration={length:.6f},scale=720:404:force_original_aspect_ratio=decrease,pad=720:404:(ow-iw)/2:(oh-ih)/2:color=0x102D38,setsar=1,format=rgba'
+    filt+=f',trim=duration={length:.6f},scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2:color=0x102D38,setsar=1,format=rgba'
     return filt,'0','0'

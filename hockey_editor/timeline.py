@@ -12,6 +12,7 @@ class Line:
     recognized: str = ""
     review_id: str = ""
     omit: list = field(default_factory=list)
+    words: list = field(default_factory=list)  # Times relative to the line, after cuts.
 
 @dataclass
 class Insert:

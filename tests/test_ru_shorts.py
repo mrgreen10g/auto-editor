@@ -35,6 +35,15 @@ class RuShortsTests(unittest.TestCase):
             tg.write_bytes(b'replacement promo')
             self.assertNotEqual(before,project_edit_key(p,0))
 
+    def test_separate_team_paragraphs_exclude_past_opponents(self):
+        text='Трактор сейчас в хорошей форме.\nПоследняя игра — 2:1 в Минске.\nНо списывать Амур здесь нельзя.\nПосле поражения от Сочи Амур обыграл Ладу.\nЕсли Амур сыграет дисциплинированно, будет сложно.\nОсновной прогноз — победа Трактора с учетом овертайма.'
+        self.assertEqual(parse_ru_script(text)[1][0].title,'Трактор — Амур')
+
+    def test_optional_pair_heading_is_normalized_for_alignment(self):
+        blocks=parse_ru_script('Матч: Трактор—Амур\nМой прогноз — победа Трактора.')[1]
+        self.assertEqual(blocks[0].script.splitlines()[0],blocks[0].title)
+        self.assertNotIn('Матч:',blocks[0].script)
+
     def test_any_number_of_explicit_fixtures(self):
         text='Привет, сегодня несколько встреч.\nТрактор — Амур\nМой прогноз — победа Трактора.\nСКА — ЦСКА\nМой прогноз — победа СКА.\nЛада — Сочи\nМой прогноз — тотал меньше 5.5.'
         a,b,z=parse_ru_script(text)
@@ -78,9 +87,9 @@ class RuShortsTests(unittest.TestCase):
         spans=promo_spans(p,[dict(words=words,start=0,end=t,text='')],[(0,0),(0,t),(t,t)],[])
         self.assertEqual(spans,[(0,t-.1)])
 
-    def test_adjacent_panels_share_presenter_motion_but_do_not_bridge_promo(self):
+    def test_fullscreen_promo_does_not_move_presenter_or_bridge_game(self):
         plan=Plan(0,8,[(0,8)],[],[Insert('a',1,3,0,'a'),Insert('b',3.2,5,0,'b')],[Card(3,3.2,'ТЕЛЕГРАМ','tg',asset='tg')],[],8)
-        self.assertEqual(panel_intervals(plan),[(1,5)])
+        self.assertEqual(panel_intervals(plan),[(1,3),(3.2,5)])
         self.assertEqual([v[1] for v in game_transitions(plan)],[0,0])
 
 if __name__=='__main__':unittest.main()

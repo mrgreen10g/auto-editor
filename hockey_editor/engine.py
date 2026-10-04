@@ -125,6 +125,8 @@ class Engine:
             if not keep:raise AlignmentError('После очистки не осталось речи. Проверьте сценарий и запись.')
         duration=sum(b-a for a,b in keep)
         lines=[Line(l.text,frame(map_time(l.start-start,keep)),frame(map_time(l.end-start,keep)),l.agreement,l.review_reason,l.recognized,l.review_id) for l in source]
+        from .subtitles import cut_words
+        for original,line in zip(source,lines):line.words=cut_words(original,line,start,keep)
         meta={c.path:probe(c.path) for c in block.clips}
         if any(not x['video'] for x in meta.values()):raise ValueError('Игровая вставка должна содержать видео.')
         inserts,cards,extra=placements(block,lines,meta,duration,p.settings.insert_frequency,shorts=p.profile.endswith('_shorts'))
@@ -289,6 +291,11 @@ class Engine:
                 enabled+=''.join(f'*not(between(t,{c.start:.6f},{c.end+tail:.6f}))' for c,tail,_,_ in game_transitions(plan))
             nv=f'panel{i}';fl.append(f"[{v}][card{i}]overlay=x='{xpos}':y='{ypos}':eof_action=pass:repeatlast=0:enable='{enabled}'[{nv}]");v=nv
         width,height=((360,640) if shorts else (640,360)) if draft else (s.width,s.height)
+        if p.profile=='ru_hockey_shorts' and s.subtitles:
+            from .subtitles import write_ass,filter_path
+            ass=self.cache/'speech-subtitles.ass'
+            if write_ass(plan,ass):
+                fl.append(f"[{v}]subtitles=filename='{filter_path(ass)}'[captioned]");v='captioned'
         fl.append(f'[{v}]scale={width}:{height},setsar=1,format=yuv420p[final]')
         graph=self.cache/'final-filter.txt';graph.write_text(';\n'.join(fl),encoding='utf-8')
         temp=target.with_name(target.stem+'.partial.mp4')

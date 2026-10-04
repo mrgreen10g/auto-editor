@@ -30,7 +30,7 @@ def project_edit_key(project, index):
         clip['path']=identity(clip['path'])
         if clip.get('origin_path'):clip['origin_path']=identity(clip['origin_path'])
     if project.profile.endswith('_shorts'):
-        structural['shorts_revision']='ru-promo-split-v2'
+        structural['shorts_revision']='ru-fullscreen-caption-v3'
         structural['telegram_asset']=identity(project.assets.get('telegram',''))
     data=['workflow-0.7.15',block,structural,identity(project.host),
           [(m.id,m.home,m.away,identity(m.path),m.score_box) for m in project.matches if m.id in block['match_ids']]]
