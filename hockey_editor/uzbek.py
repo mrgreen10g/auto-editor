@@ -113,8 +113,8 @@ def bet(text):
     winner=re.search(r"([\w'’ʻʼ .-]+?)\s+g['’ʻʼ]alab\w*",raw,re.I)
     unbeaten=re.search(r"([\w'’ʻʼ .-]+?)\s+yutqazma\w*",raw,re.I)
     if unbeaten and not double:pieces.append(unbeaten[1].strip()+' yutqazmaydi')
-    if double:pieces.append(double[1].strip().title()+' '+double[2].upper())
-    elif winner:pieces.append(winner[1].strip().title()+' g‘alabasi')
+    if double:pieces.append((football_identity(double[1].strip()) or double[1].strip().title())+' '+double[2].upper())
+    elif winner:pieces.append((football_identity(winner[1].strip()) or winner[1].strip().title())+' g‘alabasi')
     if total:pieces.append('Jami gollar: '+total[1].replace('.',',')+(' dan ko‘p' if total[2]=="ko'p" else ' dan kam'))
     # Unknown bets keep the complete Uzbek wording rather than inventing a market.
     return '\n'.join(pieces) if pieces else raw

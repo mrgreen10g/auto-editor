@@ -23,7 +23,7 @@ def parse_script(text,sport="football"):
     rows=[line.strip() for line in text.splitlines() if line.strip()]
     headers=[]
     for i,line in enumerate(rows):
-        match=re.match(r"(?:Birinchi|Ikkinchi|Uchinchi|To.rt.inchi|Beshinchi|Keyingi|Oxirgi)\s+(?:o.yin|uchrashuv)\s*[—–:,-]\s*(.+?)[.!]?\s*$",line,re.I)
+        match=re.match(r"(?:Va\s+)?(?:Birinchi|Ikkinchi|Uchinchi|To.rt.inchi|Beshinchi|Oltinchi|Yettinchi|Sakkizinchi|To.qqizinchi|O.ninchi|Keyingi|Oxirgi)\s+(?:o.yin|uchrashuv)\s*[—–:,-]\s*(.+?)[.!]?\s*$",line,re.I)
         if not match and sport=='hockey':
             match=re.match(r"(?:Va|Keyin|Endi)\s+(.+?)[.!]?\s*$",line,re.I)
         if not match:continue

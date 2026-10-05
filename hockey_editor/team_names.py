@@ -7,7 +7,7 @@ import re
 import unicodedata
 from functools import lru_cache
 
-CATALOG_VERSION = 'teams-3-national'
+CATALOG_VERSION = 'teams-4-uz-pro'
 
 @lru_cache(maxsize=8192)
 def normalize(text):
@@ -103,6 +103,13 @@ def ru_position(name,text,context=()):
 # Full names plus independent, distinctive short names. Ambiguous single words
 # are deliberately absent (Manchester, United, City, Madrid, London, Toshkent).
 FOOTBALL = {
+ # Names and shortened forms supplied in Uzbek Pro Liga scripts.
+ 'BuxDU': ('BuxDU',),
+ 'Lochin': ('Lochin',),
+ 'Olimpik MobiUz': ('Olimpik MobiUz','Olimpik'),
+ 'FarDU': ('FarDU',),
+ "Sho'rtan": ("Sho'rtan",'Shortan'),
+ 'QMU Jayxun': ('QMU Jayxun','Jayxun'),
  'OKMK': ('OKMK','AGMK','ОКМК','АГМК'),
  'Paxtakor': ('Paxtakor','Pakhtakor','Пахтакор'),
  'Neftchi': ('Neftchi','Neftchi Fargona','Нефтчи'),
