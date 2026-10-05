@@ -9,7 +9,7 @@ def script_names(project):
     if project.profile.startswith('uz_football'):
         from .football_players import mentioned_names
         values=mentioned_names(text)+values
-    if project.profile in ('ru_hockey','uz_hockey'):
+    if project.profile in ('ru_hockey','uz_hockey','ru_hockey_shorts','uz_hockey_shorts'):
         from .nhl_players import prompt_names
         values=prompt_names(text)+values
     return '; '.join(dict.fromkeys(values))

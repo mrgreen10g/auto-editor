@@ -10,20 +10,27 @@ from .uzbek import norm
 PROFILE='uz_football_shorts'
 
 
-def parse_script(text):
+def parse_script(text,sport="football"):
     """Spoken ordinal introductions are boundaries; hook team names are not."""
     from .script_input import clean_script
     from .team_names import football_identity
     from .uzbek import parse_script as long_script
+    if sport=='hockey':
+        from .uz_hockey import clean_script,parse_script as long_script
+        from .hockey_names import identity as football_identity,display
     text=clean_script(text)
     if re.search(r'^KIRISH\s*$',text,re.M|re.I):return long_script(text)
     rows=[line.strip() for line in text.splitlines() if line.strip()]
     headers=[]
     for i,line in enumerate(rows):
         match=re.match(r"(?:Birinchi|Ikkinchi|Uchinchi|To.rt.inchi|Beshinchi|Keyingi|Oxirgi)\s+(?:o.yin|uchrashuv)\s*[—–:,-]\s*(.+?)[.!]?\s*$",line,re.I)
+        if not match and sport=='hockey':
+            match=re.match(r"(?:Va|Keyin|Endi)\s+(.+?)[.!]?\s*$",line,re.I)
         if not match:continue
         pair=re.split(r'\s+va\s+|\s+[—–-]\s+',match[1].rstrip('.!'),maxsplit=1,flags=re.I)
-        if len(pair)==2 and all(football_identity(n) for n in pair):headers.append((i,' — '.join(pair)))
+        if len(pair)==2 and all(football_identity(n) for n in pair) and football_identity(pair[0])!=football_identity(pair[1]):
+            if sport=='hockey':pair=[display(football_identity(n)) for n in pair]
+            headers.append((i,' — '.join(pair)))
     if not headers:raise ValueError('Не найдены представления матчей. Например: Birinchi o‘yin — Xorvatiya va Angliya.')
     end=next((i for i in range(headers[-1][0]+1,len(rows)) if re.match(r'^(?:Demak|Xulosa|Yakuniy tanlovlar|Tanlovlarni takror)',rows[i],re.I)),None)
     if end is None:raise ValueError('Не найдены итоги шортса. Отделите их строкой Demak: или YAKUNIY TANLOVLAR.')
@@ -32,13 +39,16 @@ def parse_script(text):
         if re.search(r'SSENARIY|SCENARIO|SHORTS|^\s*\d+\s*[—–-]\s*\d+\s*soniya',line,re.I):continue
         intro.append(line)
     if not intro:raise ValueError('Перед первым разбором не найден текст вступления.')
-    blocks=[Block(title=title,script='\n'.join(rows[start:(headers[j+1][0] if j+1<len(headers) else end)]),language='uz') for j,(start,title) in enumerate(headers)]
+    blocks=[Block(title=title,script='\n'.join(rows[start:(headers[j+1][0] if j+1<len(headers) else end)]),language='uz',sport='hockey' if sport=='hockey' else '') for j,(start,title) in enumerate(headers)]
     return Block(title='Boshlanish',uid='intro',kind='intro',language='uz',script='\n'.join(intro)),blocks,Block(title='Yakun',uid='outro',kind='outro',language='uz',script='\n'.join(rows[end:]))
 
 
 def sections(project,segments):
     from .uz_speech import pair_hits,telegram_spans,recap_cue
     from .uz_forecasts import clauses,features
+    if project.profile=='uz_hockey_shorts':
+        from .hockey_names import pair_in
+        pair_hits=lambda title,words:pair_in(title,' '.join(w['word'] for w in words))
     words=[w for s in segments for w in s['words']]
     if not words:raise ValueError('В шортсе не распознана речь.')
     if project.recording_times.strip():
@@ -55,7 +65,7 @@ def sections(project,segments):
             if f['ordinal'] not in (index,-1):continue
             window=words[i:i+15];text=norm(' '.join(w['word'] for w in window[:5]))
             if not re.search(r'o.yin|uchrashuv',text):continue
-            if pair_hits(block.title,window):strong.append(words[i]['start'])
+            if f['ordinal']==index and pair_hits(block.title,window):strong.append(words[i]['start'])
         # A pair as a standalone sentence may omit the ordinal, never a hook statistic.
         for unit in units:
             text=norm(' '.join(w['word'] for w in unit))
@@ -63,7 +73,7 @@ def sections(project,segments):
         choices=strong or fallback
         if not choices:raise ValueError('Не найдено представление пары в шортсе: '+block.title+'. Укажите таймкоды записи.')
         starts.append(min(choices));floor=starts[-1]+1
-    ending=next((unit[0]['start'] for unit in units if unit[0]['start']>starts[-1]+1 and (recap_cue(' '.join(w['word'] for w in unit)) or norm(unit[0]['word']).rstrip(':,.')=='demak')),None)
+    ending=next((unit[0]['start'] for unit in units if unit[0]['start']>starts[-1]+1 and ((recap_cue(' '.join(w['word'] for w in unit)) and not re.search(r'tanlovim|yakuniy.*g.alab',norm(' '.join(w['word'] for w in unit)))) or norm(unit[0]['word']).rstrip(':,.')=='demak')),None)
     if ending is None:raise ValueError('Не найдены итоги шортса. Укажите таймкод концовки.')
     bounds=[words[0]['start'],*starts,ending,words[-1]['end']]
     if any(b-a<.15 for a,b in zip(bounds,bounds[1:])):raise ValueError('Границы шортса пересекаются. Проверьте таймкоды.')
@@ -170,7 +180,12 @@ def import_archives(project,donor):
     from .team_names import football_identity
     from .goals import source_signature,propose
     from .uzbek import events
-    if project.profile!=PROFILE or not donor.profile.startswith('uz_football'):raise ValueError('Нужны шортс УЗ футбола и проект футбольного лонга.')
+    hockey=project.profile=='uz_hockey_shorts'
+    if hockey:
+        from .hockey_names import identity as football_identity
+        from .uz_hockey import events
+    sport='hockey' if hockey else 'football'
+    if project.profile not in (PROFILE,'uz_hockey_shorts') or not donor.profile.startswith('uz_'+sport):raise ValueError('Выберите лонг того же вида спорта и УЗ спикера.')
     def pair(block):return frozenset(football_identity(n) or norm(n) for n in block_teams(block.title))
     draft=copy.deepcopy(project);total=0;notes=[]
     for block in draft.blocks:
@@ -180,7 +195,7 @@ def import_archives(project,donor):
         for owner in owners:
             for event in owner.events:
                 s=event.selection;source=ids.get(event.source_id)
-                if event.skipped or not s or not s.accepted or not source or source.sport!='football':continue
+                if event.skipped or not s or not s.accepted or not source or source.sport!=sport:continue
                 try:
                     if source_signature(source)!=s.source_signature:continue
                 except OSError:continue

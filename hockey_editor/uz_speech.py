@@ -50,7 +50,7 @@ def recognition_prompt(project):
     names='; '.join(b.title for b in project.blocks)
     from .uz_facts import COMBAT_TERMS
     terms=("TOP DOG, UFC, "+', '.join(COMBAT_TERMS)+", g‘alaba, mag‘lubiyat, durang, masofa, bosim, himoya, hujum") if project.profile=='uz_combat' else "futbol, gol, durang, g‘alaba, zarba, hujum, himoya"
-    if project.profile=='uz_hockey':
+    if project.profile.startswith('uz_hockey'):
         from .uz_hockey import clean_script
         text=clean_script('\n'.join(b.script for b in project.blocks))
         people=list(dict.fromkeys(re.findall(r'\b(?:[A-Z][a-z]+)+(?:\s+(?:[A-Z][a-z]+)+){1,2}\b',text)))
@@ -361,7 +361,7 @@ def _prepare(project,segments):
     return bounds
 
 def synchronize(project,cache,cancel,log):
-    if project.profile=='uz_hockey':
+    if project.profile.startswith('uz_hockey'):
         from .uz_hockey import synchronize as hockey_synchronize
         return hockey_synchronize(project,cache,cancel,log)
     if project.profile=='uz_combat':

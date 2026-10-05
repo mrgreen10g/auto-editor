@@ -91,7 +91,8 @@ class EpisodeMixin:
                     from .shorts import parse_ru_script
                     start,parsed,end=parse_ru_script(text);intro=start.script;outro=end.script;blocks=[(b.title,b.script) for b in parsed]
                 elif draft.profile.startswith('uz_'):
-                    if draft.profile=='uz_football_shorts':from .shorts import parse_script
+                    if draft.profile=='uz_hockey_shorts':from .uz_hockey_shorts import parse_script
+                    elif draft.profile=='uz_football_shorts':from .shorts import parse_script
                     elif draft.profile=='uz_hockey':from .uz_hockey import parse_script
                     elif draft.profile=='uz_combat':from .combat import parse_script
                     else:from .uzbek import parse_script
@@ -122,7 +123,7 @@ class EpisodeMixin:
                 if draft.recording_times:
                     try:
                         from .recording_times import parse_times
-                        parse_times(draft.recording_times,len(draft.blocks),allow_promos=draft.profile=='uz_football_shorts',include_outro=draft.profile!='uz_combat' or bool(fields['outro'].get('1.0','end').strip()))
+                        parse_times(draft.recording_times,len(draft.blocks),allow_promos=draft.profile.endswith('_shorts'),include_outro=draft.profile!='uz_combat' or bool(fields['outro'].get('1.0','end').strip()))
                     except ValueError as error:return messagebox.showerror('Таймкоды записи',str(error),parent=w)
             for key,field in fields.items():getattr(draft,key).script=field.get('1.0','end').strip()
             draft.assets={k:v.get().strip() for k,v in asset_vars.items()};draft.full_video=enabled.get()

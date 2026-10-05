@@ -120,7 +120,7 @@ class MatchMixin:
             if existing is None:
                 from .team_names import ru_file_names
                 names = ru_file_names(Path(path).stem) + ['', '']
-                if self.project.profile=='uz_hockey':
+                if self.project.profile.startswith('uz_hockey'):
                     from .hockey_names import mentioned,display
                     names=[display(n) for n in mentioned(Path(path).stem)]+['','']
                 if self.project.profile.startswith('uz_football'):

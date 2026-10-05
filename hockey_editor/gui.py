@@ -140,7 +140,7 @@ class App(EpisodeMixin,MatchMixin):
             self.button(bar, label, cmd).pack(side='right', padx=(8, 0))
         profilebar=ttk.Frame(main);profilebar.pack(fill='x',pady=(0,8))
         ttk.Label(profilebar,text='Шаблон ведущего',style='Muted.TLabel').pack(side='left',padx=(0,8))
-        self.profilebox=ttk.Combobox(profilebar,values=['Хоккей · русский','Футбол · узбекский','Бои · узбекский','Хоккей · узбекский','Футбол · УЗ Shorts','Хоккей · РУ Shorts'],state='readonly',width=28)
+        self.profilebox=ttk.Combobox(profilebar,values=['Хоккей · русский','Футбол · узбекский','Бои · узбекский','Хоккей · узбекский','Футбол · УЗ Shorts','Хоккей · РУ Shorts','Хоккей · УЗ Shorts'],state='readonly',width=28)
         self.profilebox.pack(side='left');self.controls.append(self.profilebox)
         self.profilebox.bind('<<ComboboxSelected>>',self.switch_profile)
         ui.Tooltip(self.profilebox,'Язык речи и плашек, вид спорта и отдельные материалы канала. Футбол: очные и архивные встречи для каждого разбора.')
@@ -496,7 +496,7 @@ class App(EpisodeMixin,MatchMixin):
     def refresh(self):
         self.refreshing = True
         p = self.project
-        self.profilebox.current(('ru_hockey','uz_football','uz_combat','uz_hockey','uz_football_shorts','ru_hockey_shorts').index(p.profile))
+        self.profilebox.current(('ru_hockey','uz_football','uz_combat','uz_hockey','uz_football_shorts','ru_hockey_shorts','uz_hockey_shorts').index(p.profile))
         block = p.blocks[self.index]
         self.scope.set("Все разборы" if p.whole_episode else "Текущий разбор")
         self.host.set(p.host)
@@ -587,7 +587,7 @@ class App(EpisodeMixin,MatchMixin):
     def add_block(self):
         self.collect()
         self.project.whole_episode=True
-        self.project.blocks.append(Block(title=f'Разбор {len(self.project.blocks) + 1}',language='uz' if self.project.profile.startswith('uz_') else 'ru',sport='combat' if self.project.profile=='uz_combat' else 'hockey' if self.project.profile=='uz_hockey' else ''))
+        self.project.blocks.append(Block(title=f'Разбор {len(self.project.blocks) + 1}',language='uz' if self.project.profile.startswith('uz_') else 'ru',sport='combat' if self.project.profile=='uz_combat' else 'hockey' if self.project.profile.startswith('uz_hockey') else ''))
         self.index = len(self.project.blocks) - 1
         self.invalidate()
         self.refresh()
@@ -813,8 +813,8 @@ class App(EpisodeMixin,MatchMixin):
     def import_long_matches(self):
         if self.busy:return
         self.collect()
-        if self.project.profile!='uz_football_shorts':
-            return messagebox.showinfo('Матчи из лонга','Выберите шаблон «Футбол · УЗ Shorts» и загрузите сценарий шортса.',parent=self.root)
+        if self.project.profile not in ('uz_football_shorts','uz_hockey_shorts'):
+            return messagebox.showinfo('Матчи из лонга','Выберите шаблон «Футбол · УЗ Shorts» или «Хоккей · УЗ Shorts» и загрузите сценарий шортса.',parent=self.root)
         path=filedialog.askopenfilename(parent=self.root,title='Проект лонга с найденными эпизодами',filetypes=[('Проект','*.hockeyproj')])
         if not path:return
         try:
@@ -826,7 +826,7 @@ class App(EpisodeMixin,MatchMixin):
 
     def switch_profile(self,event=None):
         if self.busy:return
-        profile=('ru_hockey','uz_football','uz_combat','uz_hockey','uz_football_shorts','ru_hockey_shorts')[self.profilebox.current()]
+        profile=('ru_hockey','uz_football','uz_combat','uz_hockey','uz_football_shorts','ru_hockey_shorts','uz_hockey_shorts')[self.profilebox.current()]
         if profile==self.project.profile:return
         self.collect()
         from .profiles import apply_profile

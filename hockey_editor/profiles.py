@@ -5,12 +5,13 @@ from pathlib import Path
 
 def kit_path(profile='ru_hockey'):
     if profile=='ru_hockey_shorts':return Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'asset-kit-ru-shorts.json'
+    if profile=='uz_hockey_shorts':return Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'asset-kit-uz-hockey-shorts.json'
     if profile.endswith('_shorts'):return Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'asset-kit-uz-shorts.json'
-    return Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/('asset-kit-uz-hockey.json' if profile=='uz_hockey' else 'asset-kit-uz-combat.json' if profile=='uz_combat' else 'asset-kit-uz-football.json' if profile.startswith('uz_football') else 'asset-kit.json')
+    return Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/('asset-kit-uz-hockey.json' if profile.startswith('uz_hockey') else 'asset-kit-uz-combat.json' if profile=='uz_combat' else 'asset-kit-uz-football.json' if profile.startswith('uz_football') else 'asset-kit.json')
 
 
 def apply_profile(project,profile):
-    if profile not in ('ru_hockey','uz_football','uz_combat','uz_hockey','uz_football_shorts','ru_hockey_shorts'):raise ValueError('Неизвестный шаблон.')
+    if profile not in ('ru_hockey','uz_football','uz_combat','uz_hockey','uz_football_shorts','ru_hockey_shorts','uz_hockey_shorts'):raise ValueError('Неизвестный шаблон.')
     if project.profile==profile:return
     was_short=project.profile.endswith('_shorts')
     if profile.endswith('_shorts'):
@@ -22,7 +23,7 @@ def apply_profile(project,profile):
     project.profile=profile;project.episode_plan=None;project.episode_key='';project.recording_times=''
     language='uz' if profile.startswith('uz_') else 'ru'
     for block in [project.intro,*project.blocks,project.outro]:
-        block.sport='combat' if profile=='uz_combat' else 'hockey' if profile=='uz_hockey' else '';block.forecast='';block.featured_pairs=[]
+        block.sport='combat' if profile=='uz_combat' else 'hockey' if profile.startswith('uz_hockey') else '';block.forecast='';block.featured_pairs=[]
         block.archive_pool=[]
         block.language=language;block.events=[];block.edit_plan=None;block.edit_key='';block.card_overrides={};block.source_hint=[];block.asr_lines=[];block.speech_key='';block.speech_cards={}
     if profile=='uz_combat' or any(s.sport=='combat' for s in project.matches):

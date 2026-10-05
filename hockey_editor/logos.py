@@ -6,7 +6,7 @@ from .graphics import block_teams
 
 def identity(name,profile):
     if profile.startswith('uz_football'):return football_identity(name)
-    if profile=='uz_hockey':
+    if profile.startswith('uz_hockey'):
         from .hockey_names import identity as hockey_identity
         return hockey_identity(name)
     # Entire filename must identify one club, not a game or a prose mention.

@@ -33,7 +33,7 @@ def parse_times(text,count,include_outro=True,allow_promos=False):
     return rows
 
 def recording_ranges(project,segments):
-    rows=parse_times(project.recording_times,len(project.blocks),allow_promos=project.profile=='uz_football_shorts')
+    rows=parse_times(project.recording_times,len(project.blocks),allow_promos=project.profile.endswith('_shorts'))
     last=max(w['end'] for s in segments for w in s['words'])
     if rows[-1][1]>last+3:raise ValueError('Таймкоды выходят за запись. Укажите время исходного видео, не примерное время из сценария.')
     # User labels are descriptive; actual project blocks retain their canonical names.
@@ -53,7 +53,7 @@ def recording_ranges(project,segments):
         limit=bounds[i+1] if i+1<len(bounds) else last
         nearby=[v for v in ends if abs(v-anchor)<=2.5 and start<v<=limit]
         end=max(nearby) if nearby else min(anchor,limit)
-        if end-start<(.15 if project.profile=='uz_football_shorts' else 3):raise ValueError('Уточнённые разделы пересекаются или слишком короткие. Проверьте таймкоды записи.')
+        if end-start<(.15 if project.profile.endswith('_shorts') else 3):raise ValueError('Уточнённые разделы пересекаются или слишком короткие. Проверьте таймкоды записи.')
         ranges.append((start,end))
     return ranges
 

@@ -429,6 +429,14 @@ def check():
         assert app.project.full_video and app.project.whole_episode
         app.project.save(tmp/'shorts.hockeyproj')
         assert Project.load(tmp/'shorts.hockeyproj').profile=='uz_football_shorts'
+        app.profilebox.current(6)
+        with patch('hockey_editor.profiles.kit_path',return_value=tmp/'uz-hockey-shorts-kit.json'):app.switch_profile()
+        root.update();app.collect()
+        assert app.project.profile=='uz_hockey_shorts'
+        assert (app.project.settings.width,app.project.settings.height)==(1080,1920)
+        assert app.project.intro.language=='uz' and app.project.intro.sport=='hockey'
+        app.project.save(tmp/'uz-hockey-shorts.hockeyproj')
+        assert Project.load(tmp/'uz-hockey-shorts.hockeyproj').profile=='uz_hockey_shorts'
         app.profilebox.current(0)
         with patch('hockey_editor.profiles.kit_path',return_value=tmp/'ru-kit.json'):app.switch_profile()
         app.collect();assert app.project.settings.width>app.project.settings.height

@@ -12,7 +12,7 @@ def quality(words):
 
 def preferable(original,retry,profile):
     from .combat_cards import coverage,numbers,classify
-    if profile=='uz_hockey':from .uz_hockey import classify
+    if profile.startswith('uz_hockey'):from .uz_hockey import classify
     elif profile.startswith('uz_football'):from .uzbek import classify
     a,b=original.get('text',''),retry.get('text','')
     if not b or coverage(a,b)<.72 or not .65<=len(b.split())/max(1,len(a.split()))<=1.6:return False

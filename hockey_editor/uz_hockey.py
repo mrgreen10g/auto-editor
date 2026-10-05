@@ -77,7 +77,7 @@ def bet(text):
         pieces.append((team+'\n' if label=='Individual total' and team else '')+label+': '+total[1].replace('.',',')+(' dan ko‘p' if total[2]=="ko'p" else ' dan kam'))
     if not pieces:return ''
     if re.search(r'asosiy vaqt|60 daqiqa',t):pieces.append('Asosiy vaqt')
-    elif re.search(r'(?:overtaym|bullit).*(?:bilan|hisobga)|(?:hisobga|bilan).*(?:overtaym|bullit)',t):pieces.append('OT va bullitlar bilan')
+    elif re.search(r'(?:overtaym|bullit).*(?:bilan|hisobga)|(?:hisobga|bilan).*(?:overtaym|bullit)|yakuniy.*g.alab',t):pieces.append('OT va bullitlar bilan')
     elif 'overtaymda' in t:pieces.append('Faqat overtaymda')
     return '\n'.join(pieces)
 
@@ -97,7 +97,7 @@ def classify(text):
         return 'РЕЗУЛЬТАТ МАТЧА',text.strip()
     if re.search(r'jarohat|transfer|murabbiy|darvozabon.*(?:keldi|o.tdi)|tarkib.*(?:yo.q|o.zgar)|safdan',t):
         return 'СОСТАВ КОМАНДЫ',text.strip() if len(text.split())<=25 else ''
-    if re.search(r'\d|birinchi|ikki|uch|to.rt|besh|olti|yetti|sakkiz|o.nta',t) and re.search(r'yosh|g.alaba|mag.lub|shayba|zarba|foiz|ketma.ket|xet.trik|raund|final|chempion',t):
+    if re.search(r'\d|\b(?:birinchi|ikki|uch|to.rt|besh|olti|yetti|sakkiz|o.n)(?:ta)?\b',t) and re.search(r'yosh|g.alaba|mag.lub|shayba|zarba|foiz|ketma.ket|xet.trik|raund|final|chempion|uchrashuv|overtaym|overtime|\bgol\b',t):
         return 'СТАТИСТИКА',text.strip() if len(text.split())<=25 else ''
     from .uz_facts import argument
     value=argument(text)
@@ -141,6 +141,9 @@ def events(block,matches,use_manual=True):
     from .event_rules import requests_for
     b=copy.deepcopy(block);b.language='ru';b.sport='';b.title=canonicalize(block.title);b.archive_context=True
     rows=[l['text'] for l in block.asr_lines] if block.asr_lines else split_script(clean_script(block.script))
+    from .shorts import promo_line_ranges
+    excluded={i for a,z in promo_line_ranges([Line(t,i,i+1) for i,t in enumerate(rows)]) for i in range(a,z+1)}
+    rows=[t for i,t in enumerate(rows) if i not in excluded]
     # Apply these exclusions before the shared RU archive selector as well as
     # the fallback below: calls to subscribe are not gameplay narration.
     rows=[t for t in rows if classify(t)[0] not in ('ПРОГНОЗ','УСЛОВИЯ ПРОГНОЗА')
@@ -171,7 +174,7 @@ def events(block,matches,use_manual=True):
 
 def speech_key(project):
     from .uz_speech import recording_key
-    return hashlib.sha256(json.dumps(['uz-hockey-v2',recording_key(project),project.recording_times,[(b.uid,b.script,b.title) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['uz-hockey-shorts-v1' if project.profile=='uz_hockey_shorts' else 'uz-hockey-v2',recording_key(project),project.recording_times,[(b.uid,b.script,b.title) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
 
 def intro_annotations(project,segments,lo,hi):
     from .hockey_names import hits
@@ -225,22 +228,34 @@ def prepare(project,segments,duration):
         if not choices:reliable=False;break
         bounds.append(min(choices,key=lambda x:abs(x-approximate)));floor=bounds[-1]+5
     ranges=list(zip(bounds,bounds[1:]+[duration]))
+    shorts=project.profile=='uz_hockey_shorts'
+    if shorts and not project.recording_times.strip():
+        from .shorts import sections
+        try:
+            bounds,_,_=sections(project,segments);ranges=list(zip(bounds,bounds[1:]));reliable=True
+        except ValueError:reliable=False
     if project.recording_times.strip():
         from .recording_times import recording_ranges,parse_times
         if segments:ranges=recording_ranges(project,segments)
         else:
-            ranges=[(a,z) for a,z,_ in parse_times(project.recording_times,len(project.blocks))]
+            ranges=[(a,z) for a,z,_ in parse_times(project.recording_times,len(project.blocks),allow_promos=shorts)]
             if len(ranges)==len(blocks)+1:ranges=ranges[:-2]+[(ranges[-2][0],ranges[-1][1])]
         if len(ranges)!=len(blocks) or ranges[-1][1]>duration+.1:raise ValueError('Проверьте границы таймкодов записи.')
         reliable=True
     if not reliable or len(ranges)!=len(blocks):ranges=[(rough[b.uid][0][0].start,rough[b.uid][0][-1].end) for b in blocks]
+    promos=[]
+    if shorts:
+        from .shorts import promo_spans
+        from .uz_speech import telegram_spans
+        promos=promo_spans(project,segments,ranges,telegram_spans(words))
     key=speech_key(project)
     for b,(lo,hi) in zip(blocks,ranges):
         local=spoken_segments(slice_segments(segments,lo,hi))
-        timed=intro_annotations(project,segments,lo,hi) if b.kind=='intro' else []
+        timed=intro_annotations(project,segments,lo,hi) if b.kind=='intro' and not shorts else []
         from .uz_hockey_support import forecast_span
         pick=forecast_span(b,local,lo,hi) if b.kind=='analysis' else None
         if pick:timed.append((pick[1],pick[2],'ПРОГНОЗ',pick[3]))
+        if shorts:timed.extend((a,z,'ТЕЛЕГРАМ','Telegram') for a,z in promos if lo<=a<z<=hi and not any(a<y and z>x for x,y,_,_ in timed))
         rows,timed_cards=make_lines(local,lo,hi,timed)
         if rows:
             for row in rows:row['recognized']=row['text']
@@ -314,7 +329,9 @@ def synchronize(project,cache,cancel,log):
         existing={(e.source_id,e.phrase,e.kind) for e in b.events}
         b.events.extend(e for e in events(b,local) if (e.source_id,e.phrase,e.kind) not in existing)
         if any(not e.skipped and (not e.selection or not e.selection.accepted) for e in b.events):
-            scans={m.id:GoalScanner(cancel=cancel,log=log).scan(m) for m in local}
+            from .shorts import archive_scans
+            reused=archive_scans(b,local) if project.profile=='uz_hockey_shorts' else {}
+            scans={m.id:reused[m.id] if m.id in reused else GoalScanner(cancel=cancel,log=log).scan(m) for m in local}
             for source_id,data in scans.items():
                 reserved={e.selection.candidate_id for e in b.events if e.source_id==source_id and e.selection and e.selection.accepted}
                 data['candidates']=[c for c in data['candidates'] if c['id'] not in reserved]
@@ -332,7 +349,10 @@ def framing_cards(project,block,lines,duration):
     for i,line in enumerate(lines):
         t=norm(line.text);pairs=[b for b in project.blocks if pair_in(b.title,t)]
         if len(pairs)==1:owner=pairs[0]
-        if block.kind=='intro':
+        if block.kind=='intro' and project.profile=='uz_hockey_shorts':
+            title,body=classify(line.text)
+            if title and body and title!='ПРОГНОЗ':cards.append(Card(line.start,line.end,title,body,i))
+        elif block.kind=='intro':
             annotation=block.speech_cards.get(str(i),{})
             if annotation.get('title')=='РАЗБОР МАТЧА':
                 pairs=[b for b in project.blocks if b.title==annotation['text']]
@@ -340,7 +360,7 @@ def framing_cards(project,block,lines,duration):
                 if b.uid not in seen:cards.append(Card(line.start,line.end,'РАЗБОР МАТЧА',b.title,i));seen.add(b.uid)
         else:
             title,body=classify(line.text)
-            if title=='ПРОГНОЗ' or (owner and bet(line.text) and re.search(r'total|\b1x\b|\bx2\b|tanlov|tanlay|g.alabasi',t)):
+            if title=='ПРОГНОЗ' or (owner and bet(line.text) and re.search(r'total|\b1x\b|\bx2\b|tanlov|tanlay|g.alaba\w*',t)):
                 own=[b for b in project.blocks if set(mentioned(line.text)) & set(mentioned(b.title))]
                 if len(own)==1:owner=own[0]
                 if owner and owner.uid not in seen:
