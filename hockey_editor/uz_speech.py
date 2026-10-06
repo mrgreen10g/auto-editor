@@ -112,6 +112,12 @@ def name_hits(name,words,context=()):
                           'Coventry City':('coventry','koventri','ковентри')}[club]
                 if not any(similar(token(w['word']),v)>=.78 for w in words[i:i+count] for v in required):score=0
                 if club=='Manchester City' and i>0 and any(similar(words[i-1]['word'],v)>=.8 for v in ('koventri','coventry','hull','hall')):score=0
+            reserve=re.search(r'\s+(ii|iii|2|3)$',normalize(name))
+            tail=token(words[i+count-1]['word'])
+            number={'ii':'2','iii':'3'}.get(reserve[1],reserve[1]) if reserve else None
+            reserve_tail={'ii':'2','iii':'3'}.get(tail,tail)
+            if reserve and reserve_tail!=number:score=0
+            if not reserve and (any(token(w['word']) in ('ii','iii') for w in words[i:i+count]) or (i+count<len(words) and token(words[i+count]['word']) in ('ii','iii'))):score=0
             if score>=.74:hits.append((i,i+count-1,score))
     return hits
 

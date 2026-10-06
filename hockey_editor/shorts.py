@@ -10,6 +10,18 @@ from .uzbek import norm
 PROFILE='uz_football_shorts'
 
 
+def _declared_football_name(name):
+    """An explicit fixture can introduce a club absent from the alias catalog."""
+    from .team_names import football_identity
+    if football_identity(name):return True
+    # Only compact proper names in a spoken fixture header, never scores,
+    # betting prose or a sentence from the hook. Preserve user spelling.
+    return (2<=len(name)<=70 and name[0].isupper()
+            and len(name.split())<=5
+            and bool(re.fullmatch(r"[^\W\d_][\w'’‘ʻʼ`.-]*(?:\s+[\w'’‘ʻʼ`.-]+)*",name))
+            and not re.search(r"\b(?:total|gol|ochko|hisob|tanlov|yutdi|yutqazdi)\b",name,re.I))
+
+
 def parse_script(text,sport="football"):
     """Spoken ordinal introductions are boundaries; hook team names are not."""
     from .script_input import clean_script
@@ -28,9 +40,14 @@ def parse_script(text,sport="football"):
             match=re.match(r"(?:Va|Keyin|Endi)\s+(.+?)[.!]?\s*$",line,re.I)
         if not match:continue
         pair=re.split(r'\s+va\s+|\s+[—–-]\s+',match[1].rstrip('.!'),maxsplit=1,flags=re.I)
-        if len(pair)==2 and all(football_identity(n) for n in pair) and football_identity(pair[0])!=football_identity(pair[1]):
+        pair=[n.strip() for n in pair]
+        valid=len(pair)==2 and all(football_identity(n) if sport=='hockey' else _declared_football_name(n) for n in pair)
+        identities=[football_identity(n) or norm(n) for n in pair]
+        if valid and identities[0]!=identities[1]:
             if sport=='hockey':pair=[display(football_identity(n)) for n in pair]
             headers.append((i,' — '.join(pair)))
+        elif sport=='football':
+            raise ValueError('Не удалось прочитать пару в строке: '+line+' Укажите два названия команд через «va» или тире.')
     if not headers:raise ValueError('Не найдены представления матчей. Например: Birinchi o‘yin — Xorvatiya va Angliya.')
     end=next((i for i in range(headers[-1][0]+1,len(rows)) if re.match(r'^(?:Demak|Xulosa|Yakuniy tanlovlar|Tanlovlarni takror)',rows[i],re.I)),None)
     if end is None:raise ValueError('Не найдены итоги шортса. Отделите их строкой Demak: или YAKUNIY TANLOVLAR.')

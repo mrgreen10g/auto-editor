@@ -7,7 +7,7 @@ import re
 import unicodedata
 from functools import lru_cache
 
-CATALOG_VERSION = 'teams-4-uz-pro'
+CATALOG_VERSION = 'teams-5-uz-pro-reserves'
 
 @lru_cache(maxsize=8192)
 def normalize(text):
@@ -103,6 +103,12 @@ def ru_position(name,text,context=()):
 # Full names plus independent, distinctive short names. Ambiguous single words
 # are deliberately absent (Manchester, United, City, Madrid, London, Toshkent).
 FOOTBALL = {
+ "Kattaqo'rg'on": ("Kattaqo'rg'on",),
+ 'Metallurg': ('Metallurg',),
+ 'Aral': ('Aral',),
+ 'TerDU': ('TerDU',),
+ "G'azalkent": ("G'azalkent",),
+ 'Paxtakor II': ('Paxtakor II','Paxtakor 2'),
  # Names and shortened forms supplied in Uzbek Pro Liga scripts.
  'BuxDU': ('BuxDU',),
  'Lochin': ('Lochin',),
@@ -202,6 +208,7 @@ def football_positions(name,text,context=()):
         matches=re.finditer(r'(?<!\w)'+pattern+suffix+r'(?!\w)',text)
         for m in matches:
             if football_identity(name)=='Irlandiya' and re.search(r'(?:northern|shimoliy)\s+$',text[:m.start()]):continue
+            if not re.search(r'\s+(?:ii|iii|2|3)$',normalize(name)) and re.match(r'\s+(?:ii|iii)(?!\w)',text[m.end():]):continue
             hits.append((m.start(),m.end()))
     return sorted(set(hits))
 
