@@ -441,7 +441,7 @@ def check():
         with patch('hockey_editor.profiles.kit_path',return_value=tmp/'ru-kit.json'):app.switch_profile()
         app.collect();assert app.project.settings.width>app.project.settings.height
         # One-folder setup is reviewable and repeatable for different releases.
-        release=tmp/'release-one';release.mkdir()
+        release=tmp.resolve()/'release-one';release.mkdir()
         (release/'camera.MOV').touch()
         (release/'text.txt').write_text('Всем привет! Сегодня разбираем матч и переходим к разбору.\nАМУР — СПАРТАК\nАмур играет дома. Мой прогноз — тотал больше 4,5 шайб в матче.\nИтак, повторю выбор. Тотал больше. Подписывайтесь, до встречи!',encoding='utf-8')
         archive=release/'Амур — Спартак';archive.mkdir();(archive/'Амур - ЦСКА.mp4').touch()
@@ -456,13 +456,13 @@ def check():
         before=app.project.host
         with patch('hockey_editor.folder_ui.filedialog.askdirectory',return_value=str(release)):app.import_episode_folder()
         root.update();app.folder_import_window.destroy();assert app.project.host==before
-        release2=tmp/'release-two'
+        release2=tmp.resolve()/'release-two'
         import shutil
         shutil.copytree(release,release2)
         with patch('hockey_editor.folder_ui.filedialog.askdirectory',return_value=str(release2)):app.import_episode_folder()
         app.folder_import_apply();root.update();assert app.project.host==str(release2/'camera.MOV')
         # Permanent folder selection is inside the intro/outro dialog.
-        materials=tmp/'channel-assets';materials.mkdir()
+        materials=tmp.resolve()/'channel-assets';materials.mkdir()
         for name in ['Дисклеймер.mov','Telegram.mp4','Подписка.mov']:(materials/name).touch()
         app.edit_framing();root.update()
         with patch('hockey_editor.episode_ui.filedialog.askdirectory',return_value=str(materials)):app.choose_material_folder()

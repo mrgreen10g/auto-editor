@@ -26,7 +26,7 @@ class FolderImportTests(unittest.TestCase):
         before=copy.deepcopy(original)
         with tempfile.TemporaryDirectory() as d:
             for n in ['release-a','release-b']:
-                root=Path(d)/n;root.mkdir();host,script=setup(root)
+                root=Path(d).resolve()/n;root.mkdir();host,script=setup(root)
                 hosts,scripts=root_files(root);self.assertEqual(hosts,[host]);self.assertEqual(scripts,[script])
                 draft,mapping,notes=build_import(original,root,host,script)
                 self.assertEqual(len(mapping),2);self.assertEqual(len(draft.matches),2)
@@ -39,7 +39,7 @@ class FolderImportTests(unittest.TestCase):
 
     def test_unknown_footage_not_labeled_as_forecast_pair(self):
         with tempfile.TemporaryDirectory() as d:
-            root=Path(d);host,script=setup(root)
+            root=Path(d).resolve();host,script=setup(root)
             (root/'АМУР — СПАРТАК'/'recording.mp4').write_bytes(b'unknown')
             draft,_,_=build_import(Project(),root,host,script)
             unknown=unresolved_sources(draft);self.assertEqual(len(unknown),1)
@@ -47,7 +47,7 @@ class FolderImportTests(unittest.TestCase):
 
     def test_ambiguity_and_missing_folder_are_visible(self):
         with tempfile.TemporaryDirectory() as d:
-            root=Path(d);host,script=setup(root)
+            root=Path(d).resolve();host,script=setup(root)
             alt=root/'Спартак — Амур';alt.mkdir();(alt/'Амур - Спартак.mp4').write_bytes(b'v')
             draft,mapping,notes=build_import(Project(),root,host,script)
             self.assertNotIn(0,mapping);self.assertTrue(any('несколько' in x for x in notes))
@@ -58,7 +58,7 @@ class FolderImportTests(unittest.TestCase):
     def test_unknown_football_pair_and_script_error_leave_original_intact(self):
         from test_shorts import SCRIPT as UZ
         with tempfile.TemporaryDirectory() as d:
-            root=Path(d);host=root/'host.mp4';host.write_bytes(b'v');script=root/'text.txt';script.write_text(UZ,encoding='utf-8')
+            root=Path(d).resolve();host=root/'host.mp4';host.write_bytes(b'v');script=root/'text.txt';script.write_text(UZ,encoding='utf-8')
             p=Project(profile='uz_football_shorts');draft,_,notes=build_import(p,root,host,script)
             self.assertEqual(len(draft.blocks),2);self.assertEqual(len(notes),2)
             before=copy.deepcopy(p);script.write_text('invalid')
@@ -68,7 +68,7 @@ class FolderImportTests(unittest.TestCase):
 
     def test_materials_folder_relocates_and_preserves_legacy_kit(self):
         with tempfile.TemporaryDirectory() as d:
-            root=Path(d);folder=root/'materials';folder.mkdir()
+            root=Path(d).resolve();folder=root/'materials';folder.mkdir()
             for name in ['Дисклеймер.mov','ТГ.mp4','Подписка.MOV']:(folder/name).write_bytes(b'v')
             choices=candidates(folder);self.assertTrue(all(len(v)==1 for v in choices.values()))
             assets={k:str(v[0]) for k,v in choices.items()};kit=root/'kit.json';save_kit(kit,str(folder),assets)
