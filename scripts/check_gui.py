@@ -440,6 +440,40 @@ def check():
         app.profilebox.current(0)
         with patch('hockey_editor.profiles.kit_path',return_value=tmp/'ru-kit.json'):app.switch_profile()
         app.collect();assert app.project.settings.width>app.project.settings.height
+        # One-folder setup is reviewable and repeatable for different releases.
+        release=tmp/'release-one';release.mkdir()
+        (release/'camera.MOV').touch()
+        (release/'text.txt').write_text('Всем привет! Сегодня разбираем матч и переходим к разбору.\nАМУР — СПАРТАК\nАмур играет дома. Мой прогноз — тотал больше 4,5 шайб в матче.\nИтак, повторю выбор. Тотал больше. Подписывайтесь, до встречи!',encoding='utf-8')
+        archive=release/'Амур — Спартак';archive.mkdir();(archive/'Амур - ЦСКА.mp4').touch()
+        shorts=release/'shorts';shorts.mkdir();(shorts/'ignore.mp4').touch()
+        previous=app.project.host
+        with patch('hockey_editor.folder_ui.filedialog.askdirectory',return_value=str(release)):app.import_episode_folder()
+        root.update();assert app.project.host==previous
+        assert len(app.folder_import_draft.matches)==1
+        app.folder_import_apply();root.update()
+        assert app.project.host==str(release/'camera.MOV') and app.project.whole_episode
+        assert app.project.matches[0].away=='ЦСКА' and app.project_path is None
+        before=app.project.host
+        with patch('hockey_editor.folder_ui.filedialog.askdirectory',return_value=str(release)):app.import_episode_folder()
+        root.update();app.folder_import_window.destroy();assert app.project.host==before
+        release2=tmp/'release-two'
+        import shutil
+        shutil.copytree(release,release2)
+        with patch('hockey_editor.folder_ui.filedialog.askdirectory',return_value=str(release2)):app.import_episode_folder()
+        app.folder_import_apply();root.update();assert app.project.host==str(release2/'camera.MOV')
+        # Permanent folder selection is inside the intro/outro dialog.
+        materials=tmp/'channel-assets';materials.mkdir()
+        for name in ['Дисклеймер.mov','Telegram.mp4','Подписка.mov']:(materials/name).touch()
+        app.edit_framing();root.update()
+        with patch('hockey_editor.episode_ui.filedialog.askdirectory',return_value=str(materials)):app.choose_material_folder()
+        assert app.framing_material_folder.get()==str(materials)
+        assert Path(app.framing_assets['telegram'].get()).name=='Telegram.mp4'
+        with patch('hockey_editor.episode_ui.kit_path',return_value=tmp/'folder-kit.json'):app.apply_framing()
+        root.update();assert app.project.asset_folder==str(materials)
+        from hockey_editor.material_folder import load_kit
+        assert load_kit(tmp/'folder-kit.json')[0]==str(materials)
+        app.project.save(tmp/'folder-project.hockeyproj')
+        assert Project.load(tmp/'folder-project.hockeyproj').asset_folder==str(materials)
         assert not errors, errors
         app.close()
     (out / 'gui-check.json').write_text(json.dumps({'status': 'ok', 'checks': ['v1-project-compatibility', 'block-switching', 'card-editing', 'stale-plan-invalidation', 'busy-control-restoration', 'worker-queue-flow', 'compact-window-layout', 'multiple-source-review-flow', 'v2-project-roundtrip', 'review-retains-custom-trim','episode-editor-roundtrip','seek-after-edit-rebuild-save','source-visual-trim','persistent-block-navigation','all-block-events-own-source','per-block-logo-tabs','ordered-host-sources','full-video-dialog-roundtrip']}, indent=2), encoding='utf-8')

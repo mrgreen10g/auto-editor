@@ -47,7 +47,8 @@ class App(EpisodeMixin,MatchMixin):
         from .preferences import restore_folder
         restore_folder(self.project)
         try:
-            self.project.assets={k:v for k,v in json.loads(kit_path().read_text(encoding='utf-8')).items() if Path(v).is_file()}
+            from .material_folder import load_kit
+            self.project.asset_folder,self.project.assets=load_kit(kit_path())
         except (OSError,ValueError):pass
         self.project_path = None
         self.scans = {}
@@ -174,6 +175,7 @@ class App(EpisodeMixin,MatchMixin):
 
     def build_materials(self):
         page = self.scrollable('materials')
+        self.button(page,'Импортировать папку выпуска…',self.import_episode_folder,'Primary.TButton').pack(anchor='w',pady=(0,12))
         block = ttk.Frame(page)
         block.pack(fill='x', pady=(0, 14))
         self.button(block, '+ Разбор', self.add_block).pack(side='left', padx=8)
@@ -841,6 +843,9 @@ class App(EpisodeMixin,MatchMixin):
         self.project = Project()
         from .preferences import restore_folder
         restore_folder(self.project)
+        from .material_folder import load_kit
+        self.project.asset_folder,self.project.assets=load_kit(kit_path())
+        self.scans.clear()
         self.index = 0
         self.project_path = None
         self.invalidate()

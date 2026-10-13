@@ -16,6 +16,10 @@ def kit_path(profile='ru_hockey'):
 
 
 class EpisodeMixin:
+    def import_episode_folder(self):
+        from .folder_ui import import_folder
+        import_folder(self)
+
     def edit_hosts(self):
         if self.busy:return
         self.collect();paths=[p for p in self.project.host_paths() if p]
@@ -63,6 +67,31 @@ class EpisodeMixin:
             scroll=ttk.Scrollbar(area,command=field.yview);field.configure(yscrollcommand=scroll.set)
             scroll.pack(side='right',fill='y');field.pack(fill='both',expand=True);field.insert('1.0',getattr(draft,key).script);fields[key]=field
         page=ttk.Frame(tabs,padding=16);tabs.add(page,text='Постоянные материалы')
+        material_folder=tk.StringVar(value=draft.asset_folder)
+        folder_row=ttk.Frame(page);folder_row.pack(fill='x',pady=(0,8))
+        ttk.Label(folder_row,text='Папка постоянных материалов').pack(anchor='w')
+        ttk.Entry(folder_row,textvariable=material_folder,state='readonly').pack(side='left',fill='x',expand=True)
+        def select_material_folder():
+            path=filedialog.askdirectory(parent=w,title='Папка: дисклеймер, Telegram, подписка')
+            if not path:return
+            from .material_folder import candidates,ROLES
+            from .folder_ui import choose_file
+            try:
+                found=candidates(path,{k:v.get() for k,v in asset_vars.items()});selected={}
+                for key,files in found.items():
+                    if not files:selected[key]='';continue
+                    choice=choose_file(w,ROLES[key]+' · выберите файл',files)
+                    if choice is None:w.grab_set();return
+                    selected[key]=str(choice.resolve())
+                material_folder.set(path)
+                for key,value in selected.items():asset_vars[key].set(value)
+                missing=[ROLES[k] for k,v in selected.items() if not v]
+                if missing:messagebox.showinfo('Постоянные материалы','Не найдены: '+', '.join(missing)+'. Выберите эти файлы вручную ниже. Для автоподбора используйте названия Дисклеймер, Telegram / ТГ, Подписка.',parent=w)
+            except (OSError,ValueError) as error:messagebox.showerror('Папка материалов',str(error),parent=w)
+            w.grab_set()
+        ttk.Button(folder_row,text='Выбрать папку…',command=select_material_folder).pack(side='left',padx=8)
+        from .material_folder import resolve
+        draft.assets=resolve(draft.asset_folder,draft.assets)
         for key,label in [('disclaimer','Дисклеймер · целиком в начале'),('telegram','Telegram · весь экран в Shorts, слева в лонгах'),('subscribe','Подписка · полная анимация')]:
             ttk.Label(page,text=label,style='CardTitle.TLabel').pack(anchor='w',pady=(14,5))
             row=ttk.Frame(page);row.pack(fill='x');var=tk.StringVar(value=draft.assets.get(key,''));asset_vars[key]=var
@@ -127,6 +156,7 @@ class EpisodeMixin:
                     except ValueError as error:return messagebox.showerror('Таймкоды записи',str(error),parent=w)
             for key,field in fields.items():getattr(draft,key).script=field.get('1.0','end').strip()
             draft.assets={k:v.get().strip() for k,v in asset_vars.items()};draft.full_video=enabled.get()
+            draft.asset_folder=material_folder.get()
             if draft.full_video:
                 if any(len(getattr(draft,k).script)<(3 if draft.profile.endswith('_shorts') else 30) for k in fields if not (draft.profile.endswith('_shorts') and not getattr(draft,k).script) and not (draft.profile=='uz_combat' and k=='outro' and not draft.outro.script)):return messagebox.showerror('Тексты','Заполните начало и завершение.',parent=w)
                 required=() if draft.profile.endswith('_shorts') else ('disclaimer',) if draft.profile.startswith('uz_') else ('disclaimer','telegram','subscribe')
@@ -135,7 +165,8 @@ class EpisodeMixin:
                 draft.whole_episode=True
             if remember.get():
                 try:
-                    path=kit_path(draft.profile);path.parent.mkdir(parents=True,exist_ok=True);tmp=path.with_suffix('.tmp');tmp.write_text(json.dumps(draft.assets,ensure_ascii=False),encoding='utf-8');tmp.replace(path)
+                    from .material_folder import save_kit
+                    save_kit(kit_path(draft.profile),draft.asset_folder,draft.assets)
                 except OSError as error:return messagebox.showerror('Материалы','Не удалось сохранить набор: '+str(error),parent=w)
             self.project=draft;self.index=min(self.index,len(draft.blocks)-1);self.invalidate();self.refresh();w.destroy()
         ttk.Button(bottom,text='Загрузить сценарий .txt / .docx',command=import_script).pack(side='left')
@@ -143,4 +174,5 @@ class EpisodeMixin:
         ttk.Button(bottom,text='Отмена',command=w.destroy).pack(side='right',padx=8)
         self.framing_window=w;self.framing_fields=fields;self.framing_assets=asset_vars;self.framing_enabled=enabled;self.apply_framing=apply
         self.framing_times=timing_field
+        self.framing_material_folder=material_folder;self.choose_material_folder=select_material_folder
         w.grab_set()

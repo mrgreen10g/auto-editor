@@ -31,6 +31,9 @@ def apply_profile(project,profile):
     else:
         for source in project.matches:source.sport='football' if profile.startswith('uz_football') else 'hockey'
     project.assets={}
-    try:project.assets={k:v for k,v in json.loads(kit_path(profile).read_text(encoding='utf-8')).items() if Path(v).is_file()}
+    project.asset_folder=''
+    try:
+        from .material_folder import load_kit
+        project.asset_folder,project.assets=load_kit(kit_path(profile))
     except (OSError,ValueError):pass
 
