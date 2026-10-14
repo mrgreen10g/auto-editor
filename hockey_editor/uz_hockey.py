@@ -22,30 +22,13 @@ def heading(line):
     return None
 
 def parse_script(text):
-    intro=None;outro=None;blocks=[];current=None
-    for raw in clean_script(text).splitlines():
-        line=raw.strip().lstrip('\ufeff');key=norm(line.split('|')[0].strip(' #*'))
-        if not line:continue
-        if key=='kirish':
-            if intro is not None:
-                if not intro.script:continue
-                raise ValueError('В сценарии должен быть один KIRISH.')
-            intro=Block(title='Boshlanish',uid='intro',kind='intro',language='uz',sport='hockey');current=intro;continue
-        if key in ('yakun','xulosa','yakuniy tanlovlar','yakuniy cta','yakuniy ekspress'):
-            if outro is None:outro=Block(title='Yakun',uid='outro',kind='outro',language='uz',sport='hockey')
-            current=outro;continue
-        title=heading(line)
-        if title and not line.endswith((':','.','!','?')) and intro is not None and current is not outro and (re.match(r'^\d+[.)]',line) or '|' in line or line.upper()==line):
-            current=Block(title=title,language='uz',sport='hockey');blocks.append(current);continue
-        if current is None or re.fullmatch(r'\d+:\d+\s*[—–-]\s*\d+:\d+',line):continue
-        current.script+=('\n' if current.script else '')+line
-    if not intro or not blocks or not outro:raise ValueError('Нужны KIRISH, пары хоккейных команд и YAKUN / YAKUNIY TANLOVLAR.')
-    if any(len(b.script.strip())<30 for b in [intro,*blocks,outro]):raise ValueError('У раздела отсутствует текст: проверьте заголовки и сценарий.')
+    from .uz_structure import parse
+    intro, blocks, outro = parse(text, 'hockey')
     for b in blocks:
-        picks=[body for row in split_script(b.script) for title,body in [classify(row)] if title=='ПРОГНОЗ']
-        b.forecast=picks[-1] if picks else ''
-    intro.featured_pairs=[b.title for b in blocks]
-    return intro,blocks,outro
+        picks = [body for row in split_script(b.script)
+                 for title, body in [classify(row)] if title == 'ПРОГНОЗ']
+        b.forecast = picks[-1] if picks else ''
+    return intro, blocks, outro
 
 def numeric(text):
     t=norm(text)

@@ -22,32 +22,8 @@ def heading(line):
 
 
 def parse_script(text):
-    index=[];intro=None;outro=None;blocks=[];current=None
-    for raw in clean_script(text).splitlines():
-        line=raw.strip().lstrip('\ufeff')
-        if not line:continue
-        key=norm(line.split('|')[0].strip())
-        if key=='kirish':
-            if intro is not None:raise ValueError('В сценарии должен быть один KIRISH.')
-            intro=Block(title='Boshlanish',uid='intro',kind='intro',language='uz',sport='combat');current=intro;continue
-        if key in ('yakun','xulosa','yakuniy tanlovlar','yakuniy cta','yakuniy ekspress'):
-            if outro is None:outro=Block(title='Yakun',uid='outro',kind='outro',language='uz',sport='combat')
-            current=outro;continue
-        pair=heading(line)
-        if pair and intro is None:index.append(pair);continue
-        if pair and current is not outro:
-            current=Block(title=pair,language='uz',sport='combat');blocks.append(current);continue
-        if current is None or re.fullmatch(r'\d+:\d+\s*[—–-]\s*\d+:\d+',line):continue
-        pick=re.match(r'PROGNOZ\s*:\s*(.+)',line,re.I)
-        if pick and current.kind=='analysis':current.forecast=pick[1].strip().rstrip('.');continue
-        current.script+=('\n' if current.script else '')+line
-    if not intro or not blocks:raise ValueError('Нужны KIRISH и заголовки пар бойцов: 1. NAME — NAME.')
-    if any(not b.script.strip() for b in blocks):raise ValueError('У заголовка боя отсутствует текст разбора.')
-    from .fighters import identity
-    pairs={}
-    for title in index+[b.title for b in blocks]:pairs[tuple(identity(n) for n in block_teams(title))]=title
-    intro.featured_pairs=list(pairs.values())
-    return intro,blocks,outro or Block(title='Yakun',uid='outro',kind='outro',language='uz',sport='combat')
+    from .uz_structure import parse
+    return parse(text, 'combat')
 
 
 def name_position(name,text):

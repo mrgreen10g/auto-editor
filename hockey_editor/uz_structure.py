@@ -1,0 +1,127 @@
+"""Structure from fixture headings and spoken prose, not mandatory labels.
+
+This module never invents recording timestamps from script time hints.
+"""
+import re
+from .model import Block
+
+
+def key(text):
+    return text.casefold().translate(str.maketrans({c: "'" for c in '’‘ʻʼ`'})).strip(' #*:')
+
+
+INTRO = {'kirish', 'hook', 'intro', 'boshlanish'}
+OUTRO = {'yakun', 'xulosa', 'yakuniy xulosa', 'yakuniy tanlovlar',
+         'yakuniy cta', 'yakuniy ekspress'}
+TIME = re.compile(r'^(\d{1,2}):(\d{2})\s*[—–-]\s*(\d{1,2}):(\d{2})$')
+
+
+def fixture(line, sport):
+    line = re.sub(r'^\d+[.)]\s*', '', line).strip(' #*')
+    line = re.sub(r'^[^\w]+', '', line)
+    if len(line) > 120 or line.endswith(('.', ':', '!', '?')):
+        return None
+    names = re.split(r'\s+[—–-]\s+', line)
+    if len(names) != 2 or any(not n or len(n.split()) > 7 for n in names):
+        return None
+    if re.search(r"\b(?:1x|x2|total|tanlov\w*|mag'lub\w*|bo'l\w*|g'alaba\w*|kam|ko'p)\b", key(line)):
+        return None
+    if sport == 'hockey':
+        from .hockey_names import identity, display
+        if all(identity(n) for n in names):
+            return ' — '.join(display(identity(n)) for n in names)
+    elif sport == 'football':
+        from .team_names import football_identity
+        if all(football_identity(n) for n in names):
+            from .uzbek import display_title
+            return display_title(' — '.join(names))
+    if not all(re.fullmatch(r"[\w'’‘ʻʼ`./\- \"“”]+", n) and
+               (n[0].isupper() or n[0].isdigit()) for n in names):
+        return None
+    return ' — '.join(names)
+
+
+def spoken_fixture(line, sport):
+    match = re.match(r"(?:birinchi|ikkinchi|uchinchi|to'rtinchi|beshinchi)\s+(?:uchrashuv|o'yin|jang)\s*[—–:-]?\s+(.+)", line, re.I)
+    if not match:
+        return None
+    return fixture(re.sub(r'\s+va\s+', ' — ', match[1].rstrip('.!'), count=1), sport)
+
+
+def rows(text):
+    text = re.sub(r'\[[^\]]*[А-Яа-яЁё][^\]]*\]', '', text, flags=re.S)
+    text = re.sub(r'https?://\S+|www\.\S+|:chatgpt-content-reference\{[^}]*\}|[^]*', '', text)
+    return [r.strip().lstrip('\ufeff').strip(' #*') for r in text.splitlines()
+            if r.strip() and not re.fullmatch(r'[━─═_—–\-\s]+', r)]
+
+
+def parse(text, sport):
+    values = rows(text)
+    def label(row):
+        return key(row.split('|')[0])
+    first = next((i for i, r in enumerate(values) if label(r) in INTRO), None)
+    index = [fixture(r.split('|')[0].strip(), sport) for r in values[:first]] if first is not None else []
+    # An initial fixture list is metadata when the body introduces matches orally.
+    if first is None and any(spoken_fixture(r, sport) for r in values):
+        first = 0
+        while first < len(values) and fixture(values[first].split('|')[0].strip(), sport):
+            index.append(fixture(values[first].split('|')[0].strip(), sport))
+            first += 1
+    single = [p for p in index if p]
+    single = single[0] if len(single) == 1 else None
+    body_rows = values[first if first is not None else 0:]
+    explicit_pairs = any(fixture(r.split('|')[0].strip(), sport) for r in body_rows)
+    intro = Block(title='Boshlanish', uid='intro', kind='intro', language='uz', sport=sport)
+    outro = Block(title='Yakun', uid='outro', kind='outro', language='uz', sport=sport)
+    blocks = []
+    current = intro
+    for raw in body_rows:
+        line = re.sub(r'\s*\|\s*\d{1,2}:\d{2}\s*[—–-]\s*\d{1,2}:\d{2}\s*$', '', raw).strip()
+        k = key(line)
+        if k in INTRO:
+            if blocks:
+                raise ValueError('Заголовок вступления найден внутри разбора: проверьте сценарий.')
+            current = intro
+            continue
+        if k in OUTRO:
+            current = outro
+            continue
+        hint = TIME.fullmatch(line)
+        if hint:
+            current.source_hint = [int(hint[1])*60+int(hint[2]), int(hint[3])*60+int(hint[4])]
+            continue
+        title = fixture(line, sport)
+        oral_title = spoken_fixture(line, sport) if not explicit_pairs else None
+        if not title and oral_title:
+            title = oral_title
+        if single and not blocks and current is intro and line.isupper() and line.endswith('?'):
+            current = Block(title=single, language='uz', sport=sport)
+            blocks.append(current)
+            continue
+        if title and current is not outro:
+            # A repeated fixture heading in the same analysis is not a new match.
+            if current.kind == 'analysis' and key(current.title) == key(title):
+                continue
+            current = Block(title=title, language='uz', sport=sport)
+            blocks.append(current)
+            if oral_title:
+                current.script = line
+            continue
+        if re.search('[А-Яа-яЁё]', line):
+            continue  # standalone editorial note; fixture names were handled above
+        if not blocks and (re.search(r'\b(?:SSENARIY|SCENARIY|LONG|SHORTS)\b', line, re.I)
+                           or line.startswith('```')):
+            continue
+        if blocks and re.search(r"^(?:demak|xullas|qisqacha|endi)\b.*(?:tanlovlar\w*.*(?:takror|quyidagicha)|takror\w*.*tanlov|yakunlaymiz)", k):
+            current = outro
+        pick = re.match(r'PROGNOZ\s*:\s*(.+)', line, re.I)
+        if sport == 'combat' and pick and current.kind == 'analysis':
+            current.forecast = pick[1].strip().rstrip('.')
+            continue
+        current.script += ('\n' if current.script else '') + line
+    if not blocks:
+        raise ValueError('Не найдены пары для разбора. Укажите отдельной строкой «Команда — Команда»; KIRISH и YAKUN не обязательны.')
+    if any(not b.script.strip() for b in blocks):
+        raise ValueError('У пары отсутствует текст разбора: проверьте заголовки сценария.')
+    intro.featured_pairs = list(dict.fromkeys([p for p in index if p] + [b.title for b in blocks]))
+    return intro, blocks, outro

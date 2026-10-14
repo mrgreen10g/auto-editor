@@ -35,42 +35,8 @@ def display_title(line):
                     else w[:1].upper()+w[1:].lower() for w in line.split())
 
 def parse_script(text):
-    from .script_input import clean_script
-    text=clean_script(text)
-    sections=[];current=None
-    # Author headings may carry advisory time ranges. Strip those ranges
-    # before identifying sections; preserve prose and separate recording times.
-    rows=[re.sub(r'\s*\|\s*\d{1,2}:\d{2}\s*[—–-]\s*\d{1,2}:\d{2}\s*$','',l).strip().lstrip('\ufeff') for l in text.splitlines()]
-    # Authors supply an unspoken title and fixture index before KIRISH.
-    start=next((i for i,l in enumerate(rows) if norm(l.strip().lstrip('\ufeff'))=='kirish'),None)
-    if start is None:raise ValueError('Начните узбекский сценарий с заголовка KIRISH.')
-    for raw in rows[start:]:
-        line=raw.strip().lstrip('\ufeff')
-        if not line:continue
-        line=re.sub(r'^\d+[.)]\s+(?=.+\s[—–-]\s)', '', line)
-        key=norm(line)
-        kind='intro' if key=='kirish' else 'outro' if key in ('yakuniy tanlovlar','yakuniy cta','yakuniy ekspress','xulosa','yakun') else None
-        pair=re.fullmatch(r"[A-ZА-ЯЁa-zа-яёʻʼ'’ .0-9]+\s+[—–-]\s+[A-ZА-ЯЁa-zа-яёʻʼ'’ .0-9]+",norm(line))
-        pair_names=block_teams(line) if pair else []
-        known=bool(pair_names) and all(football_identity(n) for n in pair_names)
-        pair_heading=pair and not line.endswith('.') and len(line)<100 and (known or line.upper()==line)
-        if current and current['kind']=='outro':pair_heading=False
-        if kind or pair_heading:
-            if kind=='intro' and current and current['kind']=='intro' and not current['lines']:continue
-            current={'kind':kind or 'analysis','title':display_title(line) if not kind else 'Boshlanish' if kind=='intro' else 'Yakun','lines':[],'hint':[]};sections.append(current);continue
-        hint=HINT.match(line)
-        if hint:
-            if current:current['hint']=[int(hint[1])*60+int(hint[2]),int(hint[3])*60+int(hint[4])]
-            continue
-        if current is None:raise ValueError('Начните узбекский сценарий с заголовка KIRISH.')
-        current['lines'].append(line)
-    intro=[s for s in sections if s['kind']=='intro'];analyses=[s for s in sections if s['kind']=='analysis'];outro=[s for s in sections if s['kind']=='outro']
-    if len(intro)!=1 or not analyses or not outro:raise ValueError('Нужны KIRISH, один или больше заголовков пар команд и YAKUNIY TANLOVLAR / YAKUNIY CTA.')
-    def make(s):return Block(title=s['title'],script='\n'.join(s['lines']),kind=s['kind'],language='uz',source_hint=s['hint'])
-    start=make(intro[0]);end=make(outro[0]);end.script='\n'.join('\n'.join(s['lines']) for s in outro)
-    if end.source_hint and outro[-1]['hint']:end.source_hint=[end.source_hint[0],outro[-1]['hint'][1]]
-    start.uid='intro';end.uid='outro'
-    return start,[make(s) for s in analyses],end
+    from .uz_structure import parse
+    return parse(text, 'football')
 
 
 def prepared(block):
