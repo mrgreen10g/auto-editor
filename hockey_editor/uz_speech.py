@@ -20,7 +20,7 @@ def recording_key(project):
     return hashlib.sha256(json.dumps([MODEL_REV,'beam5-vocabulary-v2',recognition_prompt(project),project.profile,[b.title for b in project.blocks],data]).encode()).hexdigest()
 
 def speech_key(project):
-    return hashlib.sha256(json.dumps(['uz-shorts-promo-v2' if project.profile=='uz_football_shorts' else 'uz-speech-10-local-forecast-review',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['uz-local-evidence-v11',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
 
 def model_path(cancel,log):
     folder=Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'Models'/'uzbek-turbo'
@@ -435,13 +435,24 @@ def prepare(project,segments,review=False,duration=None):
         else:recovered=draft_alignment(blocks,segments,duration,str(error))
         bounds=[]
         for b in blocks:
-            lines,_=recovered[b.uid];bounds.append(lines[0].start)
+            lines,_=recovered[b.uid]
+            bounds.append(lines[0].start if lines else (duration if b.kind=='outro' else 0.))
             b.asr_lines=[vars(l) for l in lines];b.speech_key=speech_key(candidate)
             b.speech_cards={}
+            if not lines:continue
             from .uzbek import classify
+            if b.sport=='hockey':
+                from .uz_hockey import classify
+            elif b.sport=='combat':
+                from .combat import classify
             for i,line in enumerate(lines):
                 title,text=classify(line.text)
-                if title:b.speech_cards[str(i)]={'title':title,'text':text,'needs_review':True,'review_reason':str(error)}
+                if title:
+                    from .combat_cards import numbers
+                    reason=line.review_reason
+                    if numbers(line.text)!=numbers(line.recognized):
+                        reason=reason or 'Числа в сценарии и распознанной речи расходятся.'
+                    b.speech_cards[str(i)]={'title':title,'text':text,'needs_review':bool(reason),'review_reason':reason}
             # Framing uses authored script semantics for recovered lines.
             if b.kind!='analysis':
                 local=[Line(l.text,l.start-lines[0].start,l.end-lines[0].start,l.agreement,l.review_reason,l.recognized,l.review_id) for l in lines]

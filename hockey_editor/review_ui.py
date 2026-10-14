@@ -46,6 +46,8 @@ class ReviewDialog:
         actions=ttk.Frame(right);actions.pack(fill='x',pady=8)
         ttk.Button(actions,text='▶ Прослушать участок',command=self.listen).pack(side='left')
         ttk.Button(actions,text='■ Стоп',command=self.stop).pack(side='left')
+        if project.profile.startswith('uz_'):
+            ttk.Button(actions,text='Перевод на русский',command=self.translate).pack(side='left',padx=6)
         ttk.Label(right,text='Звук читается из исходников: пересборка видео не нужна. Время плашек указано на монтажной дорожке.',wraplength=550).pack(fill='x')
         bottom=ttk.Frame(w);bottom.pack(fill='x',padx=12,pady=10)
         for title,command in [('Подтвердить и далее',lambda:self.decide('confirmed')),('Удалить плашку',lambda:self.decide('deleted')),('Вернуть на проверку',lambda:self.decide('pending')),('Отменить решение',self.undo),('Закрыть',self.close)]:ttk.Button(bottom,text=title,command=command).pack(side='left',padx=3)
@@ -100,6 +102,11 @@ class ReviewDialog:
 
     def undo(self):
         if self.history.undo():self.on_apply(copy.deepcopy(self.plan));self.refresh()
+
+    def translate(self):
+        if not self.selected():return
+        from .review_translation import show
+        show(self.window, tuple(box.get('1.0','end').strip() for box in (self.script,self.heard,self.text)), self.cache)
 
     def listen(self):
         if self.busy:return

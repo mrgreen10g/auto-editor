@@ -69,7 +69,9 @@ def draft_alignment(blocks, segments, duration, reason):
         coverage=sum(k in mapping for k in range(lo,hi))/max(1,hi-lo)
         anchored=any(k in mapping for k in range(lo,min(hi,lo+2)))
         next_anchor=i+1==len(rows) or any(k in mapping for k in range(rows[i+1][3],min(rows[i+1][4],rows[i+1][3]+2)))
-        uncertain=global_weak or coverage<.7 or not anchored or not next_anchor
+        # An abbreviated Uzbek script must not invalidate an independently
+        # matched sentence elsewhere. Keep local boundary checks mandatory.
+        uncertain=(global_weak and language!='uz') or coverage<.7 or not anchored or not next_anchor
         message=('Нет надёжного совпадения. '+reason) if uncertain else ''
         heard=' '.join(w['word'].strip() for w in words if starts[i]<=w['start']<starts[i+1])
         result[b.uid][0].append(Line(text,starts[i],starts[i+1],1. if uncertain else 0.,message,heard,f'{b.uid}:line:{index}'))

@@ -8,6 +8,16 @@ from hockey_editor.framing import forecast_text
 
 
 class LocalReviewTests(unittest.TestCase):
+    def test_global_script_mismatch_does_not_taint_exact_local_sentence(self):
+        from hockey_editor.model import Block
+        from hockey_editor.review import draft_alignment
+        omitted=' '.join('unspoken'+str(i) for i in range(80))+'.'
+        exact='Jamoaning himoyasida katta muammo bor.'
+        b=Block(language='uz',script=omitted+'\n'+exact)
+        result=draft_alignment([b],[segment(10,15,exact)],15,'test')[b.uid][0]
+        self.assertTrue(result[0].review_reason)
+        self.assertFalse(result[-1].review_reason)
+
     def test_one_missing_pick_does_not_downgrade_other_sections(self):
         with tempfile.TemporaryDirectory() as tmp:
             host=Path(tmp)/'host';host.touch();p=project(host);data=sample()

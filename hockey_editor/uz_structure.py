@@ -88,7 +88,8 @@ def parse(text, sport):
             continue
         hint = TIME.fullmatch(line)
         if hint:
-            current.source_hint = [int(hint[1])*60+int(hint[2]), int(hint[3])*60+int(hint[4])]
+            interval = [int(hint[1])*60+int(hint[2]), int(hint[3])*60+int(hint[4])]
+            current.source_hint = [current.source_hint[0], interval[1]] if current.source_hint else interval
             continue
         title = fixture(line, sport)
         oral_title = spoken_fixture(line, sport) if not explicit_pairs else None
@@ -100,7 +101,7 @@ def parse(text, sport):
             continue
         if title and current is not outro:
             # A repeated fixture heading in the same analysis is not a new match.
-            if current.kind == 'analysis' and key(current.title) == key(title):
+            if current.kind == 'analysis' and key(current.title) == key(title) and not re.match(r'^\d+[.)]\s', line):
                 continue
             current = Block(title=title, language='uz', sport=sport)
             blocks.append(current)
