@@ -7,10 +7,11 @@ import argparse
 import ctypes as c
 import ctypes.util
 import json
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
+import hashlib
 
 
-def entries(path):
+def entries(path, extract_dir=None):
     lib = c.CDLL(ctypes.util.find_library('archive'))
     for name, restype, args in [
         ('archive_read_new', c.c_void_p, []),
@@ -36,14 +37,28 @@ def entries(path):
             if status < 0: raise ValueError('Corrupt archive: '+str(path))
             name = lib.archive_entry_pathname(entry).decode('utf-8')
             data = bytearray()
-            if name.lower().endswith('.txt'):
+            suffix = PurePosixPath(name.replace('\\', '/')).suffix.lower()
+            target = None
+            if extract_dir is not None and suffix in ('.txt', '.mp3', '.wav', '.m4a', '.flac'):
+                # Never use archive paths as output paths (including traversal/symlinks).
+                root = Path(extract_dir); root.mkdir(parents=True, exist_ok=True)
+                key = hashlib.sha256((str(Path(path).resolve())+'\0'+name).encode()).hexdigest()
+                target = root / (key+suffix)
+            if suffix == '.txt' or target is not None:
                 buf = c.create_string_buffer(65536)
-                while True:
-                    n = lib.archive_read_data(archive, buf, len(buf))
-                    if n < 0: raise ValueError('Cannot read script: '+name)
-                    if not n: break
-                    data.extend(buf.raw[:n])
-                    if len(data) > 4_000_000: raise ValueError('Oversized script')
+                out = target.with_suffix(target.suffix+'.part').open('wb') if target else None
+                try:
+                    while True:
+                        n = lib.archive_read_data(archive, buf, len(buf))
+                        if n < 0: raise ValueError('Cannot read entry: '+name)
+                        if not n: break
+                        if out: out.write(buf.raw[:n])
+                        if suffix == '.txt':
+                            data.extend(buf.raw[:n])
+                            if len(data) > 4_000_000: raise ValueError('Oversized script')
+                finally:
+                    if out: out.close()
+                if target: target.with_suffix(target.suffix+'.part').replace(target)
             yield name, bytes(data)
     finally:
         lib.archive_read_free(archive)
@@ -52,12 +67,20 @@ def entries(path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('archives', nargs='+')
+    parser.add_argument('--extract-dir', type=Path,
+                        help='Private extraction directory; also writes files.json for audit_uz_corpus.py')
     args = parser.parse_args()
     from hockey_editor.uz_structure import parse
-    scripts = {}; audio = set()
+    scripts = {}; audio = set(); files = []
     for path in args.archives:
-        for name, data in entries(path):
+        for name, data in entries(path, args.extract_dir):
             p = PurePosixPath(name.replace('\\', '/'))
+            if args.extract_dir and p.suffix.lower() in ('.txt', '.mp3', '.wav', '.m4a', '.flac'):
+                key = hashlib.sha256((str(Path(path).resolve())+'\0'+name).encode()).hexdigest()
+                target = args.extract_dir / (key+p.suffix.lower())
+                with target.open('rb') as source:
+                    digest = hashlib.file_digest(source, 'sha256').hexdigest()
+                files.append(dict(episode=p.stem, path=str(target.resolve()), type=p.suffix.lower(), sha256=digest))
             if p.suffix.lower() in ('.mp3', '.wav', '.m4a', '.flac'): audio.add(p.stem)
             if p.suffix.lower() == '.txt': scripts[p.stem] = data.decode('utf-8-sig')
     result = []
@@ -70,6 +93,8 @@ def main():
             a, b, z = parse(text, 'football')
             result.append({'episode':stem, 'blocks':len(b), 'intro':bool(a.script), 'outro':bool(z.script)})
         except ValueError as e: result.append({'episode':stem, 'error':str(e)})
+    if args.extract_dir:
+        (args.extract_dir/'files.json').write_text(json.dumps(files, ensure_ascii=False, indent=2), encoding='utf-8')
     print(json.dumps({'audio_count':len(audio), 'script_count':len(scripts), 'episodes':result}, ensure_ascii=False, indent=2))
 
 
