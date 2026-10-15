@@ -71,6 +71,11 @@ def tokens(text):
     from .nhl import speech_names
     from .nhl_players import normalize_speech
     text=speech_names(normalize_speech(text.lower().replace('ё','е')))
+    # Local ASR spelling variants of club names. Do not rewrite the original
+    # recognized text displayed to the reviewer or numeric forecast terms.
+    text=re.sub(r'\b(?:салават|соловат|словат)\s+юл(?:аев|айев|айов)\b','салават юлаев',text)
+    text=re.sub(r'\bметалург([а-я]*)\b',r'металлург\1',text)
+    text=re.sub(r'\bнефтихимик([а-я]*)\b',r'нефтехимик\1',text)
     text=re.sub(r'(\d)\s*([,.])\s*(\d)',r'\1\2\3',text)
     text=re.sub(r'\bcska\b|\bцск\b','цска',text)
     text=re.sub(r'\b(?:ska|sk)\b','ска',text)

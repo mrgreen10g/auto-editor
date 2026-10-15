@@ -127,3 +127,9 @@ class ReleaseTests(unittest.TestCase):
         self.assertTrue(football_positions('Leeds United','матч с Лидсом'))
         self.assertIn('Erling Haaland',mentioned_names('У Холанда три гола.'))
         self.assertEqual(mentioned_names('Мартинес вернулся.'),[])
+
+    def test_local_club_spelling_does_not_change_forecast_numbers(self):
+        from hockey_editor.ru_speech import tokens
+        for heard,script in [('Словат Юлайов','Салават Юлаев'),('Соловат Юлайев','Салават Юлаев'),('Металурга','Металлурга'),('Нефтихимик','Нефтехимик')]:
+            self.assertEqual(tokens(heard),tokens(script))
+        self.assertNotEqual(tokens('Металург не забьет три'),tokens('Металлург забьет два'))
