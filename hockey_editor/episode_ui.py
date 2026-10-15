@@ -116,7 +116,10 @@ class EpisodeMixin:
             try:
                 from .script_input import read_script
                 text=read_script(path);parsed=None
-                if draft.profile=='ru_hockey_shorts':
+                if draft.profile=='ru_football':
+                    from .ru_football import parse_script
+                    start,parsed,end=parse_script(text);intro=start.script;outro=end.script;blocks=[(b.title,b.script) for b in parsed]
+                elif draft.profile=='ru_hockey_shorts':
                     from .shorts import parse_ru_script
                     start,parsed,end=parse_ru_script(text);intro=start.script;outro=end.script;blocks=[(b.title,b.script) for b in parsed]
                 elif draft.profile.startswith('uz_'):

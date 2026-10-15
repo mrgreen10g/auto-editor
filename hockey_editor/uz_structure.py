@@ -18,6 +18,9 @@ TIME = re.compile(r'^(\d{1,2}):(\d{2})\s*[—–-]\s*(\d{1,2}):(\d{2})$')
 
 def fixture(line, sport):
     line = re.sub(r'^\d+[.)]\s*', '', line).strip(' #*')
+    oral=re.match(r"(?:birinchi|ikkinchi|uchinchi|to'rtinchi|beshinchi)\s+(?:uchrashuv|o'yin|jang)\s*[—–:-]?\s+(.+)",key(line),re.I)
+    if oral:
+        return None  # spoken_fixture strips the lead-in and preserves spoken text.
     line = re.sub(r'^[^\w]+', '', line)
     if len(line) > 120 or line.endswith(('.', ':', '!', '?')):
         return None

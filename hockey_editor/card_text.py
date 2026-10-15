@@ -7,7 +7,10 @@ NUMBERS = {'одну':'1', 'одной':'1', 'один':'1', 'одна':'1', 'д
 
 def teams(text):
     positions=[(team_position(name,text),name) for name in TEAMS]
-    return [name for _,name in sorted((position,name) for position,name in positions if position is not None)]
+    found=[name for _,name in sorted((position,name) for position,name in positions if position is not None)]
+    if found:return found
+    from .team_names import football_names,FOOTBALL
+    return [next((a for a in FOOTBALL[n] if re.search('[А-Яа-я]',a)),n) for n in football_names(text)]
 
 
 def numeric(text):
@@ -92,7 +95,7 @@ def classify_card(text):
     pick=any(w in t for w in ('мой прогноз','мой выбор','основной выбор','основной прогноз','форой плюс'))
     if pick and re.search(r'побед|тотал|фор[аыуое]|\b[пp][12]\b|\b(?:1[xх]|[xх]2)\b|ничь',t):return 'ПРОГНОЗ'
     if any(w in t for w in ('ставка проходит','ставка выигрывает','ставка выиграет','возврат','ставка проигрывает')) or ('проигрыш' in t and re.search(r'\d',n)):return 'УСЛОВИЯ ПРОГНОЗА'
-    if re.search(r'\d',n) and any(w in t for w in ('броск','переброс','сейв','отражен','отразил','процент')):return 'СТАТИСТИКА'
+    if re.search(r'\d',n) and any(w in t for w in ('броск','переброс','сейв','отражен','отразил','процент','удар','владени','xg','ожидаем','очк','пропущ','забит')):return 'СТАТИСТИКА'
     if re.search(r'\b\d{1,2}\s*[–—-]\s*\d{1,2}\s*[–—-]\s*\d{1,2}\b',t):return 'СТАТИСТИКА'
     if re.search(r'ставка.{0,20}(?:проходит|выигрывает|проигрывает)',t):return 'УСЛОВИЯ ПРОГНОЗА'
     if re.search(r'\b\d{1,2}\s*[:：]\s*\d{1,2}\b',t):

@@ -42,6 +42,9 @@ def prepared_script(block):
 
 def pair_matches(text,block):
     names=block_teams(block.title)
+    if block.sport=='football':
+        from .team_names import football_positions
+        return bool(names[1]) and all(football_positions(n,text,names) for n in names)
     positions=[team_position(name,text,names) for name in names]
     return bool(names[1]) and all(p is not None for p in positions) and len(set(positions))==2
 
@@ -218,9 +221,11 @@ def asset_filter(card,cache,cancel):
     return filt,'0','0'
 
 
-def split_full_script(text):
+def split_full_script(text,sport='hockey'):
     """Standalone fixtures and recap intent, independent of one catchphrase."""
     from .team_names import ru_identity
+    if sport=='football':
+        from .team_names import football_identity as ru_identity
     from .speech_boundaries import recap_cue
     # A recap can start inside a paragraph. Preserve the wording verbatim.
     rows=[]
@@ -230,6 +235,9 @@ def split_full_script(text):
     headers=[];titles={}
     for i,line in enumerate(rows):
         title=re.sub(r'^\s*(?:#{1,4}\s*|\d+[.)]\s*)','',line).strip().strip('*').strip()
+        if sport=='football':
+            title=re.sub(r'^(?:начинаем\s+с|теперь|далее|следующий\s+матч\s*[—–:]?)\s+','',title,flags=re.I).strip(' .')
+            title=title.replace('«','').replace('»','')
         pair=block_teams(title)
         if len(title)<100 and pair[1] and all(ru_identity(name) for name in pair):
             # Don't accept a prose sentence containing two clubs as a heading.

@@ -23,11 +23,11 @@ class Engine:
             s=Path(p).stat();return [str(Path(p).resolve()),s.st_size,s.st_mtime_ns]
         from .framing import prepared_script
         data={'version':ALIGNMENT_VERSION,'host':stat(self.project.host) if len(self.project.host_paths())==1 else [stat(v) for v in self.project.host_paths()],'script':prepared_script(self.project.blocks[self.index]),'floor':frame(source_floor)}
-        if self.project.profile not in ('ru_hockey','ru_hockey_shorts'):data['profile']=self.project.profile
+        if self.project.profile not in ('ru_hockey','ru_football','ru_hockey_shorts'):data['profile']=self.project.profile
         return hashlib.sha256(json.dumps(data,ensure_ascii=False).encode()).hexdigest()
 
     def analyze(self,source_floor=0,speech=None,recover=True):
-        if recover and speech is None and self.project.profile in ('ru_hockey','ru_hockey_shorts') and self.project.settings.cut_pauses and getattr(self,'recover_speech',True):
+        if recover and speech is None and self.project.profile in ('ru_hockey','ru_football','ru_hockey_shorts') and self.project.settings.cut_pauses and getattr(self,'recover_speech',True):
             self.project.validate(self.index)
             from .ru_speech import prepare
             found=prepare(self.project,self.project.blocks,self.cache,self.cancel,self.log)
@@ -183,6 +183,7 @@ class Engine:
             if rotation==180:video+=',hflip,vflip'
             elif rotation==90:video+=',transpose=clock'
             elif rotation==270:video+=',transpose=cclock'
+            if s.mirror_host:video+=',hflip'
             video+=f',scale={cw}:{ch}:force_original_aspect_ratio=decrease,pad={cw}:{ch}:(ow-iw)/2:(oh-ih)/2,setsar=1'
             if s.color:video+=',eq=contrast=1.045:saturation=1.035:brightness=-0.004'
             fl=[f'[0:v]{video}[video]','[0:a]asplit='+str(n)+''.join(f'[s{i}]' for i in range(n))]

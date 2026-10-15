@@ -227,6 +227,12 @@ def football_positions(name,text,context=()):
     suffix=r"(?:'?(?:ning|ni|ga|da|dan|mi))?"
     for alias in football_aliases(name,context):
         pattern=r'\s+'.join(re.escape(w) for w in normalize(alias).split())
+        if re.fullmatch(r'[а-яё -]+',normalize(alias)):
+            parts=[]
+            for word in normalize(alias).split():
+                stem=word[:-1] if word[-1:] in 'аяь' and len(word)>4 else word
+                parts.append(re.escape(stem)+(r'[а-яё]*' if len(stem)>=4 else ''))
+            pattern=r'\s+'.join(parts)
         matches=re.finditer(r'(?<!\w)'+pattern+suffix+r'(?!\w)',text)
         for m in matches:
             if numeric_stat(text,m.start(),m.end()):continue

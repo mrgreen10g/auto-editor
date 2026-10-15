@@ -49,7 +49,7 @@ def panel(width, height, accent=(70,211,215,255), profile='ru_hockey'):
     r.line((width*.78,0,width*.78,height),fill=(62,141,181,38),width=2)
     r.ellipse((width*.78-58,height/2-58,width*.78+58,height/2+58),outline=(89,175,203,35),width=2)
     r.line((width*.94,0,width*.94,height),fill=(229,92,111,38),width=2)
-    if profile=='uz_football':
+    if profile in ('uz_football','ru_football'):
         rink=Image.new('RGBA',(width,height));r=ImageDraw.Draw(rink)
         ink=(89,175,203,38);x=int(width*.78)
         r.line((x,0,x,height),fill=ink,width=2)

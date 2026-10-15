@@ -7,6 +7,13 @@ from .team_names import normalize,compact
 
 VIDEO={'.mov','.mp4','.mkv','.avi','.webm','.m4v'}
 
+def presenter_folder(folder,profile):
+    root=Path(folder).resolve()
+    if not profile.endswith('_shorts'):return root
+    choices=[p for p in root.iterdir() if p.is_dir() and not p.is_symlink() and p.name.casefold()=='shorts']
+    if len(choices)!=1:raise ValueError('Для Shorts выберите папку лонга с единственной вложенной папкой shorts.')
+    return choices[0]
+
 def root_files(folder):
     root=Path(folder).resolve()
     if not root.is_dir():raise ValueError('Папка выпуска не найдена.')
@@ -15,7 +22,9 @@ def root_files(folder):
             [p for p in files if p.suffix.lower() in {'.txt','.docx'} and not p.name.startswith('~$')])
 
 def parse_episode(text,profile):
-    if profile=='ru_hockey_shorts':
+    if profile=='ru_football':
+        from .ru_football import parse_script as parse
+    elif profile=='ru_hockey_shorts':
         from .shorts import parse_ru_script as parse
     elif profile=='uz_hockey_shorts':
         from .uz_hockey_shorts import parse_script as parse
@@ -34,7 +43,7 @@ def parse_episode(text,profile):
     return parse(text)
 
 def identity(name,profile):
-    if profile.startswith('uz_football'):
+    if 'football' in profile:
         from .team_names import football_identity
         return football_identity(name) or compact(name)
     if profile=='uz_combat':
@@ -58,7 +67,7 @@ def source_names(path,profile):
     """Infer only from the recording filename, never the forecast folder."""
     text=Path(path).stem.replace('_',' ')
     if profile=='uz_combat':return '',''
-    if profile.startswith('uz_football'):
+    if 'football' in profile:
         from .team_names import football_names
         found=football_names(text)
     elif profile.startswith('uz_hockey'):
@@ -69,7 +78,7 @@ def source_names(path,profile):
         found=ru_file_names(text)
     if len(found)==2:return tuple(found)
     # Unlisted football names are allowed in an explicit file pair.
-    if profile.startswith('uz_football'):
+    if 'football' in profile:
         from .shorts import _declared_football_name
         pair=block_teams(text)
         if all(pair) and all(_declared_football_name(n) for n in pair):return tuple(pair)
@@ -77,9 +86,9 @@ def source_names(path,profile):
 
 def build_import(project,folder,host,script,overrides=None):
     from .script_input import read_script
-    root=Path(folder).resolve();hosts,scripts=root_files(root)
+    root=Path(folder).resolve();hosts,scripts=root_files(presenter_folder(root,project.profile))
     host=Path(host).resolve();script=Path(script).resolve()
-    if host not in hosts or script not in scripts:raise ValueError('Выберите запись ведущего и сценарий из корня выбранной папки.')
+    if host not in hosts or script not in scripts:raise ValueError('Выберите запись ведущего и сценарий из папки shorts.' if project.profile.endswith('_shorts') else 'Выберите запись ведущего и сценарий из корня выбранной папки.')
     draft=copy.deepcopy(project)
     draft.intro,draft.blocks,draft.outro=parse_episode(read_script(script),draft.profile)
     draft.host=str(host);draft.hosts=[str(host)];draft.matches=[]
@@ -103,7 +112,7 @@ def build_import(project,folder,host,script,overrides=None):
             if path in seen:
                 notes.append('Повтор файла пропущен: '+str(path));continue
             a,b=source_names(path,draft.profile)
-            source=MatchSource(str(path),a,b,sport='combat' if draft.profile=='uz_combat' else 'football' if draft.profile.startswith('uz_football') else 'hockey')
+            source=MatchSource(str(path),a,b,sport='combat' if draft.profile=='uz_combat' else 'football' if 'football' in draft.profile else 'hockey')
             if source.sport=='combat':
                 candidates=[n for n in block_teams(block.title) if identity(n,draft.profile) in (identity(path.stem,draft.profile),identity(path.parent.name,draft.profile))]
                 if len(candidates)==1:source.fighter=source.home=candidates[0]

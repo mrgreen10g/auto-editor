@@ -20,7 +20,7 @@ def recording_key(project):
     return hashlib.sha256(json.dumps([MODEL_REV,'beam5-vocabulary-v2',recognition_prompt(project),project.profile,[b.title for b in project.blocks],data]).encode()).hexdigest()
 
 def speech_key(project):
-    return hashlib.sha256(json.dumps(['uz-local-evidence-v12-body-anchors',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['uz-local-evidence-v13-heard-context',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
 
 def model_path(cancel,log):
     folder=Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'Models'/'uzbek-turbo'
@@ -259,7 +259,8 @@ def make_lines(segments,lo,hi,annotations):
         if not annotated:
             a=max(a,selected[0]['start']);b=min(b,selected[-1]['end'])
             if b-a<.15:continue
-        lines.append({'text':text,'start':a,'end':b,'agreement':0.})
+        lines.append({'text':text,'recognized':text,'start':a,'end':b,'agreement':0.,
+                      'words':[dict(word=w['word'],start=max(0,w['start']-a),end=min(b,w['end'])-a) for w in selected]})
     return lines,cards
 
 def _prepare(project,segments):

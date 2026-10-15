@@ -8,6 +8,9 @@ from .graphics import block_teams
 
 def events(block,matches):
     from .uzbek import classify,norm
+    if block.language=='ru':
+        from .card_text import classify_card,summarize_card
+        classify=lambda text:(classify_card(text),summarize_card(classify_card(text),text))
     sources=[m for m in matches if m.id in block.match_ids and m.sport=='football']
     if not sources:return []
     def key(name):return football_identity(name) or norm(name)
@@ -23,7 +26,7 @@ def events(block,matches):
         if i in promo_indices:continue
         t=norm(text);title,_=classify(text)
         title=block.speech_cards.get(str(i),{}).get('title',title)
-        if title in ('ПРОГНОЗ','УСЛОВИЯ ПРОГНОЗА','СОСТАВ КОМАНДЫ','ТЕЛЕГРАМ') or re.search(r'telegram|obuna|layk|tanlov',t):continue
+        if title in ('ПРОГНОЗ','ОЖИДАЕМЫЙ СЧЁТ','УСЛОВИЯ ПРОГНОЗА','СОСТАВ КОМАНДЫ','ТЕЛЕГРАМ') or re.search(r'telegram|obuna|layk|tanlov|телеграм|подпис|лайк',t):continue
         hits=sorted((a,n) for n in catalog for a,z in football_positions(n,text))
         named=list(dict.fromkeys(n for a,n in hits))
         if len(named)>=2:

@@ -175,9 +175,19 @@ def attach(plan, block, project):
         if reason:
             card.review_reason=reason
             plan.review_items.append(dict(id=card.review_id,block_id=block.uid,start=card.start,end=card.end,
-                reason=reason,script=script_context(block,card,line),recognized=line.recognized if line else '',status='pending'))
+                reason=reason,script=script_context(block,card,line),recognized=heard_context(plan,card.start,card.end,line),status='pending'))
     plan.edit_baseline={'cards':[asdict(c) for c in plan.cards],'inserts':[asdict(c) for c in plan.inserts]}
     return plan
+
+
+def heard_context(plan,start,end,line=None):
+    """Only actual ASR evidence; include neighboring speech for review context."""
+    rows=[x for x in plan.lines if x.end>start-1.5 and x.start<end+1.5]
+    values=[]
+    for row in rows:
+        value=row.recognized.strip() or ' '.join(w['word'].strip() for w in row.words)
+        if value and (not values or value!=values[-1]):values.append(value)
+    return ' '.join(values) or (line.recognized if line else '')
 
 
 def pending(plan):return [x for x in plan.review_items if x['status']=='pending']

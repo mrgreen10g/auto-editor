@@ -3,7 +3,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk,filedialog,messagebox
 from . import ui
-from .folder_import import root_files,build_import,unresolved_sources
+from .folder_import import root_files,build_import,unresolved_sources,presenter_folder
 
 
 def choose_file(parent,title,files):
@@ -25,7 +25,10 @@ def import_folder(app):
     if not root:return
     app.collect()
     try:
-        hosts,scripts=root_files(root)
+        hosts,scripts=root_files(presenter_folder(root,app.project.profile))
+        if app.project.profile.endswith('_shorts'):
+            preferred=[p for p in scripts if p.name.casefold()=='text.txt']
+            if preferred:scripts=preferred
         host=choose_file(app.root,'Запись ведущего · MOV / MP4',hosts)
         if not host:return
         script=choose_file(app.root,'Полный сценарий · TXT / DOCX',scripts)
@@ -36,7 +39,7 @@ def import_folder(app):
     w=tk.Toplevel(app.root);w.title('Импорт выпуска из папки');w.transient(app.root)
     w.geometry(f'{min(900,w.winfo_screenwidth()-60)}x{min(650,w.winfo_screenheight()-100)}');w.minsize(760,500)
     ttk.Label(w,text=f'Папка: {root}\nВедущий: {host.name}\nСценарий: {script.name}',wraplength=840,padding=12).pack(fill='x')
-    ttk.Label(w,text='Проверьте сопоставление. Настройки голоса, музыки и оформления сохранятся.\nТекущий проект заменится только после импорта; shorts не используется.',wraplength=840,padding=12).pack(fill='x')
+    ttk.Label(w,text='Проверьте сопоставление. Настройки голоса, музыки и оформления сохранятся.\n'+('Ведущий и сценарий взяты из shorts, матчи — из папок лонга.' if draft.profile.endswith('_shorts') else 'Текущий проект заменится только после импорта; shorts не используется.'),wraplength=840,padding=12).pack(fill='x')
     table=ui.table(w,[('kind','Разбор / запись',330),('source','Папка / файл',280),('state','Состояние',220)],10)
     notice=tk.StringVar();ttk.Label(w,textvariable=notice,wraplength=840,padding=12).pack(fill='x')
     footer=ttk.Frame(w,padding=12);footer.pack(side='bottom',fill='x',before=table.master)

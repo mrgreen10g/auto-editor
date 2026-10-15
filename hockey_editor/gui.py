@@ -141,7 +141,10 @@ class App(EpisodeMixin,MatchMixin):
             self.button(bar, label, cmd).pack(side='right', padx=(8, 0))
         profilebar=ttk.Frame(main);profilebar.pack(fill='x',pady=(0,8))
         ttk.Label(profilebar,text='Шаблон ведущего',style='Muted.TLabel').pack(side='left',padx=(0,8))
-        self.profilebox=ttk.Combobox(profilebar,values=['Хоккей · русский','Футбол · узбекский','Бои · узбекский','Хоккей · узбекский','Футбол · УЗ Shorts','Хоккей · РУ Shorts','Хоккей · УЗ Shorts'],state='readonly',width=28)
+        self.speakerbox=ttk.Combobox(profilebar,values=['РУ спикер','УЗ спикер'],state='readonly',width=13)
+        self.speakerbox.pack(side='left',padx=(0,8));self.controls.append(self.speakerbox)
+        self.speakerbox.bind('<<ComboboxSelected>>',self.switch_speaker)
+        self.profilebox=ttk.Combobox(profilebar,state='readonly',width=23)
         self.profilebox.pack(side='left');self.controls.append(self.profilebox)
         self.profilebox.bind('<<ComboboxSelected>>',self.switch_profile)
         ui.Tooltip(self.profilebox,'Язык речи и плашек, вид спорта и отдельные материалы канала. Футбол: очные и архивные встречи для каждого разбора.')
@@ -175,7 +178,7 @@ class App(EpisodeMixin,MatchMixin):
 
     def build_materials(self):
         page = self.scrollable('materials')
-        self.button(page,'Импортировать папку выпуска…',self.import_episode_folder,'Primary.TButton').pack(anchor='w',pady=(0,12))
+        self.button(page,'Импортировать папку выпуска…',self.import_episode_folder,'Primary.TButton').pack(anchor='w',padx=8,pady=(0,12))
         block = ttk.Frame(page)
         block.pack(fill='x', pady=(0, 14))
         self.button(block, '+ Разбор', self.add_block).pack(side='left', padx=8)
@@ -191,7 +194,6 @@ class App(EpisodeMixin,MatchMixin):
         self.button(presenter,'Восстановить ссылки',self.relink_media).pack(anchor='w',pady=(6,0))
         framing=ui.card(page,'Начало и завершение','Дисклеймер, представление команд, Telegram, итоги и подписка.')
         self.button(framing,'Настроить полный выпуск…',self.edit_framing).pack(anchor='w')
-        self.button(framing,'Shorts · взять матчи из лонга…',self.import_long_matches).pack(anchor='w',pady=(6,0))
         self.framing_hint=ttk.Label(framing,style='CardMuted.TLabel',wraplength=650);self.framing_hint.pack(anchor='w',pady=(8,0))
         script = ui.card(page, 'Сценарий разбора', 'Вставьте текст так, как его произносит ведущий. Таймкоды не нужны.', '02')
         row = ttk.Frame(script, style='Card.TFrame')
@@ -285,14 +287,15 @@ class App(EpisodeMixin,MatchMixin):
         self.rotate = tk.StringVar(value='Автоматически')
         self.option(look, 'Поворот ведущего', self.rotate, ['Автоматически', 'Без поворота', '90°', '180°', '270°'])
         self.effect_vars = {}
-        for key, label in [('zoom', 'Плавные наезды 100% → 120% с промежутками'),
+        for key, label in [('mirror_host', 'Отзеркалить ведущего по горизонтали'),
+                           ('zoom', 'Плавные наезды 100% → 120% с промежутками'),
                            ('transitions', 'Мягкие переходы к игре и обратно'),
                            ('animate_cards', 'Плавное появление и уход плашек'),
                            ('wobble', 'Лёгкое покачивание плашек'),
                            ('cut_pauses', 'Сокращать паузы и повторные неудачные дубли'),
                            ('color', 'Лёгкая цветокоррекция'),
                            ('subtitles', 'Субтитры · РУ Shorts (экспериментально)')]:
-            var = tk.BooleanVar(value=key!='subtitles')
+            var = tk.BooleanVar(value=key not in ('subtitles','mirror_host'))
             self.effect_vars[key] = var
             widget = ttk.Checkbutton(look, text=label, variable=var)
             widget.pack(anchor='w', pady=2)
@@ -498,7 +501,12 @@ class App(EpisodeMixin,MatchMixin):
     def refresh(self):
         self.refreshing = True
         p = self.project
-        self.profilebox.current(('ru_hockey','uz_football','uz_combat','uz_hockey','uz_football_shorts','ru_hockey_shorts','uz_hockey_shorts').index(p.profile))
+        from .profiles import PROFILES
+        language='uz' if p.profile.startswith('uz_') else 'ru'
+        self.speakerbox.current(1 if language=='uz' else 0)
+        self.profile_choices=PROFILES[language]
+        self.profilebox['values']=[label for _,label in self.profile_choices]
+        self.profilebox.current([key for key,_ in self.profile_choices].index(p.profile))
         block = p.blocks[self.index]
         self.scope.set("Все разборы" if p.whole_episode else "Текущий разбор")
         self.host.set(p.host)
@@ -589,7 +597,7 @@ class App(EpisodeMixin,MatchMixin):
     def add_block(self):
         self.collect()
         self.project.whole_episode=True
-        self.project.blocks.append(Block(title=f'Разбор {len(self.project.blocks) + 1}',language='uz' if self.project.profile.startswith('uz_') else 'ru',sport='combat' if self.project.profile=='uz_combat' else 'hockey' if self.project.profile.startswith('uz_hockey') else ''))
+        self.project.blocks.append(Block(title=f'Разбор {len(self.project.blocks) + 1}',language='uz' if self.project.profile.startswith('uz_') else 'ru',sport='combat' if self.project.profile=='uz_combat' else 'football' if 'football' in self.project.profile else 'hockey'))
         self.index = len(self.project.blocks) - 1
         self.invalidate()
         self.refresh()
@@ -828,7 +836,7 @@ class App(EpisodeMixin,MatchMixin):
 
     def switch_profile(self,event=None):
         if self.busy:return
-        profile=('ru_hockey','uz_football','uz_combat','uz_hockey','uz_football_shorts','ru_hockey_shorts','uz_hockey_shorts')[self.profilebox.current()]
+        profile=self.profile_choices[self.profilebox.current()][0]
         if profile==self.project.profile:return
         self.collect()
         from .profiles import apply_profile
@@ -836,6 +844,14 @@ class App(EpisodeMixin,MatchMixin):
         from .preferences import restore_folder
         restore_folder(self.project)
         self.scans.clear();self.invalidate();self.refresh()
+
+    def switch_speaker(self,event=None):
+        if self.busy:return
+        from .profiles import PROFILES
+        self.profile_choices=PROFILES['uz' if self.speakerbox.current()==1 else 'ru']
+        self.profilebox['values']=[label for _,label in self.profile_choices]
+        self.profilebox.current(0)
+        self.switch_profile()
 
     def new(self):
         if not messagebox.askyesno('Новый проект', 'Создать новый проект? Несохранённые изменения текущего проекта будут потеряны.'):

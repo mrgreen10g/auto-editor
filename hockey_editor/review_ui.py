@@ -83,7 +83,9 @@ class ReviewDialog:
         from .review import describe_card
         kind,where=describe_card(card,task,self.project,self.plan)
         self.reason.set(kind+' · '+where+'\n'+task['reason'])
-        for box,value in [(self.script,task['script']),(self.heard,task.get('recognized','')),(self.text,card.text if card else '')]:
+        from .review import heard_context
+        heard=task.get('recognized','') or heard_context(self.plan,task['start'],task['end'])
+        for box,value in [(self.script,task['script']),(self.heard,heard),(self.text,card.text if card else '')]:
             box.configure(state='normal');box.delete('1.0','end');box.insert('1.0',value)
         self.script.configure(state='disabled')
         self.start.set(format_time(card.start if card else task['start']));self.end.set(format_time(card.end if card else task['end']))

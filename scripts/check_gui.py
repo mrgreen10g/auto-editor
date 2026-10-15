@@ -22,6 +22,13 @@ def check():
     errors = []
     root.report_callback_exception = lambda *exc: errors.append(str(exc[1]))
     app = App(root)
+    def select_profile(profile):
+        from hockey_editor.profiles import PROFILES
+        language='uz' if profile.startswith('uz_') else 'ru'
+        app.speakerbox.current(1 if language=='uz' else 0)
+        app.profile_choices=PROFILES[language]
+        app.profilebox['values']=[label for _,label in app.profile_choices]
+        app.profilebox.current([key for key,_ in app.profile_choices].index(profile))
     out = ROOT / 'build'
     out.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='hockey-ui-') as tmp:
@@ -343,7 +350,7 @@ def check():
                 assert widget.winfo_ismapped(), (key, str(widget), root.geometry())
                 assert widget.winfo_rootx() + widget.winfo_width() <= root.winfo_rootx() + root.winfo_width() + 1
                 assert widget.winfo_rooty() + widget.winfo_height() <= root.winfo_rooty() + root.winfo_height() + 1
-        app.profilebox.current(1)
+        select_profile('uz_football')
         with patch('hockey_editor.profiles.kit_path',return_value=tmp/'uz-kit.json'):app.switch_profile()
         root.update();assert app.project.profile=='uz_football' and not app.project.assets
         assert all(b.language=='uz' for b in [app.project.intro,*app.project.blocks,app.project.outro])
@@ -357,12 +364,12 @@ def check():
         root.update();assert '00:31 01:30' in app.project.recording_times
         app.edit_framing();root.update();assert '00:31 01:30' in app.framing_times.get('1.0','end');app.framing_window.destroy()
         app.project.save(tmp/'uz.hockeyproj');assert Project.load(tmp/'uz.hockeyproj').profile=='uz_football'
-        app.profilebox.current(0)
+        select_profile('ru_hockey')
         with patch('hockey_editor.profiles.kit_path',return_value=tmp/'ru-kit.json'):app.switch_profile()
         root.update();assert app.project.profile=='ru_hockey'
         assert app.find_events_button.cget('text')=='Найти голы'
         # Russian Shorts share portrait output while retaining Russian analysis.
-        app.profilebox.current(5)
+        select_profile('ru_hockey_shorts')
         with patch('hockey_editor.profiles.kit_path',return_value=tmp/'ru-short-kit.json'):app.switch_profile()
         root.update();app.collect()
         assert app.project.profile=='ru_hockey_shorts'
@@ -426,7 +433,7 @@ def check():
         for _ in range(9):app.add_block()
         root.update();assert len(app.project.blocks)==10
         # Combat profile must not inherit football source limits or logo controls.
-        app.profilebox.current(2)
+        select_profile('uz_combat')
         with patch('hockey_editor.profiles.kit_path',return_value=tmp/'combat-kit.json'):app.switch_profile()
         root.update();assert app.project.profile=='uz_combat'
         assert not app.logos_panel.winfo_manager()
@@ -439,11 +446,11 @@ def check():
         dialog.fighter.set('ALEKSANDR XALZOV');assert dialog.validate()
         dialog.apply();assert dialog.result==['ALEKSANDR XALZOV','','']
         dialog.destroy();root.update()
-        app.profilebox.current(0)
+        select_profile('ru_hockey')
         with patch('hockey_editor.profiles.kit_path',return_value=tmp/'ru-kit.json'):app.switch_profile()
         root.update();assert app.logos_panel.winfo_manager()
         # Shorts is a first-class portrait profile, including collection and saved projects.
-        app.profilebox.current(4)
+        select_profile('uz_football_shorts')
         with patch('hockey_editor.profiles.kit_path',return_value=tmp/'shorts-kit.json'):app.switch_profile()
         root.update();app.collect()
         assert app.project.profile=='uz_football_shorts'
@@ -451,7 +458,7 @@ def check():
         assert app.project.full_video and app.project.whole_episode
         app.project.save(tmp/'shorts.hockeyproj')
         assert Project.load(tmp/'shorts.hockeyproj').profile=='uz_football_shorts'
-        app.profilebox.current(6)
+        select_profile('uz_hockey_shorts')
         with patch('hockey_editor.profiles.kit_path',return_value=tmp/'uz-hockey-shorts-kit.json'):app.switch_profile()
         root.update();app.collect()
         assert app.project.profile=='uz_hockey_shorts'
@@ -459,9 +466,21 @@ def check():
         assert app.project.intro.language=='uz' and app.project.intro.sport=='hockey'
         app.project.save(tmp/'uz-hockey-shorts.hockeyproj')
         assert Project.load(tmp/'uz-hockey-shorts.hockeyproj').profile=='uz_hockey_shorts'
-        app.profilebox.current(0)
+        select_profile('ru_hockey')
         with patch('hockey_editor.profiles.kit_path',return_value=tmp/'ru-kit.json'):app.switch_profile()
         app.collect();assert app.project.settings.width>app.project.settings.height
+        select_profile('ru_football')
+        with patch('hockey_editor.profiles.kit_path',return_value=tmp/'ru-football-kit.json'):app.switch_profile()
+        root.update();app.collect()
+        assert app.project.profile=='ru_football'
+        assert all(b.language=='ru' and b.sport=='football' for b in app.project.blocks)
+        assert app.speakerbox.get()=='РУ спикер'
+        assert all(key.startswith('ru_') for key,_ in app.profile_choices)
+        app.effect_vars['mirror_host'].set(True);app.collect()
+        app.project.save(tmp/'mirrored-football.hockeyproj')
+        assert Project.load(tmp/'mirrored-football.hockeyproj').settings.mirror_host
+        select_profile('ru_hockey')
+        with patch('hockey_editor.profiles.kit_path',return_value=tmp/'ru-kit.json'):app.switch_profile()
         # One-folder setup is reviewable and repeatable for different releases.
         release=tmp.resolve()/'release-one';release.mkdir()
         (release/'camera.MOV').touch()

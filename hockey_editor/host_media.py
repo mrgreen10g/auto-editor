@@ -86,6 +86,7 @@ def prepare_base(engine,plan,base):
         if rot==180:video+=',hflip,vflip'
         elif rot==90:video+=',transpose=clock'
         elif rot==270:video+=',transpose=cclock'
+        if s.mirror_host and m.get('kind')!='disclaimer':video+=',hflip'
         video+=f',scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p'
         if s.color and m.get('kind')!='disclaimer':video+=',eq=contrast=1.045:saturation=1.035:brightness=-0.004'
         duration=sum(v['end']-v['start'] for v in group)

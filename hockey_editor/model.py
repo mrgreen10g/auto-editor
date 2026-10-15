@@ -56,6 +56,7 @@ class EventRequest:
 class Settings:
     rotate: int = 0
     auto_rotate: bool = True
+    mirror_host: bool = False
     use_manual_clips: bool = False
     allow_other_matches: bool = True
     insert_frequency: str = 'normal'
@@ -130,7 +131,7 @@ class Project:
         if not 0 <= index < len(self.blocks):
             raise ValueError('Выберите разбор.')
         block = self.blocks[index]
-        if self.profile not in ('ru_hockey','uz_football','uz_combat','uz_hockey','uz_football_shorts','ru_hockey_shorts','uz_hockey_shorts'):raise ValueError('Неизвестный шаблон выпуска.')
+        if self.profile not in ('ru_hockey','ru_football','uz_football','uz_combat','uz_hockey','uz_football_shorts','ru_hockey_shorts','uz_hockey_shorts'):raise ValueError('Неизвестный шаблон выпуска.')
         expected='uz' if self.profile.startswith('uz_') else 'ru'
         if block.language!=expected:raise ValueError('Язык блока не совпадает с шаблоном ведущего.')
         if len(block.script.strip()) < (3 if self.profile.endswith('_shorts') else 30):

@@ -25,6 +25,8 @@ Tottenham|Tottenham Hotspur|Тоттенхэм Хотспур
 Athletic|Athletic Club|Атлетик Бильбао
 Bayer|Bayer Leverkuzen|Байер Леверкузен
 Leeds United|Leeds|Lids|Лидс|Лидс Юнайтед
+Hull City|Hull|Hall Siti|Халл|Халл Сити
+Coventry City|Coventry|Koventri|Ковентри|Ковентри Сити
 Burnley|Bernli|Byornli|Бернли
 Brentford|Брентфорд
 Crystal Palace|Kristal Pelas|Kristal Peles|Кристал Пэлас
