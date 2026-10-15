@@ -60,7 +60,7 @@ Heidenheim|Haydenhaym|Xaydenxaym|Хайденхайм
 St. Pauli|St Pauli|Sankt Pauli|Санкт-Паули|Санкт Паули
 Elversberg|Elversberq|Эльверсберг
 Juventus|Yuventus|Ювентус
-AC Milan|Milan|Милан
+Milan|AC Milan|Милан
 Napoli|Наполи
 Atalanta|Аталанта
 Bologna|Bolonya|Болонья

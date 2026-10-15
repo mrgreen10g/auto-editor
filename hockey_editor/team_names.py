@@ -189,6 +189,9 @@ def compact(text):return ''.join(c for c in normalize(text) if c.isalnum())
 
 from .club_catalog import extend
 extend(FOOTBALL,compact)
+for variants,word in [(('Real',),'real'),(('United','Yunayted'),'united'),(('City','Siti'),'city')]:
+    clubs=tuple(club for club,aliases in FOOTBALL.items() if any(word in normalize(alias).split() for alias in aliases))
+    for alias in variants:FOOTBALL_CONTEXT[alias]=clubs
 
 @lru_cache(maxsize=2048)
 def football_identity(name):
@@ -211,7 +214,11 @@ def qualified_patterns():
 
 @lru_cache(maxsize=2048)
 def qualified_hits(text):
-    return tuple((m.start(),m.end(),club) for club,p in qualified_patterns() for m in p.finditer(text))
+    return tuple((m.start(),m.end(),club) for club,p in qualified_patterns() for m in p.finditer(text)
+                 if not numeric_stat(text,m.start(),m.end()))
+
+def numeric_stat(text,start,end):
+    return bool(re.search(r'\s\d+$',text[start:end]) and re.match(r'\s+(?:gol|ochko|marta|zarba|гол|очк)',text[end:]))
 
 def football_positions(name,text,context=()):
     text=normalize(text);hits=[]
@@ -222,6 +229,7 @@ def football_positions(name,text,context=()):
         pattern=r'\s+'.join(re.escape(w) for w in normalize(alias).split())
         matches=re.finditer(r'(?<!\w)'+pattern+suffix+r'(?!\w)',text)
         for m in matches:
+            if numeric_stat(text,m.start(),m.end()):continue
             if any(a<=m.start() and z>=m.end() and z-a>m.end()-m.start() and other!=club for a,z,other in longer):continue
             if football_identity(name)=='Irlandiya' and re.search(r'(?:northern|shimoliy)\s+$',text[:m.start()]):continue
             if not re.search(r'\s+(?:ii|iii|2|3)$',normalize(name)) and re.match(r'\s+(?:ii|iii)(?!\w)',text[m.end():]):continue

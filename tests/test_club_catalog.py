@@ -31,3 +31,9 @@ class ClubCatalogTests(unittest.TestCase):
     def test_reserve_team_does_not_match_senior(self):
         self.assertEqual(football_positions('Paxtakor','Paxtakor II o‘ynaydi'),[])
         self.assertTrue(football_positions('Paxtakor II','Paxtakor II o‘ynaydi'))
+        self.assertTrue(football_positions('Paxtakor','Paxtakor 2 gol urdi'))
+        self.assertFalse(football_positions('Paxtakor II','Paxtakor 2 gol urdi'))
+
+    def test_real_requires_unique_fixture_context(self):
+        self.assertFalse(football_positions('Real Madrid','Real hujum qiladi',('Real Madrid','Real Betis')))
+        self.assertTrue(football_positions('Real Madrid','Real hujum qiladi',('Real Madrid','Arsenal')))

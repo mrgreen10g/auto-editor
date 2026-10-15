@@ -204,8 +204,12 @@ def sections(project,segments):
         from .recording_times import recording_bounds
         return recording_bounds(project,segments),tg,words
     from .uz_anchors import script_ranges
-    grounded=script_ranges([project.intro,*project.blocks,project.outro],segments,words[-1]['end']) if words else None
-    if grounded:return [a for a,z in grounded]+[grounded[-1][1]],tg,words
+    active=[b for b in [project.intro,*project.blocks,project.outro] if b.kind=='analysis' or b.script.strip()]
+    grounded=script_ranges(active,segments,words[-1]['end']) if words else None
+    if grounded:
+        spans={b.uid:span for b,span in zip(active,grounded)}
+        ending=spans[project.outro.uid][0] if project.outro.uid in spans else grounded[-1][1]
+        return [0.,*[spans[b.uid][0] for b in project.blocks],ending,grounded[-1][1]],tg,words
     # A clearer repetition in the first analysis must not move the intro floor.
     intro_limit=tg[0][0] if tg and tg[0][0]<60 else 60
     early=[w for w in words if w['start']<intro_limit];floor=0
@@ -216,6 +220,8 @@ def sections(project,segments):
     if tg and tg[0][0]<60:floor=max(floor,tg[0][1])
     from .uz_forecasts import features
     for index,b in enumerate(project.blocks):
+        if index==0 and not project.intro.script.strip():
+            starts.append(words[0]['start']);floor=starts[-1]+10;continue
         def is_start(segment):
             if pair_hits(b.title,segment['words']):return True
             ordinal=features(segment['text'])['ordinal']
@@ -224,10 +230,10 @@ def sections(project,segments):
         choices=[s['start'] for s in segments if s['start']>=floor-.1 and is_start(s)]
         if not choices:raise ValueError('Не удалось найти начало разбора по речи: '+b.title+'. Проверьте названия и состав блоков.')
         starts.append(choices[0]);floor=starts[-1]+10
-    ending=next((s['start'] for s in segments if s['start']>starts[-1]+10 and recap_cue(s['text'])),None)
+    ending=next((s['start'] for s in segments if s['start']>starts[-1]+10 and recap_cue(s['text'])),None) if project.outro.script.strip() else words[-1]['end']
     if ending is None:raise ValueError('В речи не найден переход к итогам. Таймкоды сценария не использованы.')
     bounds=[words[0]['start'],*starts,ending,words[-1]['end']]
-    if any(b-a<3 for a,b in zip(bounds,bounds[1:])):raise ValueError('Неустойчивые границы разделов. Нужна проверка записи.')
+    if any(z-a<3 for block,(a,z) in zip([project.intro,*project.blocks,project.outro],zip(bounds,bounds[1:])) if block.kind=='analysis' or block.script.strip()):raise ValueError('Неустойчивые границы разделов. Нужна проверка записи.')
     return bounds,tg,words
 
 def bet_cue(text):return bool(re.search(r'tanlo|varia|qildik|qila qold',norm(text)))
@@ -276,6 +282,8 @@ def _prepare(project,segments):
     if any(not v for v in picks.values()):raise ValueError('Укажите основной прогноз в сценарии каждого разбора: Mening tanlovim — …')
     for index,b in enumerate([project.intro,*project.blocks,project.outro]):
         lo,hi=ranges[index];annotations=[];local=[s for s in segments if lo<=s['start']<hi];forecast_review=[];forecast_owners={};forecast_reasons={}
+        if b.kind!='analysis' and not b.script.strip():
+            b.asr_lines=[];b.speech_cards={};b.speech_key=key;continue
         if b.kind=='intro' and project.profile=='uz_football_shorts':
             uncertain=set()  # Hook facts are not a list of the episode fixtures.
         elif b.kind=='intro':

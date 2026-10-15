@@ -51,3 +51,11 @@ class StructureTests(unittest.TestCase):
         self.assertEqual(len(blocks), 1)
         self.assertEqual(a.script, 'Salom do‘stlar.')
         self.assertIn('kuchli', blocks[0].script)
+
+    def test_empty_optional_sections_are_not_rendered(self):
+        from hockey_editor.model import Project
+        from hockey_editor.episode import assembly_project
+        for profile in ('uz_football','uz_hockey','uz_combat'):
+            a,blocks,z=parse('ARSENAL — CHELSEA\nArsenal uyda kuchli o‘ynaydi.', 'football')
+            p=Project(profile=profile,intro=a,blocks=blocks,outro=z,full_video=True)
+            self.assertEqual([b.kind for b in assembly_project(p).blocks],['analysis'])
