@@ -4,7 +4,8 @@ Canonical identities checked against league club directories. Transliteration
 variants are editorial aliases, not separate teams.
 Sources: premierleague.com/en/clubs, laliga.com/en-GB/laliga-easports/clubs,
 bundesliga.com/en/bundesliga/clubs, en.legaseriea.it/team, ligue1.com/fr,
-premierliga.ru/clubs, mlssoccer.com/clubs. Uzbek aliases also cover supplied scripts.
+premierliga.ru/clubs, mlssoccer.com/clubs, realracingclub.es/el-club.
+Uzbek aliases also cover supplied scripts.
 """
 ROWS = '''
 Kattaqo'rg'on|Каттакурган
@@ -27,6 +28,7 @@ Bayer|Bayer Leverkuzen|Байер Леверкузен
 Leeds United|Leeds|Lids|Лидс|Лидс Юнайтед
 Hull City|Hull|Hall Siti|Халл|Халл Сити
 Coventry City|Coventry|Koventri|Ковентри|Ковентри Сити
+Racing Santander|Racing de Santander|Real Racing Club|Rasing Santander|Расинг Сантандер|Расинг
 Burnley|Bernli|Byornli|Бернли
 Brentford|Брентфорд
 Crystal Palace|Kristal Pelas|Kristal Peles|Кристал Пэлас
@@ -113,7 +115,7 @@ Fakel Voronezh|Fakel|Факел
 Rodina Moscow|Rodina Moskva|Родина
 Khimki|Ximki|Химки
 Ural|Урал
-Qo'qon-1912|Qo'qon|Qoqon|Kokand 1912|Коканд-1912|Коканд
+Qo'qon-1912|Qo'qon|Qoqon|Kokand 1912|Коканд-1912|Коканд 1912|Коканд
 Andijon|Andijan|Андижан
 Dinamo Samarqand|Dinamo Samarkand|Динамо Самарканд
 Qizilqum|Kyzylkum|Кызылкум

@@ -221,35 +221,69 @@ def asset_filter(card,cache,cancel):
     return filt,'0','0'
 
 
+RU_PAIR_CUE=r'(?:(?:начинаем\s+с|начн[её]м\s+с|переходим\s+к)(?:\s+матч[ау])?|теперь|далее|дальше|(?:и\s+)?(?:следующий|первый|второй|третий|четв[её]ртый|пятый|последний)\s+матч)\s*(?:[—–:]\s*)?\s+'
+
+
+def ru_fixture_heading(line,sport='hockey'):
+    """Recognize explicit fixture announcements, not arbitrary club mentions."""
+    from .team_names import RU,normalize,football_positions,FOOTBALL
+    clean=re.sub(r'^\s*(?:#{1,4}\s*|\d+[.)]\s*)','',line).strip().strip('*').strip()
+    cue=re.match(RU_PAIR_CUE,clean,re.I)
+    candidate=clean[cue.end():] if cue else clean
+    if cue:candidate=re.split(r'[.!?](?:\s|$)',candidate,maxsplit=1)[0]
+    candidate=candidate.strip(' .:')
+    parts=re.split(r'\s+[—–-]\s+|\s+и\s+|\s+против\s+',candidate,flags=re.I)
+    if len(parts)!=2:return None
+    names=[]
+    for part in parts:
+        value=normalize(part).strip()
+        if sport=='football':
+            matches=[club for club in FOOTBALL if any(a==0 and z==len(value) for a,z in football_positions(club,value))]
+        else:
+            matches=[]
+            for club,patterns in RU.items():
+                rest=list(value)
+                for pattern in patterns:
+                    for m in re.finditer(r'(?<!\w)(?:'+pattern+r')(?!\w)',value):rest[m.start():m.end()]=' '*(m.end()-m.start())
+                if not re.search(r'\w',''.join(rest)):matches.append(club)
+            if value=='динамо':matches=['Динамо']
+        if len(set(matches))!=1:return None
+        names.append(matches[0])
+    if names[0]==names[1]:return None
+    if not cue and re.search(r'\s+[—–-]\s+',candidate):return candidate
+    if sport=='football':
+        names=[next((a for a in FOOTBALL[n] if re.search('[А-Яа-яЁё]',a)),n) for n in names]
+    return ' — '.join(names)
+
+
 def split_full_script(text,sport='hockey'):
     """Standalone fixtures and recap intent, independent of one catchphrase."""
-    from .team_names import ru_identity
-    if sport=='football':
-        from .team_names import football_identity as ru_identity
     from .speech_boundaries import recap_cue
     # A recap can start inside a paragraph. Preserve the wording verbatim.
     rows=[]
     for line in text.splitlines():
-        parts=re.split(r'(?<=[.!?])\s+(?=(?:Итак|Подвед|Подытож|Напомню|Повтор|В\s+итоге|На\s+сегодня|Коротко|Теперь\s+к\s+итогам)\b)',line,flags=re.I)
+        parts=re.split(r'(?<=[.!?])\s+(?=(?:Итак|Подвед|Подытож|Напомню|Повтор|В\s+итоге|На\s+сегодня|Коротко|Теперь\s+к\s+итогам)\b|'+RU_PAIR_CUE+r')',line,flags=re.I)
         rows.extend(parts)
+    # A document title before the greeting is metadata, not spoken analysis.
+    # Relocate only when a subsequent explicit transition identifies its place.
+    first=next((i for i,r in enumerate(rows) if r.strip()),None)
+    if first is not None and ru_fixture_heading(rows[first],sport) and not re.match(RU_PAIR_CUE,rows[first],re.I):
+        transition=next((i for i in range(first+1,min(len(rows),first+12)) if re.search(r'переходим\s+к\s+разбору[.!]?\s*$',rows[i],re.I)),None)
+        if transition is not None and any(re.search(r'всем\s+привет',r,re.I) for r in rows[first+1:transition+1]):
+            heading=rows.pop(first);rows.insert(transition,heading)
     headers=[];titles={}
     for i,line in enumerate(rows):
-        title=re.sub(r'^\s*(?:#{1,4}\s*|\d+[.)]\s*)','',line).strip().strip('*').strip()
-        if sport=='football':
-            title=re.sub(r'^(?:начинаем\s+с|теперь|далее|следующий\s+матч\s*[—–:]?)\s+','',title,flags=re.I).strip(' .')
-            title=title.replace('«','').replace('»','')
-        pair=block_teams(title)
-        if len(title)<100 and pair[1] and all(ru_identity(name) for name in pair):
-            # Don't accept a prose sentence containing two clubs as a heading.
-            if re.fullmatch(r"[\w .«»'’()-]+\s+[—–-]\s+[\w .«»'’()-]+",title):
-                headers.append(i);titles[i]=title
-    if not headers:raise ValueError('Не найдены отдельные заголовки пар команд. Проверьте названия и разделитель « — ».')
+        # Recap announcements cannot create additional analysis blocks.
+        if headers and recap_cue(line):break
+        title=ru_fixture_heading(line,sport)
+        if title:headers.append(i);titles[i]=title
+    if not headers:raise ValueError('Не найдены пары команд. Укажите названия в заголовке или во фразе начала разбора, например «Начинаем с Торпедо и московского Динамо».')
     end=next((i for i in range(headers[-1]+1,len(rows)) if recap_cue(rows[i])),None)
     if end is None:
         # An unlabelled recap repeats at least two distinct fixtures' choices,
         # followed by a closing CTA. One last analysis bet is not a recap.
         promo=next((i for i in range(headers[-1]+1,len(rows)) if re.search(r'телеграм|подписывай|до\s+встреч',rows[i],re.I)),len(rows))
-        owners=[type('Pair',(),{'title':titles[h]})() for h in headers]
+        owners=[type('Pair',(),{'title':titles[h],'sport':sport})() for h in headers]
         choices=[(i,{b.title for b in owners if pair_matches(rows[i],b)}) for i in range(headers[-1]+1,promo) if re.search(r'беру|выбор|ставк|тотал|фор[ауо]|побед',rows[i],re.I)]
         for k,(i,names) in enumerate(choices):
             remaining=set().union(*(n for j,n in choices[k:]))
@@ -258,6 +292,6 @@ def split_full_script(text,sport='hockey'):
     if end is None:
         raise ValueError('Не удалось отделить повтор ставок от последнего разбора. Добавьте перед итогами строку «Итоги» или задайте конец вручную.')
     intro='\n'.join(rows[:headers[0]]).strip();outro='\n'.join(rows[end:]).strip()
-    blocks=[(titles[a],'\n'.join([titles[a],*rows[a+1:(headers[j+1] if j+1<len(headers) else end)]]).strip()) for j,a in enumerate(headers)]
+    blocks=[(titles[a],'\n'.join(rows[a:(headers[j+1] if j+1<len(headers) else end)]).strip()) for j,a in enumerate(headers)]
     if not intro:raise ValueError('Перед первым разбором не найден текст начала.')
     return intro,blocks,outro

@@ -12,6 +12,37 @@ def segment(text,start=0):
     return dict(text=text,start=start,end=words[-1]['end'],words=words)
 
 class ReleaseTests(unittest.TestCase):
+    def test_spoken_ru_fixture_preserves_alignment_phrase(self):
+        from hockey_editor.framing import split_full_script,ru_fixture_heading
+        phrase='Начинаем с «Торпедо» и московского «Динамо».'
+        text='Всем привет. Переходим к разбору. '+phrase+' Здесь хозяева хорошо атакуют.\nОсновной прогноз — победа Торпедо.\nТеперь «СКА» и минское «Динамо».\nОсновной прогноз — победа СКА.\nИтак, повторю два выбора.\nТорпедо — Динамо Москва\nДо встречи.'
+        intro,blocks,outro=split_full_script(text)
+        self.assertEqual([b[0] for b in blocks],['Торпедо — Динамо Москва','СКА — Динамо Минск'])
+        self.assertTrue(blocks[0][1].startswith(phrase))
+        self.assertIn('Здесь хозяева хорошо атакуют.',blocks[0][1])
+        self.assertNotIn(phrase,intro)
+        for historical in ['Вчера Торпедо и московское Динамо сыграли 3:2.', 'Начинаем с победы Торпедо и московского Динамо.', 'Арсенал — Челси выиграл вчера.', 'Сегодня Торпедо и СКА, затем Лада и Амур.']:
+            self.assertIsNone(ru_fixture_heading(historical))
+        self.assertEqual(ru_fixture_heading('Начнем с «Арсенала» и «Челси».','football'),'Арсенал — Челси')
+
+    def test_ru_shorts_accepts_oral_pair(self):
+        from hockey_editor.shorts import parse_ru_script
+        phrase='Начинаем с «Торпедо» и московского «Динамо».'
+        _,blocks,_=parse_ru_script(phrase+'\nМой прогноз — победа Торпедо.')
+        self.assertEqual(blocks[0].title,'Торпедо — Динамо Москва')
+        self.assertTrue(blocks[0].script.startswith(phrase))
+
+    def test_ordinal_and_city_headings(self):
+        from hockey_editor.framing import ru_fixture_heading,split_full_script
+        for phrase,title in [('Начинаем с матча «Амур» — ЦСКА.','Амур — ЦСКА'),('Дальше — «Адмирал» против «Локомотива».','Адмирал — Локомотив'),('Третий матч — «Салават Юлаев» против «Металлурга».','Салават Юлаев — Металлург'),('И последний матч — «Нефтехимик» против «Лады».','Нефтехимик — Лада'),('Металлург Магнитогорск — Амур','Металлург Магнитогорск — Амур')]:
+            self.assertEqual(ru_fixture_heading(phrase),title)
+        for phrase in ['Коканд 1912 — Локомотив Ташкент','Машъал — Андижан','Хетафе — Расинг Сантандер']:
+            self.assertEqual(ru_fixture_heading(phrase,'football'),phrase)
+        intro,blocks,outro=split_full_script('Барселона — Атлетик Бильбао\nВсем привет.\nПереходим к разбору.\nХозяева хорошо атакуют.\nМой прогноз — победа хозяев.\nИ коротко все выборы. До встречи.','football')
+        self.assertTrue(intro.startswith('Всем привет.'))
+        self.assertEqual(len(blocks),1)
+        self.assertIn('Хозяева хорошо атакуют.',blocks[0][1])
+
     def test_two_sentence_restart_keeps_complete_later_take(self):
         text='Сегодня хозяева активно идут вперед и контролируют мяч. Их соперник часто теряет мяч в опасной зоне.'
         bad=segment('Сегодня хозяева активно идут вперед и контролируют мяч. Их соперник часто теряет нет заново.')
@@ -69,7 +100,7 @@ class ReleaseTests(unittest.TestCase):
             p=Project(profile='uz_football_shorts')
             result,_,_=build_import(p,root,host,script)
             self.assertEqual(result.host,str(host.resolve()));self.assertEqual(len(result.matches),1)
-            self.assertEqual(presenter_folder(root,p.profile),short)
+            self.assertEqual(presenter_folder(root,p.profile),short.resolve())
             with self.assertRaises(ValueError):build_import(p,root,root/'long.mp4',root/'text.txt')
 
     def test_mirror_setting_roundtrip_and_profile_groups(self):

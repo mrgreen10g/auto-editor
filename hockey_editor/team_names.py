@@ -35,7 +35,7 @@ RU = {
  'Трактор': (r'трактор\w*', r'челябин\w*'),
  'Амур': (r'амур(?:а|у|ом|е)?', r'хабаров\w*'),
  'Барыс': (r'барыс\w*', r'астан\w*'),
- 'Шанхайские Драконы': (r'шанха\w*|дракон\w*',),
+ 'Шанхайские Драконы': (r'шанхайск\w*\s+дракон\w*|шанха\w*|дракон\w*',),
  'Нефтехимик': (r'нефтехимик\w*', r'нижнекам\w*'),
  # Mentioned as preseason opponents; never conflate them with the senior clubs.
  'СКА-ВМФ': (r'ска\s*[-—]\s*вмф',),
@@ -127,7 +127,7 @@ FOOTBALL = {
  'Buxoro': ('Buxoro','Bukhara','Бухара'),
  'Navbahor': ('Navbahor','Navbakhor','Навбахор'),
  'Lokomotiv Toshkent': ('Lokomotiv Toshkent','Lokomotiv Tashkent','Локомотив Ташкент','Lokomotiv'),
- "Mash'al": ("Mash'al",'Mashal','Машал'),
+ "Mash'al": ("Mash'al",'Mashal','Машал','Машъал'),
  'Union Berlin': ('Union Berlin','Union','Унион Берлин','Унион'),
  'Schalke': ('Schalke','Shalke','Шальке'),
  'Augsburg': ('Augsburg','Аугсбург'),

@@ -245,11 +245,15 @@ def parse_ru_script(text):
     """Keep unheaded Shorts as one spoken analysis; never require a recap."""
     from .event_rules import suggested_names,team_position
     from .card_text import teams
+    from .framing import ru_fixture_heading,RU_PAIR_CUE
     text=re.sub(r'https?://\S+','',text)
     rows=[r.strip() for r in text.splitlines() if r.strip() and not re.match(r'^\s*\[.*\]\s*$',r)]
     headers=[]
     for i,row in enumerate(rows):
         heading=re.sub(r'^\s*(?:матч|пара|разбор)\s*:\s*','',row,flags=re.I)
+        announced=ru_fixture_heading(heading)
+        if announced:
+            headers.append((i,announced));continue
         pair=re.split(r'\s*[—–]\s*|\s+-\s+',heading.rstrip('.:'),maxsplit=1)
         if len(pair)==2 and all(len(p.split())<=5 and len(suggested_names(p))==1 for p in pair):
             names=[suggested_names(p)[0] for p in pair]
@@ -258,7 +262,7 @@ def parse_ru_script(text):
     outro=Block(title='Завершение',uid='outro',kind='outro',language='ru')
     if headers:
         intro.script='\n'.join(rows[:headers[0][0]])
-        blocks=[Block(title=title,script='\n'.join([title,*rows[start+1:(headers[j+1][0] if j+1<len(headers) else len(rows))]]),language='ru') for j,(start,title) in enumerate(headers)]
+        blocks=[Block(title=title,script='\n'.join([rows[start] if re.match(RU_PAIR_CUE,rows[start],re.I) else title,*rows[start+1:(headers[j+1][0] if j+1<len(headers) else len(rows))]]),language='ru') for j,(start,title) in enumerate(headers)]
         return intro,blocks,outro
     # A historical rival mentioned in the hook is not necessarily today's rival.
     # Prefer the bet's team and repeated direct encounters involving that team.

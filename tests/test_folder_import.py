@@ -58,7 +58,8 @@ class FolderImportTests(unittest.TestCase):
     def test_unknown_football_pair_and_script_error_leave_original_intact(self):
         from test_shorts import SCRIPT as UZ
         with tempfile.TemporaryDirectory() as d:
-            root=Path(d).resolve();host=root/'host.mp4';host.write_bytes(b'v');script=root/'text.txt';script.write_text(UZ,encoding='utf-8')
+            root=Path(d).resolve();short=root/'shorts';short.mkdir()
+            host=short/'host.mp4';host.write_bytes(b'v');script=short/'text.txt';script.write_text(UZ,encoding='utf-8')
             p=Project(profile='uz_football_shorts');draft,_,notes=build_import(p,root,host,script)
             self.assertEqual(len(draft.blocks),2);self.assertEqual(len(notes),2)
             before=copy.deepcopy(p);script.write_text('invalid')

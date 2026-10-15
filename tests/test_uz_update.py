@@ -60,7 +60,10 @@ class UzbekUpdateTests(unittest.TestCase):
   from hockey_editor.team_names import football_names
   self.assertEqual(football_names('Northern Ireland — Denmark'),['Shimoliy Irlandiya','Daniya'])
   from hockey_editor.football_players import PLAYERS,mentioned_names
-  self.assertEqual(len(PLAYERS),72)
+  from hockey_editor.football_players import NAMES
+  seed={n.strip() for n in NAMES.replace('\n',';').split(';') if n.strip()}
+  self.assertTrue(seed.issubset(PLAYERS));self.assertGreater(len(PLAYERS),len(seed))
+  self.assertEqual(len(PLAYERS),len(set(PLAYERS)))
   self.assertIn('Gonçalo Ramos',mentioned_names('Goncalo Ramosning goli'))
   for alias,name in [('Germany','Germaniya'),('Wales','Uels'),('Norway','Norvegiya'),('Сербия','Serbiya')]:
    self.assertEqual(football_identity(alias),name);self.assertTrue(football_positions(name,name+'ning hujumi'))

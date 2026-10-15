@@ -8,16 +8,15 @@ def remove_retakes(blocks,segments):
     from .alignment import split_script
     from .ru_speech import tokens
     words=[w for s in segments for w in s.get('words',[])]
-    sentences=[tokens(t) for b in blocks if b.language=='ru' for t in split_script(b.script)]
+    sentences=[tokens(t) for b in blocks for t in split_script(b.script)]
     texts=[]
     for block in blocks:
-        if block.language!='ru':continue
         local=[tokens(t) for t in split_script(block.script)]
         for i in range(len(local)):
             # The presenter can restart a whole thought (up to three sentences).
             # Repeated authored sentences, including recap, remain protected.
             if sentences.count(local[i])!=1:continue
-            for size in range(1,min(3,len(local)-i)+1):
+            for size in range(1,min(3 if block.language=='ru' else 1,len(local)-i)+1):
                 target=[t for row in local[i:i+size] for t in row]
                 if 6<=len(target)<=100:texts.append(target)
     source=[tokens(w['word']) for w in words]
