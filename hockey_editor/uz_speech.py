@@ -20,7 +20,7 @@ def recording_key(project):
     return hashlib.sha256(json.dumps([MODEL_REV,'beam5-vocabulary-v2',recognition_prompt(project),project.profile,[b.title for b in project.blocks],data]).encode()).hexdigest()
 
 def speech_key(project):
-    return hashlib.sha256(json.dumps(['uz-local-evidence-v11',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['uz-local-evidence-v12-body-anchors',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
 
 def model_path(cancel,log):
     folder=Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'Models'/'uzbek-turbo'
@@ -203,6 +203,9 @@ def sections(project,segments):
     if project.recording_times.strip():
         from .recording_times import recording_bounds
         return recording_bounds(project,segments),tg,words
+    from .uz_anchors import script_ranges
+    grounded=script_ranges([project.intro,*project.blocks,project.outro],segments,words[-1]['end']) if words else None
+    if grounded:return [a for a,z in grounded]+[grounded[-1][1]],tg,words
     # A clearer repetition in the first analysis must not move the intro floor.
     intro_limit=tg[0][0] if tg and tg[0][0]<60 else 60
     early=[w for w in words if w['start']<intro_limit];floor=0
@@ -307,7 +310,7 @@ def _prepare(project,segments):
         elif b.kind=='analysis':
             s=match_forecasts(segments,lo,hi,[b],picks,recap=False,partial=True)[0]
             if s is None:
-                s=missing_forecast(segments,lo,hi,b) or dict(start=lo,end=hi,text='',needs_review=True,review_reason='В этом разделе не найдены слова ставки. Проверьте только эту плашку.')
+                s=missing_forecast(segments,lo,hi,b) or dict(start=max(lo,hi-6),end=hi,text='',needs_review=True,review_reason='В этом разделе не найдены слова ставки. Проверьте только эту плашку.')
                 forecast_reasons[(s['start'],s['end'])]=s['review_reason']
             spoken_total=re.search(r'(\d+[,.]\d+)\s*(?:ta)?dan',norm(s['text']))
             reference_total=re.search(r'(\d+[,.]\d+)\s+dan',norm(picks[b.uid]))

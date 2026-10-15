@@ -88,7 +88,7 @@ def active_blocks(project):return [b for b in [project.intro,*project.blocks,pro
 
 def speech_key(project):
     from .uz_speech import recording_key
-    return hashlib.sha256(json.dumps(['combat-speech-v5-archives',recording_key(project),project.recording_times,[(b.uid,b.title,b.script,b.forecast,b.featured_pairs) for b in active_blocks(project)]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['combat-speech-v6-body-anchors',recording_key(project),project.recording_times,[(b.uid,b.title,b.script,b.forecast,b.featured_pairs) for b in active_blocks(project)]],ensure_ascii=False).encode()).hexdigest()
 
 
 def spoken_segments(segments):
@@ -150,6 +150,10 @@ def prepare(project,segments,duration):
         if not choices:reliable=False;break
         bounds.append(choices[0]);floor=choices[0]+10
     ranges=list(zip(bounds,bounds[1:]+[duration]))
+    if not project.recording_times.strip():
+        from .uz_anchors import script_ranges
+        grounded=script_ranges(blocks,segments,duration)
+        if grounded:ranges=grounded;bounds=[a for a,z in ranges];reliable=True
     if project.recording_times.strip():
         from .recording_times import parse_times
         rows=parse_times(project.recording_times,len(project.blocks),include_outro=bool(project.outro.script.strip()))

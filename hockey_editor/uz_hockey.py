@@ -157,7 +157,7 @@ def events(block,matches,use_manual=True):
 
 def speech_key(project):
     from .uz_speech import recording_key
-    return hashlib.sha256(json.dumps(['uz-hockey-shorts-v1' if project.profile=='uz_hockey_shorts' else 'uz-hockey-v2',recording_key(project),project.recording_times,[(b.uid,b.script,b.title) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['uz-hockey-v3-body-anchors',recording_key(project),project.recording_times,[(b.uid,b.script,b.title) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
 
 def intro_annotations(project,segments,lo,hi):
     from .hockey_names import hits
@@ -211,6 +211,10 @@ def prepare(project,segments,duration):
         if not choices:reliable=False;break
         bounds.append(min(choices,key=lambda x:abs(x-approximate)));floor=bounds[-1]+5
     ranges=list(zip(bounds,bounds[1:]+[duration]))
+    if not project.recording_times.strip() and not project.profile.endswith('_shorts'):
+        from .uz_anchors import script_ranges
+        grounded=script_ranges(blocks,segments,duration)
+        if grounded:ranges=grounded;reliable=True
     shorts=project.profile=='uz_hockey_shorts'
     if shorts and not project.recording_times.strip():
         from .shorts import sections

@@ -1,6 +1,9 @@
 import os
 # Keep matrix operations economical on a 16 GB Windows workstation.
 for name in ('OPENBLAS_NUM_THREADS','OMP_NUM_THREADS','MKL_NUM_THREADS'):os.environ.setdefault(name,'2')
+os.environ['ORT_DISABLE_TELEMETRY']='1'
+os.environ['HF_HUB_DISABLE_TELEMETRY']='1'
+os.environ['DO_NOT_TRACK']='1'
 import sys,json,tempfile,threading
 from pathlib import Path
 
@@ -20,6 +23,9 @@ def self_test(report):
         Image.new('RGB',(10,10)).save(d/'image.png')
         synthesize(["O'yinni tahlil qilamiz. Kamida ikkita gol."],d/'uz.wav',threading.Event(),language='uz')
         from faster_whisper import WhisperModel
+        from faster_whisper.audio import decode_audio
+        decoded=decode_audio(str(voice),sampling_rate=16000)
+        assert len(decoded)>1600 and np.isfinite(decoded).all()
         import ctranslate2,tokenizers,av
         assert 'int8' in ctranslate2.get_supported_compute_types('cpu')
     if sys.platform == 'win32':
@@ -33,7 +39,7 @@ def self_test(report):
         import cv2
         for name in ('haarcascade_frontalface_default.xml','haarcascade_eye_tree_eyeglasses.xml'):
             assert not cv2.CascadeClassifier(str(Path(cv2.data.haarcascades)/name)).empty(), name
-    Path(report).write_text(json.dumps({'status':'ok','checks':['espeak-ru','espeak-uz','audio-alignment','ffmpeg-h264-aac','pillow','whisper-runtime','ctranslate2-cpu-int8']+(['bundled-score-ocr'] if sys.platform == 'win32' else [])},indent=2),encoding='utf-8')
+    Path(report).write_text(json.dumps({'status':'ok','checks':['espeak-ru','espeak-uz','audio-alignment','ffmpeg-h264-aac','pillow','whisper-runtime','whisper-audio-decoder','ctranslate2-cpu-int8']+(['bundled-score-ocr'] if sys.platform == 'win32' else [])},indent=2),encoding='utf-8')
 
 if __name__=='__main__':
     try:

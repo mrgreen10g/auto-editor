@@ -26,6 +26,15 @@ The application bundle includes third-party software with its own license terms.
 
 No user recordings, scripts, media files or local project files are included in the source repository or generic application bundle.
 
+## Optional local review translation
+
+MADLAD-400-3B-MT (Apache-2.0): https://huggingface.co/google/madlad400-3b-mt .
+The optional int8 CTranslate2 conversion is downloaded separately from
+https://huggingface.co/lifeai-dev/madlad400-3b-mt-ct2-int8 at a pinned revision,
+with SHA-256 verification. Model weights are not included in the application bundle.
+Translation runs locally and never changes rendered overlay text.
+Machine translation quality varies; it is not a verifier for betting claims.
+
 ## Added in 0.2
 
 - RapidOCR ONNX Runtime 1.4.4 (Apache-2.0), including distributed PaddleOCR detection/recognition model files and their upstream notices.

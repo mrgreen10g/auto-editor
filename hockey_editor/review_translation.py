@@ -54,7 +54,7 @@ def ensure_model(folder, cancel, log):
 
 
 def cache_key(text):
-    return hashlib.sha256(json.dumps([REV, 'ru', text], ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps([REV, 'ru-sports-v2', text], ensure_ascii=False).encode()).hexdigest()
 
 
 def translate(texts, cache, cancel, log):
@@ -67,6 +67,9 @@ def translate(texts, cache, cancel, log):
             for text in texts:
                 if cancel.is_set(): raise InterruptedError('Перевод отменён.')
                 if not text.strip(): results.append('Нет текста для перевода.'); continue
+                from .uz_review_terms import exact_translation,sensitive
+                exact=exact_translation(text)
+                if exact is not None:results.append(exact);continue
                 saved = cache/(cache_key(text)+'.json')
                 if saved.exists():
                     try:
@@ -96,6 +99,8 @@ def translate(texts, cache, cancel, log):
                     parts.append(tokenizer.decode(ids, skip_special_tokens=True))
                 value = ' '.join(parts).strip()
                 if not value: raise ValueError('Модель вернула пустой перевод.')
+                if sensitive(text):
+                    value='⚠ Непроверенный перевод спортивной формулировки: модель может ошибиться в отрицании или направлении ставки.\n\n'+value
                 temp = saved.with_suffix('.tmp')
                 temp.write_text(json.dumps({'source':text, 'translation':value}, ensure_ascii=False), encoding='utf-8')
                 temp.replace(saved); results.append(value)
@@ -140,7 +145,7 @@ def show(parent, texts, cache):
                 if kind == 'result':
                     for box, translated in zip(boxes, value):
                         box.configure(state='normal'); box.delete('1.0','end'); box.insert('1.0',translated); box.configure(state='disabled')
-                    status.set('Перевод готов. Имена, числа и отрицания сверяйте с оригиналом.')
+                    status.set('Перевод готов. Это вспомогательный текст, не подтверждение правильности ставки или распознавания.')
                 else: status.set(('Перевод недоступен: ' if kind=='error' else '')+value)
         except queue.Empty: pass
         w.after(100, poll)

@@ -9,12 +9,12 @@ from hockey_editor.review_translation import cache_key, translate, installed
 
 class TranslationTests(unittest.TestCase):
     def test_exact_cache_is_used_without_model_or_network(self):
-        source = 'Mening tanlovim total 2,5 dan kam.'
+        source = 'Salom, do‘stlar.'
         with tempfile.TemporaryDirectory() as d:
             folder = Path(d)/'translations'; folder.mkdir()
-            (folder/(cache_key(source)+'.json')).write_text(json.dumps({'source':source,'translation':'Мой выбор — тотал меньше 2,5.'}),encoding='utf-8')
+            (folder/(cache_key(source)+'.json')).write_text(json.dumps({'source':source,'translation':'Привет, друзья.'}),encoding='utf-8')
             with patch('hockey_editor.review_translation.ensure_model', side_effect=AssertionError('no download')):
-                self.assertEqual(translate([source, ''], d, threading.Event(), lambda s:None), ['Мой выбор — тотал меньше 2,5.', 'Нет текста для перевода.'])
+                self.assertEqual(translate([source, ''], d, threading.Event(), lambda s:None), ['Привет, друзья.', 'Нет текста для перевода.'])
 
     def test_cancellation_precedes_download(self):
         cancel = threading.Event(); cancel.set()

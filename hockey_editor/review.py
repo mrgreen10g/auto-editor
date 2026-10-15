@@ -149,6 +149,10 @@ def attach(plan, block, project):
         text=forecast_text(block) or block.title+' — уточните прогноз'
         a=max(0,plan.duration-5)
         plan.cards.append(Card(a,plan.duration,'ПРОГНОЗ',text,forecast_id=block.uid,review_reason='Основной прогноз не найден уверенно. Плашка сохранена для проверки.'))
+    if block.language=='uz' and not project.profile.endswith('_shorts'):
+        from .card_schedule import exclusive
+        plan.cards,omitted=exclusive(plan.cards)
+        if omitted:plan.warnings.append(f'Убрано пересекающихся автоматических плашек: {len(omitted)}. Приоритет у ставок и представления пар.')
     for i,line in enumerate(plan.lines):
         if not line.review_id:line.review_id=f'{block.uid}:line:{i}'
         annotation=block.speech_cards.get(str(i),{})
