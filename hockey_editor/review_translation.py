@@ -116,7 +116,7 @@ def show(parent, texts, cache):
         'Для перевода нужна отдельная модель (~3 ГБ на диске и несколько ГБ свободной памяти). Скачать её?\n\nТексты и аудио никуда не отправляются. Перевод справочный: ошибки распознавания он не исправляет.', parent=parent):
         return
     w = tk.Toplevel(parent); w.title('УЗ → русский · перевод выбранной плашки')
-    w.geometry('1000x650'); w.transient(parent)
+    w.geometry(f'{min(1000,w.winfo_screenwidth()-40)}x{min(650,w.winfo_screenheight()-70)}'); w.transient(parent)
     status = tk.StringVar(value='Подготовка локального перевода…')
     ttk.Label(w, textvariable=status, wraplength=930).pack(fill='x', padx=12, pady=8)
     ttk.Label(w, text='Машинный перевод для проверки. Оригиналы и текст в готовом видео не изменяются.').pack(fill='x', padx=12)
@@ -133,11 +133,12 @@ def show(parent, texts, cache):
             box.configure(yscrollcommand=scroll.set); scroll.pack(side='right',fill='y'); box.pack(fill='both',expand=True)
             box.insert('1.0',value); box.configure(state='disabled')
             if col: boxes.append(box)
-    cancel = threading.Event(); events = queue.Queue(); closed = False
+    cancel = threading.Event(); events = queue.Queue(); closed = False; poll_id = None
     def work():
         try: events.put(('result', translate(tuple(texts), cache, cancel, lambda s:events.put(('status', s)))))
         except Exception as e: events.put(('error', str(e)))
     def poll():
+        nonlocal poll_id
         if closed: return
         try:
             while True:
@@ -148,10 +149,15 @@ def show(parent, texts, cache):
                     status.set('Перевод готов. Это вспомогательный текст, не подтверждение правильности ставки или распознавания.')
                 else: status.set(('Перевод недоступен: ' if kind=='error' else '')+value)
         except queue.Empty: pass
-        w.after(100, poll)
-    def close():
+        poll_id=w.after(100, poll)
+    def destroyed(event):
         nonlocal closed
-        closed=True; cancel.set(); w.destroy()
-    w.protocol('WM_DELETE_WINDOW', close)
-    w.bind('<Destroy>', lambda e:cancel.set() if e.widget is w else None)
+        if event.widget is not w:return
+        closed=True;cancel.set()
+        if poll_id is not None:
+            try:w.after_cancel(poll_id)
+            except tk.TclError:pass
+    w.protocol('WM_DELETE_WINDOW', w.destroy)
+    w.bind('<Destroy>', destroyed)
     threading.Thread(target=work, daemon=True).start(); poll()
+    return w

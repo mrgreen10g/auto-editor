@@ -393,6 +393,28 @@ def check():
         dialog.decide('deleted');root.update();assert not app.plan.cards
         dialog.undo();root.update();assert app.plan.cards
         dialog.close();root.update()
+        # Translation is a read-only snapshot of all three fields; no model download in UI CI.
+        from hockey_editor.review_translation import show as translation_window
+        before_translation=app.plan.to_dict()
+        originals=('Salom, do‘stlar.','Arsenal hujum qiladi.','Total 2,5 dan kam.')
+        translated=('Привет, друзья.','Арсенал атакует.','Тотал меньше 2,5.')
+        with patch('hockey_editor.review_translation.installed',return_value=True),patch('hockey_editor.review_translation.translate',return_value=list(translated)):
+            window=translation_window(root,originals,tmp)
+            def descendants(widget):
+                result=[]
+                for child in widget.winfo_children():result.append(child);result.extend(descendants(child))
+                return result
+            deadline=time.monotonic()+3
+            while time.monotonic()<deadline:
+                root.update()
+                boxes=[v for v in descendants(window) if isinstance(v,tk.Text)]
+                if len(boxes)==6 and boxes[-1].get('1.0','end').strip()==translated[-1]:break
+                time.sleep(.05)
+            assert len(boxes)==6
+            assert [b.get('1.0','end').strip() for b in boxes]==[value for pair in zip(originals,translated) for value in pair]
+            assert all(str(b.cget('state'))=='disabled' for b in boxes)
+            assert app.plan.to_dict()==before_translation
+            window.destroy();root.update()
         app.project.save(tmp/'review.hockeyproj')
         from hockey_editor.editing import saved_plan
         restored=saved_plan(Project.load(tmp/'review.hockeyproj'),0)
