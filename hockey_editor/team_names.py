@@ -7,7 +7,7 @@ import re
 import unicodedata
 from functools import lru_cache
 
-CATALOG_VERSION = 'teams-5-uz-pro-reserves'
+CATALOG_VERSION = 'teams-6-multilingual-clubs'
 
 @lru_cache(maxsize=8192)
 def normalize(text):
@@ -187,6 +187,9 @@ FOOTBALL_CONTEXT = {'Real': ('Real Madrid',), 'Yunayted': ('Manchester United','
 
 def compact(text):return ''.join(c for c in normalize(text) if c.isalnum())
 
+from .club_catalog import extend
+extend(FOOTBALL,compact)
+
 @lru_cache(maxsize=2048)
 def football_identity(name):
     key=compact(name)
@@ -200,21 +203,37 @@ def football_aliases(name,context=()):
         if club and known.intersection(clubs)=={club}:result.append(alias)
     return tuple(result)
 
+@lru_cache(maxsize=1)
+def qualified_patterns():
+    """Known longer names protect Inter Miami, Dynamo cities and reserve teams."""
+    return [(club,re.compile(r'(?<!\w)'+r'\s+'.join(re.escape(w) for w in normalize(alias).split())+r"(?:'?(?:ning|ni|ga|da|dan|mi))?(?!\w)"))
+            for club,aliases in FOOTBALL.items() for alias in aliases if len(alias.split())>1]
+
+@lru_cache(maxsize=2048)
+def qualified_hits(text):
+    return tuple((m.start(),m.end(),club) for club,p in qualified_patterns() for m in p.finditer(text))
+
 def football_positions(name,text,context=()):
     text=normalize(text);hits=[]
+    club=football_identity(name)
+    longer=qualified_hits(text)
     suffix=r"(?:'?(?:ning|ni|ga|da|dan|mi))?"
     for alias in football_aliases(name,context):
         pattern=r'\s+'.join(re.escape(w) for w in normalize(alias).split())
         matches=re.finditer(r'(?<!\w)'+pattern+suffix+r'(?!\w)',text)
         for m in matches:
+            if any(a<=m.start() and z>=m.end() and z-a>m.end()-m.start() and other!=club for a,z,other in longer):continue
             if football_identity(name)=='Irlandiya' and re.search(r'(?:northern|shimoliy)\s+$',text[:m.start()]):continue
             if not re.search(r'\s+(?:ii|iii|2|3)$',normalize(name)) and re.match(r'\s+(?:ii|iii)(?!\w)',text[m.end():]):continue
             hits.append((m.start(),m.end()))
     return sorted(set(hits))
 
 def football_names(text):
-    found=[(hits[0][0],club) for club in FOOTBALL if (hits:=football_positions(club,text))]
-    return [club for _,club in sorted(found)[:2]]
+    found=[(a,z,club) for club in FOOTBALL for a,z in football_positions(club,text)]
+    selected=[]
+    for a,z,club in sorted(found,key=lambda v:(-(v[1]-v[0]),v[0])):
+        if not any(a<y and z>x for x,y,_ in selected):selected.append((a,z,club))
+    return list(dict.fromkeys(club for a,z,club in sorted(selected)))[:2]
 
 def ru_file_names(text):
     from .event_rules import suggested_names
