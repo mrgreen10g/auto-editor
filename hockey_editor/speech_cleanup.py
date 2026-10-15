@@ -34,15 +34,20 @@ def remove_retakes(blocks,segments):
         for a,b in zip(starts,starts[1:]):
             if not 1<=words[b]['start']-words[a]['start']<=60:continue
             first=[t for row in source[a:b] for t in row]
-            later=[t for row in source[b:b+len(target)+5] for t in row]
+            allowance=max(3,min(14,round(len(target)*.3)))
+            later=[t for row in source[b:b+len(target)+allowance+5] for t in row]
             # Require a complete, better matching replacement, not a repeated
             # slogan or the speaker merely continuing the original sentence.
-            options=[(SequenceMatcher(None,target,later[:n],autojunk=False).ratio(),n) for n in range(max(4,len(target)-3),min(len(later),len(target)+3)+1)]
-            best,n=max(options,default=(0,0))
             critical={'не','нет','без','ноль','один','одна','одно','два','две','три','четыре','пять','шесть','семь','восемь','девять','десять','одинна','двенад','тринад','четырн','пятнад','шестна','семнад','восемн','девятн','двадца','тридца','сорок','пятьде','шестьд','семьде','восемь','девяно','сто','полови'}
-            if [t for t in target if t in critical]!=[t for t in later[:n] if t in critical]:continue
-            # A high overall match must still include the end of the new take.
-            if not n or SequenceMatcher(None,target[-4:],later[max(0,n-4):n],autojunk=False).ratio()<.75:continue
+            # Extra spoken linking words must not truncate the replacement
+            # before its final phrase. Choose among COMPLETE candidates first.
+            options=[]
+            for n in range(max(4,len(target)-3),min(len(later),len(target)+allowance)+1):
+                if [t for t in target if t in critical]!=[t for t in later[:n] if t in critical]:continue
+                if SequenceMatcher(None,target[-4:],later[max(0,n-4):n],autojunk=False).ratio()<.75:continue
+                options.append((SequenceMatcher(None,target,later[:n],autojunk=False).ratio(),n))
+            best,n=max(options,default=(0,0))
+            if not n:continue
             earlier=SequenceMatcher(None,target,first,autojunk=False).ratio()
             if best<.85 or best+.001<earlier or len(first)>len(target)+8:continue
             correction=bool(re.search(r'\b(?:нет|точнее|заново|оговорился|поправлюсь)\b',' '.join(w['word'].lower().strip(',.!?') for w in words[a:b])))

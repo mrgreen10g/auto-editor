@@ -52,6 +52,15 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(clean[0]['words'][0]['start'],12)
         self.assertEqual(clean[-1]['text'],text)
 
+    def test_restart_allows_linking_words_without_clipping_final_phrase(self):
+        text='Сегодня хозяева активно идут вперед и контролируют мяч. Их соперник часто теряет мяч в опасной зоне у ворот.'
+        bad=segment('Сегодня хозяева активно идут вперед и контролируют мяч. Их соперник часто теряет мяч в нет заново.')
+        spoken='Сегодня хозяева активно идут вперед и контролируют мяч. А вот их соперник здесь часто теряет мяч в очень опасной зоне у ворот.'
+        clean,cuts=remove_retakes([Block(script=text)],[bad,segment(spoken,15)])
+        self.assertEqual(len(cuts),1)
+        self.assertEqual(clean[0]['words'][0]['start'],15)
+        self.assertEqual(clean[-1]['text'],spoken)
+
     def test_wrong_number_or_negation_is_not_successful_retake(self):
         text='Хозяева в этом матче не пропустили три мяча.'
         for later in ['Хозяева в этом матче пропустили три мяча.', 'Хозяева в этом матче не пропустили два мяча.']:
