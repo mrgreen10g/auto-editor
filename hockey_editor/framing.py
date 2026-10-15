@@ -262,8 +262,13 @@ def split_full_script(text,sport='hockey'):
     # A recap can start inside a paragraph. Preserve the wording verbatim.
     rows=[]
     for line in text.splitlines():
-        parts=re.split(r'(?<=[.!?])\s+(?=(?:Итак|Подвед|Подытож|Напомню|Повтор|В\s+итоге|На\s+сегодня|Коротко|Теперь\s+к\s+итогам)\b|'+RU_PAIR_CUE+r')',line,flags=re.I)
-        rows.extend(parts)
+        parts=re.split(r'(?<=[.!?])\s+(?=(?:Итак|Подвед|Подытож|Напомню|Повтор|В\s+итоге|На\s+сегодня|Коротко|Теперь\s+к\s+итогам)\b)',line,flags=re.I)
+        for part in parts:
+            cursor=0
+            for match in re.finditer(r'(?<=[.!?])\s+(?='+RU_PAIR_CUE+r')',part,re.I):
+                if ru_fixture_heading(part[match.end():],sport):
+                    rows.append(part[cursor:match.start()]);cursor=match.end()
+            rows.append(part[cursor:])
     # A document title before the greeting is metadata, not spoken analysis.
     # Relocate only when a subsequent explicit transition identifies its place.
     first=next((i for i,r in enumerate(rows) if r.strip()),None)
