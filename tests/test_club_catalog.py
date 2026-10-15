@@ -27,6 +27,13 @@ class ClubCatalogTests(unittest.TestCase):
         self.assertEqual(identity('Spartak Moskva'),'Спартак')
         self.assertEqual(identity('Shanxay Dragons'),'Шанхайские Драконы')
         self.assertEqual(identity('SSKA'),'ЦСКА')
+        for text in ('ЦСКА Москва','CSKA Moscow','SSKA Moskva'):
+            self.assertEqual(identity(text),'ЦСКА')
+        self.assertEqual(identity('СКА Санкт-Петербург'),'СКА')
+
+    def test_full_russian_nhl_names(self):
+        examples={'Бостон Брюинз':'Boston Bruins','Торонто Мейпл Лифс':'Toronto Maple Leafs','Вашингтон Кэпиталз':'Washington Capitals','Нью-Йорк Рейнджерс':'New York Rangers','Лос-Анджелес Кингз':'Los Angeles Kings'}
+        for text,want in examples.items():self.assertEqual(identity(text),want,text)
 
     def test_reserve_team_does_not_match_senior(self):
         self.assertEqual(football_positions('Paxtakor','Paxtakor II o‘ynaydi'),[])

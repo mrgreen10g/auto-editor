@@ -39,6 +39,9 @@ def norm(text):
     return re.sub(r'\s+',' ',t.translate(str.maketrans({'’':"'",'‘':"'",'ʻ':"'",'ʼ':"'",'ё':'е'}))).strip()
 
 ALIASES={k:tuple(v.split('|')) for k,v in KHL.items()}
+ALIASES['ЦСКА']+=('CSKA Moscow','CSKA Moskva','SSKA Moskva','ЦСКА Москва')
+ALIASES['СКА']+=('SKA Saint Petersburg','SKA Sankt Peterburg','СКА Санкт-Петербург')
+ALIASES['Спартак']+=('Спартак Москва',)
 for club,code,extra in zip(NHL,CODES,PHONETIC):
     parts=club.split();city=' '.join(parts[:-2] if club in ('Toronto Maple Leafs','Detroit Red Wings','Columbus Blue Jackets','Vegas Golden Knights') else parts[:-1])
     if club=='St. Louis Blues':city='St. Louis'
@@ -63,7 +66,9 @@ def patterns():
             pattern=re.escape(norm(alias)).replace(r'\ ',r'[\s-]+')
             result.append((club,re.compile(r'(?<!\w)'+pattern+r"(?:'?ning|ning|niki|ni|ga|ka|da|dan|dagi|lar|larning)?(?!\w)")))
     for club,values in RU.items():
-        for pattern in values:result.append((club,re.compile(r'(?<!\w)(?:'+pattern+r')(?!\w)')))
+        # Text normalization removes combining marks (including the breve in й).
+        # Normalize literal letters in the shared RU patterns the same way.
+        for pattern in values:result.append((club,re.compile(r'(?<!\w)(?:'+norm(pattern)+r')(?!\w)')))
     return result
 
 @lru_cache(maxsize=8192)
