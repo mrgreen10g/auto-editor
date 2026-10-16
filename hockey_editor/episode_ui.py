@@ -61,6 +61,7 @@ class EpisodeMixin:
         for key,label in [('intro','Начало'),('outro','Итоги и прощание')]:
             page=ttk.Frame(tabs,padding=12);tabs.add(page,text=label)
             hint='Пары команд — под слова ведущего. Telegram — ровно на фразу о канале и ссылке.' if key=='intro' else 'Повтор прогнозов, Telegram и подписка. Последняя строка — полное прощание. Игровых вставок здесь нет.'
+            if '_top5_' in draft.profile:hint='Завязка рейтинга и приветствие.' if key=='intro' else 'Вывод и вопрос зрителям. Ставки для ТОП‑5 не требуются.'
             ttk.Label(page,text=hint,wraplength=720).pack(anchor='w',pady=(0,10))
             area=ttk.Frame(page);area.pack(fill='both',expand=True)
             field=tk.Text(area,wrap='word',font=('Segoe UI',11),undo=True,padx=10,pady=10)
@@ -116,7 +117,10 @@ class EpisodeMixin:
             try:
                 from .script_input import read_script
                 text=read_script(path);parsed=None
-                if draft.profile=='ru_football':
+                if '_top5_' in draft.profile:
+                    from .top5 import parse_script
+                    start,parsed,end=parse_script(text,'football' if 'football' in draft.profile else 'hockey');intro=start.script;outro=end.script;blocks=[(b.title,b.script) for b in parsed]
+                elif draft.profile=='ru_football':
                     from .ru_football import parse_script
                     start,parsed,end=parse_script(text);intro=start.script;outro=end.script;blocks=[(b.title,b.script) for b in parsed]
                 elif draft.profile=='ru_hockey_shorts':
@@ -137,6 +141,7 @@ class EpisodeMixin:
                     if b.script!=script:b.events=[];b.edit_plan=None;b.edit_key=''
                     b.script=script
                     if parsed:
+                        b.top5_rank=parsed[len(updated)].top5_rank
                         b.language=parsed[len(updated)].language;b.source_hint=parsed[len(updated)].source_hint
                         b.sport=parsed[len(updated)].sport;b.forecast=parsed[len(updated)].forecast
                     updated.append(b)

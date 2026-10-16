@@ -1,5 +1,6 @@
 """Portrait artwork in a 720×1280 composition shared by export and preview."""
 from pathlib import Path
+import re
 from PIL import Image,ImageDraw
 from .graphics import font,wrap,block_teams,logo_image
 from .uzbek import card_label
@@ -7,6 +8,8 @@ from .uzbek import card_label
 
 def card_image(card,path,logos=None,language="uz"):
     logos=logos or {};pair=card.title=='РАЗБОР МАТЧА';pick=card.title=='ПРОГНОЗ'
+    if re.fullmatch(r'[1-5] МЕСТО',card.title):
+        return ranking_card(card,path,logos)
     width=608;accent='#FFC65B' if pick else '#54E4C0'
     if pair:
         im=Image.new('RGBA',(width,154));d=ImageDraw.Draw(im)
@@ -38,10 +41,34 @@ def card_image(card,path,logos=None,language="uz"):
     d.text((39,19),header,font=font(16,True),fill=accent)
     y=51
     if owner:
-        d.text((39,y),owner,font=font(18,True),fill='#A8CEC9');y+=27
+        owner_size=18
+        while owner_size>12 and d.textlength(owner,font=font(owner_size,True))>width-78:owner_size-=1
+        d.text((39,y),owner,font=font(owner_size,True),fill='#A8CEC9');y+=27
     for line in lines:d.text((39,y),line,font=font(size,True),fill='#FFFFFF');y+=size+7
     im.save(path)
     return 40,min(865,1090-height)
+
+
+def ranking_card(card,path,logos):
+    rank=card.title[0];accent='#FFC65B' if rank=='1' else '#54E4C0'
+    im=Image.new('RGBA',(608,190));d=ImageDraw.Draw(im)
+    d.rounded_rectangle((0,0,607,189),radius=24,fill='#102D38',outline=accent,width=3)
+    d.rounded_rectangle((18,18,112,171),radius=17,fill=accent)
+    d.text((65,38),'ТОП 5',font=font(16,True),anchor='mt',fill='#102D38')
+    d.text((65,91),rank,font=font(66,True),anchor='mm',fill='#102D38')
+    d.text((65,151),'МЕСТО',font=font(14,True),anchor='mm',fill='#102D38')
+    names=[n for n in block_teams(card.text) if n]
+    d.text((138,23),'МАТЧ РЕЙТИНГА' if len(names)==2 else 'КОМАНДА РЕЙТИНГА',font=font(15,True),fill=accent)
+    for i,name in enumerate(names):
+        y=75+i*67 if len(names)==2 else 111
+        logo=next((p for n,p in logos.items() if n.casefold()==name.casefold() and Path(p).is_file()),None)
+        x=138
+        if logo:im.alpha_composite(logo_image(logo,44),(x,y-22));x+=56
+        size=30 if len(names)==1 else 26
+        while size>14 and d.textlength(name,font=font(size,True))>584-x:size-=1
+        d.text((x,y),name,font=font(size,True),anchor='lm',fill='white')
+    if len(names)==2:d.text((151,109),'VS',font=font(13,True),anchor='mm',fill=accent)
+    im.save(path);return 40,70
 
 
 def asset_filter(card):

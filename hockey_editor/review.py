@@ -144,7 +144,7 @@ def attach(plan, block, project):
             card.review_reason='Фраза попала в вырезанную паузу. Проверьте время плашки.'
     counts={}
     from .framing import forecast_text
-    if block.kind=='analysis' and not (block.sport=='combat' and not forecast_text(block)) and not any(c.title=='ПРОГНОЗ' for c in plan.cards):
+    if block.kind=='analysis' and not block.top5_rank and '_top5_' not in project.profile and not (block.sport=='combat' and not forecast_text(block)) and not any(c.title=='ПРОГНОЗ' for c in plan.cards):
         from .framing import forecast_text
         text=forecast_text(block) or block.title+' — уточните прогноз'
         a=max(0,plan.duration-5)
@@ -404,9 +404,11 @@ def describe_card(card,task,project,plan):
     section=next((s for s in plan.sections if s['start']<=task['start']<s['end']),None)
     kind=section.get('kind') if section else block.kind if block else 'analysis'
     where={'intro':'Вступление','outro':'Повтор ставок','analysis':'Разбор'}.get(kind,kind)
+    if kind=='outro' and '_top5_' in project.profile:where='Завершение'
     if block and kind=='analysis':where+=' · '+block.title
     if card is None:return 'Удалённая плашка',where
     if project.profile.endswith('_shorts'):
+        if card.title in {f'{i} МЕСТО' for i in range(1,6)}:return 'Место в рейтинге',where+' · над головой'
         if card.asset:return card.title.capitalize()+' · видео-вставка',where+(' · полный экран' if card.title=='ТЕЛЕГРАМ' else ' · верхняя половина')
         if card.title=='РАЗБОР МАТЧА':return 'Представление пары',where+' · над головой'
         return ('Ставка' if card.title=='ПРОГНОЗ' else card.title.capitalize()),where+' · на уровне груди'

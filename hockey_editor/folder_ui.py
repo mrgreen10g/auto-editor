@@ -39,7 +39,8 @@ def import_folder(app):
     w=tk.Toplevel(app.root);w.title('Импорт выпуска из папки');w.transient(app.root)
     w.geometry(f'{min(900,w.winfo_screenwidth()-60)}x{min(650,w.winfo_screenheight()-100)}');w.minsize(760,500)
     ttk.Label(w,text=f'Папка: {root}\nВедущий: {host.name}\nСценарий: {script.name}',wraplength=840,padding=12).pack(fill='x')
-    ttk.Label(w,text='Проверьте сопоставление. Настройки голоса, музыки и оформления сохранятся.\n'+('Ведущий и сценарий взяты из shorts, матчи — из папок лонга.' if draft.profile.endswith('_shorts') else 'Текущий проект заменится только после импорта; shorts не используется.'),wraplength=840,padding=12).pack(fill='x')
+    hint='Ведущий и сценарий взяты из shorts, матчи — из папок лонга.' if host.parent.name.casefold()=='shorts' else 'Ведущий и сценарий взяты из выбранной папки, матчи — из вложенных папок.'
+    ttk.Label(w,text='Проверьте сопоставление. Настройки голоса, музыки и оформления сохранятся.\n'+hint,wraplength=840,padding=12).pack(fill='x')
     table=ui.table(w,[('kind','Разбор / запись',330),('source','Папка / файл',280),('state','Состояние',220)],10)
     notice=tk.StringVar();ttk.Label(w,textvariable=notice,wraplength=840,padding=12).pack(fill='x')
     footer=ttk.Frame(w,padding=12);footer.pack(side='bottom',fill='x',before=table.master)

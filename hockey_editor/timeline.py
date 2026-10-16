@@ -159,6 +159,9 @@ def placements(block,lines,clip_meta,duration,frequency='normal',shorts=False):
         inserts.append(Insert(clip.origin_path or clip.path,frame(start),frame(end),source_in+clip.origin_start,
                               clip.phrase,clip.context_label,clip.origin_start,clip.origin_start+length))
         if clip.kind=='play':last_play_source=clip.origin_path or clip.path
+    if block.top5_rank:
+        from .top5 import facts
+        return inserts,facts(block,lines,duration),warnings
     from .card_text import summarize_card,classify_card
     cards=[Card(0,intro_end,'РАЗБОР МАТЧА',block.title)] if intro_end>=.15 else []
     topic=next(iter(suggested_names(block.title)),'');combat_owner=None

@@ -43,11 +43,11 @@ def recording_key(project):
 
 def recognition_prompt(project):
     from .nhl_players import prompt_names
-    if project.profile=='ru_football':
+    if 'football' in project.profile:
         from .football_players import mentioned_names as prompt_names
     text='\n'.join(b.script for b in project.blocks)
     names=prompt_names(text)
-    if project.profile=='ru_football':names=[b.title for b in project.blocks]+names
+    if 'football' in project.profile or '_top5_' in project.profile:names=[b.title for b in project.blocks]+names
     return '; '.join(names)[:1500] or None
 
 def transcribe(project,cache,cancel,log):

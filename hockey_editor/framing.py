@@ -78,6 +78,7 @@ def optional_subscription(cards,duration):
 
 
 def framing_cards(project,block,lines,duration):
+    if '_top5_' in project.profile:return [],[]
     if project.profile=='ru_hockey_shorts':
         cards=[]
         for i,line in enumerate(lines):

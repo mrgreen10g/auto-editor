@@ -139,7 +139,7 @@ def finish_cards(project,block,lines,cards,inserts,duration):
         for c in existing:cards.remove(c)
         reason='; '.join(dict.fromkeys([l.review_reason for l in lines[a:z+1] if l.review_reason]+[c.review_reason for c in existing if c.review_reason]))
         cards.append(Card(lo,hi,'ТЕЛЕГРАМ','Telegram',a if a==z else -1,review_reason=reason))
-    if block.language=='ru':
+    if block.language=='ru' and not block.top5_rank:
         cards=[c for c in cards if not (c.title=='РЕЗУЛЬТАТ ВСТРЕЧИ' and 0<=c.line<len(lines) and re.search(r'главный вопрос|пишите.*комментари',lines[c.line].text,re.I))]
         for c in cards:
             if c.title=='РЕЗУЛЬТАТ ВСТРЕЧИ' and 0<=c.line<len(lines) and re.match(r'^результат\b',lines[c.line].text,re.I):c.text=block.title+'\n'+c.text
@@ -154,6 +154,7 @@ def finish_cards(project,block,lines,cards,inserts,duration):
             owner=next((b for b in project.blocks if b.uid==card.forecast_id),None)
             if owner:card.fixture=owner.title
     priorities={'ТЕЛЕГРАМ':5,'ПРОГНОЗ':4,'РАЗБОР МАТЧА':3,'ПОДПИСКА':2}
+    priorities.update({f'{n} МЕСТО':4 for n in range(1,6)})
     selected=[]
     for card in sorted(cards,key=lambda c:(-priorities.get(c.title,1),c.start)):
         pieces=[(card.start,card.end)]
@@ -165,7 +166,7 @@ def finish_cards(project,block,lines,cards,inserts,duration):
         original=card.start;card.start=frame(a);card.end=frame(b)
         if card.asset:card.source_in+=card.start-original
         selected.append(card)
-    protected=[c for c in selected if c.title in ('ТЕЛЕГРАМ','ПРОГНОЗ','РАЗБОР МАТЧА')]
+    protected=[c for c in selected if c.title in ('ТЕЛЕГРАМ','ПРОГНОЗ','РАЗБОР МАТЧА') or re.fullmatch(r'[1-5] МЕСТО',c.title)]
     kept=[]
     for clip in inserts:
         pieces=[(clip.start,clip.end)]
@@ -310,7 +311,7 @@ def promo_line_ranges(lines):
         if a and lines[a].start-lines[a-1].end<1.5:
             prev=texts[a-1]
             if re.search(r'aytgancha|qo.shimcha.*prognoz|дополнительн\w*\s+ставк',prev):a-=1
-        while z+1<len(lines) and lines[z+1].start-lines[z].end<1.5 and re.search(r'havola|tavsif|ссылк\w*.*описани',texts[z+1]):z+=1
+        while z+1<len(lines) and lines[z+1].start-lines[z].end<1.5 and re.search(r'havola|tavsif|ссылк\w*.*(?:описани|шапке\s+профиля)',texts[z+1]):z+=1
         if ranges and a<=ranges[-1][1]+1:ranges[-1]=(ranges[-1][0],max(z,ranges[-1][1]))
         else:ranges.append((a,z))
     return ranges

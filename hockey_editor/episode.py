@@ -230,13 +230,13 @@ class EpisodeEngine(Engine):
         runtime=assembly_project(self.project)
         snapshot=[(copy.deepcopy(b.edit_plan),b.edit_key) for b in runtime.blocks]
         try:
-            if self.project.profile in ('ru_hockey','ru_football','ru_hockey_shorts') and (self.project.full_video or self.project.settings.cut_pauses) and runtime.blocks[0].script.strip():
+            if self.project.profile.startswith('ru_') and (self.project.full_video or self.project.settings.cut_pauses) and runtime.blocks[0].script.strip():
                 from .ru_speech import prepare
                 return self._assemble(runtime,prepare(self.project,runtime.blocks,self.cache,self.cancel,self.log))
             return self._assemble(runtime)
         except AlignmentError:
             for block,(plan,key) in zip(runtime.blocks,snapshot):block.edit_plan=plan;block.edit_key=key
-            if self.project.profile not in ('ru_hockey','ru_football','ru_hockey_shorts'):raise
+            if not self.project.profile.startswith('ru_'):raise
             from .ru_speech import prepare
             self.log('Обычная разметка неустойчива. Проверяю весь выпуск по словам и порядку частей…')
             speech=prepare(self.project,runtime.blocks,self.cache,self.cancel,self.log)

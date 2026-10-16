@@ -287,7 +287,7 @@ def propose(requests, scans, sources=(), allow_other=False):
         # Weak evidence is reviewed, never silently replaced by an unrelated attack.
         c = exact or (None if event.flexible_source and allow_other else next_play(event.source_id))
         original_id = event.source_id
-        if c is None and allow_other:
+        if c is None and allow_other and not event.strict_source:
             alternatives = [m for m in sources if (m.id != original_id or event.flexible_source) and m.id in scans]
             alternatives.sort(key=lambda m: (source_usage.get(m.id,0),m.id==last_source,
                 -sum(any(team_position(team,name) is not None for name in (m.home,m.away)) for team in event.requested_teams)))

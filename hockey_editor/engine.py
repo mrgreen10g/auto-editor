@@ -27,7 +27,7 @@ class Engine:
         return hashlib.sha256(json.dumps(data,ensure_ascii=False).encode()).hexdigest()
 
     def analyze(self,source_floor=0,speech=None,recover=True):
-        if recover and speech is None and self.project.profile in ('ru_hockey','ru_football','ru_hockey_shorts') and self.project.settings.cut_pauses and getattr(self,'recover_speech',True):
+        if recover and speech is None and self.project.profile.startswith('ru_') and self.project.settings.cut_pauses and getattr(self,'recover_speech',True):
             self.project.validate(self.index)
             from .ru_speech import prepare
             found=prepare(self.project,self.project.blocks,self.cache,self.cancel,self.log)
@@ -292,7 +292,7 @@ class Engine:
                 enabled+=''.join(f'*not(between(t,{c.start:.6f},{c.end+tail:.6f}))' for c,tail,_,_ in game_transitions(plan))
             nv=f'panel{i}';fl.append(f"[{v}][card{i}]overlay=x='{xpos}':y='{ypos}':eof_action=pass:repeatlast=0:enable='{enabled}'[{nv}]");v=nv
         width,height=((360,640) if shorts else (640,360)) if draft else (s.width,s.height)
-        if p.profile=='ru_hockey_shorts' and s.subtitles:
+        if p.profile.startswith('ru_') and p.profile.endswith('_shorts') and s.subtitles:
             from .subtitles import write_ass,filter_path
             ass=self.cache/'speech-subtitles.ass'
             if write_ass(plan,ass):

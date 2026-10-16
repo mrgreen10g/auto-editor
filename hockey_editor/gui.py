@@ -144,7 +144,7 @@ class App(EpisodeMixin,MatchMixin):
         self.speakerbox=ttk.Combobox(profilebar,values=['РУ спикер','УЗ спикер'],state='readonly',width=13)
         self.speakerbox.pack(side='left',padx=(0,8));self.controls.append(self.speakerbox)
         self.speakerbox.bind('<<ComboboxSelected>>',self.switch_speaker)
-        self.profilebox=ttk.Combobox(profilebar,state='readonly',width=23)
+        self.profilebox=ttk.Combobox(profilebar,state='readonly',width=28)
         self.profilebox.pack(side='left');self.controls.append(self.profilebox)
         self.profilebox.bind('<<ComboboxSelected>>',self.switch_profile)
         ui.Tooltip(self.profilebox,'Язык речи и плашек, вид спорта и отдельные материалы канала. Футбол: очные и архивные встречи для каждого разбора.')
@@ -512,7 +512,7 @@ class App(EpisodeMixin,MatchMixin):
         self.host.set(p.host)
         self.music.set(p.music)
         self.title.set(block.title)
-        self.blockbox['values'] = [f'{i+1}. {x.title}' for i,x in enumerate(p.blocks)]
+        self.blockbox['values'] = [f'{x.top5_rank} место · {x.title}' if x.top5_rank else f'{i+1}. {x.title}' for i,x in enumerate(p.blocks)]
         self.blockbox.current(self.index)
         self.script.delete('1.0', 'end')
         self.script.insert('1.0', block.script)

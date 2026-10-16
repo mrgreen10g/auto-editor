@@ -57,6 +57,9 @@ def explicit_reference(text):
     return result_reference(text) or any(w in t for w in ('сыграли','проигр','уступ','обыгр','выигр','побед','поражен','встречалась','предсезон'))
 
 def requests_for(block, matches, use_manual=True):
+    if block.top5_rank:
+        from .top5 import events
+        return events(block,matches)
     if block.sport=='football' and block.language=='ru':
         from .football_archives import events
         return events(block,matches)

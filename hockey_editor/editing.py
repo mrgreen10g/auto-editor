@@ -13,6 +13,7 @@ def project_edit_key(project, index):
     if project.profile.startswith('ru_') and project.settings.cut_pauses:block['retake_version']='script-thought-v3'
     if project.profile.startswith('uz_'):block['review_context_version']='heard-v2'
     if not block.get('archive_pool'):block.pop('archive_pool',None)
+    if not block.get('top5_rank'):block.pop('top5_rank',None)
     block.pop('event_search_key',None)  # Search status does not change the montage.
     if project.profile in ('ru_hockey','uz_hockey','ru_hockey_shorts','uz_hockey_shorts'):block['player_cards_version']='nhl-v1'
     for field in ('asr_lines','speech_key','speech_cards'):

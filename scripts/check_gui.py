@@ -479,6 +479,14 @@ def check():
         app.effect_vars['mirror_host'].set(True);app.collect()
         app.project.save(tmp/'mirrored-football.hockeyproj')
         assert Project.load(tmp/'mirrored-football.hockeyproj').settings.mirror_host
+        for profile in ('ru_hockey_top5_shorts','ru_football_top5_shorts'):
+            select_profile(profile)
+            with patch('hockey_editor.profiles.kit_path',return_value=tmp/'top5-kit.json'):app.switch_profile()
+            root.update();app.collect()
+            assert app.project.profile==profile
+            assert (app.project.settings.width,app.project.settings.height)==(1080,1920)
+            assert app.project.full_video and app.project.whole_episode
+            assert app.speakerbox.get()=='РУ спикер'
         select_profile('ru_hockey')
         with patch('hockey_editor.profiles.kit_path',return_value=tmp/'ru-kit.json'):app.switch_profile()
         # One-folder setup is reviewable and repeatable for different releases.

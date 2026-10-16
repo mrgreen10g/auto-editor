@@ -2,11 +2,12 @@
 import json,os
 from pathlib import Path
 
-PROFILES={'ru':[('ru_hockey','Хоккей · лонг'),('ru_football','Футбол · лонг'),('ru_hockey_shorts','Хоккей · Shorts')],
+PROFILES={'ru':[('ru_hockey','Хоккей · лонг'),('ru_football','Футбол · лонг'),('ru_hockey_shorts','Хоккей · Shorts'),('ru_hockey_top5_shorts','Хоккей · Shorts ТОП‑5'),('ru_football_top5_shorts','Футбол · Shorts ТОП‑5')],
           'uz':[('uz_football','Футбол · лонг'),('uz_hockey','Хоккей · лонг'),('uz_combat','Бои · лонг'),('uz_football_shorts','Футбол · Shorts'),('uz_hockey_shorts','Хоккей · Shorts')]}
 
 
 def kit_path(profile='ru_hockey'):
+    if profile in ('ru_hockey_top5_shorts','ru_football_top5_shorts'):profile='ru_hockey_shorts'
     if profile=='ru_football':return Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'asset-kit-ru-football.json'
     if profile=='ru_hockey_shorts':return Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'asset-kit-ru-shorts.json'
     if profile=='uz_hockey_shorts':return Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'asset-kit-uz-hockey-shorts.json'
@@ -27,6 +28,7 @@ def apply_profile(project,profile):
     project.profile=profile;project.episode_plan=None;project.episode_key='';project.recording_times=''
     language='uz' if profile.startswith('uz_') else 'ru'
     for block in [project.intro,*project.blocks,project.outro]:
+        block.top5_rank=0
         block.sport='combat' if profile=='uz_combat' else 'football' if 'football' in profile else 'hockey';block.forecast='';block.featured_pairs=[]
         block.archive_pool=[]
         block.language=language;block.events=[];block.edit_plan=None;block.edit_key='';block.card_overrides={};block.source_hint=[];block.asr_lines=[];block.speech_key='';block.speech_cards={}

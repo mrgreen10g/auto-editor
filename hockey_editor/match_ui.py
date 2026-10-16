@@ -72,7 +72,7 @@ class MatchMixin:
 
     def refresh_matches(self):
         block = self.project.blocks[self.index]
-        football=self.project.profile.startswith('uz_') or self.project.profile=='ru_football'
+        football=self.project.profile.startswith('uz_') or 'football' in self.project.profile
         combat=self.project.profile=='uz_combat'
         self.match_materials.title_label.configure(text='Архивные бои' if combat else 'Исходные матчи')
         self.match_materials.subtitle_label.configure(text='Добавьте записи и выберите бойца для каждого файла. Уверенные активные фрагменты выбираются автоматически; сомнительные — на проверку.' if combat else 'Добавьте одну или несколько записей, на которые ссылается ведущий. Таймкоды не нужны.')

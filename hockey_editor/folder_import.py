@@ -11,6 +11,7 @@ def presenter_folder(folder,profile):
     root=Path(folder).resolve()
     if not profile.endswith('_shorts'):return root
     choices=[p for p in root.iterdir() if p.is_dir() and not p.is_symlink() and p.name.casefold()=='shorts']
+    if '_top5_' in profile and not choices:return root
     if len(choices)!=1:raise ValueError('Для Shorts выберите папку лонга с единственной вложенной папкой shorts.')
     return choices[0]
 
@@ -22,6 +23,9 @@ def root_files(folder):
             [p for p in files if p.suffix.lower() in {'.txt','.docx'} and not p.name.startswith('~$')])
 
 def parse_episode(text,profile):
+    if '_top5_' in profile:
+        from .top5 import parse_script
+        return parse_script(text,'football' if 'football' in profile else 'hockey')
     if profile=='ru_football':
         from .ru_football import parse_script as parse
     elif profile=='ru_hockey_shorts':
@@ -53,6 +57,9 @@ def identity(name,profile):
     return hockey_identity(name) or compact(name)
 
 def pair_key(title,profile):
+    if '_top5_' in profile:
+        from .top5 import members
+        return tuple(sorted(members(title,'football' if 'football' in profile else 'hockey')))
     names=block_teams(title)
     return tuple(sorted(identity(n,profile) for n in names)) if all(names) else ()
 
