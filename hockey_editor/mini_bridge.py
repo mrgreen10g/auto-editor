@@ -34,7 +34,9 @@ class Bridge:
                 if time.monotonic()>command['deadline']:raise RemoteError('Запрос устарел. Обновите список.',409)
                 command['result']=self.handle(command['kind'],command['data'])
             except RemoteError as error:command['error']=error
-            except Exception:command['error']=RemoteError('Не удалось выполнить действие. Проверьте материалы и журнал на сервере.',400)
+            except Exception as error:
+                self.app.log_lines.append('Mini App · '+command['kind']+': '+type(error).__name__)
+                command['error']=RemoteError('Не удалось выполнить действие. Проверьте материалы и журнал на сервере.',400)
             finally:command['event'].set()
     def revision(self):
         app=self.app
@@ -42,7 +44,11 @@ class Bridge:
         identities=[]
         for path in app.project.host_paths()+[m.path for m in app.project.matches]:
             try:
-                stat=Path(path).stat();identities.append([path,stat.st_size,stat.st_mtime_ns])
+                stat=Path(path).stat()
+                with Path(path).open('rb') as stream:
+                    sample=stream.read(4096)
+                    if stat.st_size>4096:stream.seek(max(4096,stat.st_size-4096));sample+=stream.read(4096)
+                identities.append([path,stat.st_size,stat.st_mtime_ns,hashlib.sha256(sample).hexdigest()])
             except OSError:identities.append([path,'missing'])
         content=[self.instance,id(app.project),str(app.project_path),app.index,identities,asdict(app.project),app.plan.to_dict() if app.plan else None]
         return hashlib.sha256(json.dumps(content,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
@@ -180,11 +186,11 @@ class Bridge:
             if not installed(model_folder()):raise RemoteError('Модель перевода ещё не установлена. Один раз нажмите «Перевод на русский» в редакторе и завершите установку.')
             detail=self.item(data);spec=dict(mode=mode,texts=[detail[k] for k in ('script','recognized','text')])
         else:raise RemoteError('Этот предпросмотр недоступен.')
+        cache=Path(app.cache_path())/'mobile-previews';cache.mkdir(parents=True,exist_ok=True)
         with self.media_lock:
             if self.media_busy:raise RemoteError('Уже готовится предпросмотр. Подождите.',429)
             while len(self.jobs)>=32:self.jobs.pop(next(iter(self.jobs)))
             self.media_busy=True;ident=secrets.token_hex(16);self.jobs[ident]=dict(status='working',revision=data['revision'],created=time.time())
-        cache=Path(app.cache_path())/'mobile-previews';cache.mkdir(parents=True,exist_ok=True)
         def work():
             from .mini_media import generate
             try:
