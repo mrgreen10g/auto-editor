@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from unittest.mock import patch
 import tkinter as tk
+from tkinter import ttk
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -392,13 +393,29 @@ def check():
         attach(review_plan,app.project.blocks[0],app.project)
         app.display_plan(review_plan)
         dialog=ReviewDialog(root,app.project,app.plan,tmp,app.display_plan);root.update()
+        # Phone RDP / short desktop: action buttons must never be below the window.
+        button_style=ttk.Style(root);original_button_font=button_style.lookup('TButton','font')
+        for size in ('1120x600','850x480','640x480','640x400'):
+            if size=='640x400':button_style.configure('TButton',font=('Segoe UI',14))
+            dialog.window.geometry(size);root.update()
+            for button in dialog.action_buttons:
+                assert button.winfo_ismapped(),(size,button.cget('text'))
+                x=button.winfo_rootx()-dialog.window.winfo_rootx()
+                y=button.winfo_rooty()-dialog.window.winfo_rooty()
+                assert 0<=x and x+button.winfo_width()<=dialog.window.winfo_width(),(size,'horizontal',x)
+                assert 0<=y and y+button.winfo_height()<=dialog.window.winfo_height(),(size,'vertical',y)
+            dialog.details.canvas.yview_moveto(1);root.update()
+            assert dialog.details.canvas.yview()[1]>.99
+            assert all(b.winfo_ismapped() for b in dialog.action_buttons)
+        button_style.configure('TButton',font=original_button_font)
+        dialog.window.geometry('850x480');root.update()
         assert len(pending(dialog.plan))==1
         dialog.start.set('00:01');dialog.end.set('00:04');dialog.text.delete('1.0','end');dialog.text.insert('1.0','Победа команды')
-        dialog.decide('confirmed');root.update();assert not pending(app.plan)
+        dialog.action_buttons[0].invoke();root.update();assert not pending(app.plan)
         assert app.plan.cards[0].start==1 and app.plan.cards[0].text=='Победа команды'
         dialog.show_all.set(True);dialog.refresh();root.update()
-        dialog.decide('deleted');root.update();assert not app.plan.cards
-        dialog.undo();root.update();assert app.plan.cards
+        dialog.action_buttons[1].invoke();root.update();assert not app.plan.cards
+        dialog.action_buttons[3].invoke();root.update();assert app.plan.cards
         dialog.close();root.update()
         # Translation is a read-only snapshot of all three fields; no model download in UI CI.
         from hockey_editor.review_translation import show as translation_window

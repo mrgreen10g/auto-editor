@@ -19,19 +19,24 @@ class ReviewDialog:
         self.cache.mkdir(parents=True,exist_ok=True);self.on_apply=on_apply
         self.cancel=threading.Event();self.jobs=queue.Queue();self.closed=False;self.busy=False
         self.window=w=tk.Toplevel(parent);w.title('Ручная проверка речи и плашек')
-        w.geometry(f'{min(1120,w.winfo_screenwidth()-40)}x{min(820,w.winfo_screenheight()-70)}');w.minsize(850,620);w.transient(parent)
+        width=min(1120,w.winfo_screenwidth()-40);height=min(820,w.winfo_screenheight()-110)
+        w.geometry(f'{width}x{height}+10+20');w.minsize(min(640,width),min(360,height));w.transient(parent)
+        w.columnconfigure(0,weight=1);w.rowconfigure(2,weight=1)
         w.protocol('WM_DELETE_WINDOW',self.close)
-        self.status=tk.StringVar();ttk.Label(w,textvariable=self.status,wraplength=1000).pack(fill='x',padx=12,pady=8)
+        self.status=tk.StringVar();status_label=ttk.Label(w,textvariable=self.status,wraplength=1000)
+        status_label.grid(row=0,column=0,sticky='ew',padx=12,pady=6)
         self.show_all=tk.BooleanVar(value=False)
-        ttk.Checkbutton(w,text='Показать также проверенные и удалённые',variable=self.show_all,command=self.refresh).pack(anchor='w',padx=12)
-        body=ttk.Panedwindow(w,orient='horizontal');body.pack(fill='both',expand=True,padx=12,pady=8)
-        left=ttk.Frame(body);right=ttk.Frame(body);body.add(left,weight=1);body.add(right,weight=2)
+        ttk.Checkbutton(w,text='Показать также проверенные и удалённые',variable=self.show_all,command=self.refresh).grid(row=1,column=0,sticky='w',padx=12)
+        body=ttk.Panedwindow(w,orient='horizontal');body.grid(row=2,column=0,sticky='nsew',padx=12,pady=6)
+        from .ui import ScrollPage
+        left=ttk.Frame(body);self.details=ScrollPage(body);right=self.details.content
+        body.add(left,weight=1);body.add(self.details,weight=2)
         self.table=ttk.Treeview(left,columns=('time','kind','state','text'),show='headings',height=16)
         for key,title,width in [('time','Время',75),('kind','Тип плашки',155),('state','Решение',75),('text','Текст',180)]:
             self.table.heading(key,text=title);self.table.column(key,width=width)
         scroll=ttk.Scrollbar(left,orient='vertical',command=self.table.yview);self.table.configure(yscrollcommand=scroll.set)
         scroll.pack(side='right',fill='y');self.table.pack(fill='both',expand=True);self.table.bind('<<TreeviewSelect>>',self.select)
-        self.reason=tk.StringVar();ttk.Label(right,textvariable=self.reason,wraplength=550).pack(fill='x')
+        self.reason=tk.StringVar();reason_label=ttk.Label(right,textvariable=self.reason,wraplength=550);reason_label.pack(fill='x')
         self.script=tk.Text(right,height=4,wrap='word');ttk.Label(right,text='Сценарий').pack(anchor='w');self.script.pack(fill='x')
         self.heard=tk.Text(right,height=3,wrap='word');ttk.Label(right,text='Распознано · можно исправить для этой проверки').pack(anchor='w');self.heard.pack(fill='x')
         self.text=tk.Text(right,height=4,wrap='word');ttk.Label(right,text='Текст плашки в видео').pack(anchor='w');self.text.pack(fill='x')
@@ -44,13 +49,39 @@ class ReviewDialog:
         ttk.Label(right,text='Прогноз относится к матчу').pack(anchor='w',pady=(6,0))
         self.owner=ttk.Combobox(right,state='readonly',values=[x[1] for x in self.owners]);self.owner.pack(fill='x')
         actions=ttk.Frame(right);actions.pack(fill='x',pady=8)
-        ttk.Button(actions,text='▶ Прослушать участок',command=self.listen).pack(side='left')
-        ttk.Button(actions,text='■ Стоп',command=self.stop).pack(side='left')
+        ttk.Button(actions,text='▶ Прослушать участок',command=self.listen).grid(row=0,column=0,sticky='ew')
+        ttk.Button(actions,text='■ Стоп',command=self.stop).grid(row=0,column=1,sticky='ew')
         if project.profile.startswith('uz_'):
-            ttk.Button(actions,text='Перевод на русский',command=self.translate).pack(side='left',padx=6)
-        ttk.Label(right,text='Звук читается из исходников: пересборка видео не нужна. Время плашек указано на монтажной дорожке.',wraplength=550).pack(fill='x')
-        bottom=ttk.Frame(w);bottom.pack(fill='x',padx=12,pady=10)
-        for title,command in [('Подтвердить и далее',lambda:self.decide('confirmed')),('Удалить плашку',lambda:self.decide('deleted')),('Вернуть на проверку',lambda:self.decide('pending')),('Отменить решение',self.undo),('Закрыть',self.close)]:ttk.Button(bottom,text=title,command=command).pack(side='left',padx=3)
+            ttk.Button(actions,text='Перевод на русский',command=self.translate).grid(row=1,column=0,columnspan=2,sticky='ew',pady=(4,0))
+        help_label=ttk.Label(right,text='Звук читается из исходников: пересборка видео не нужна. Время плашек указано на монтажной дорожке.',wraplength=550);help_label.pack(fill='x')
+        right.bind('<Configure>',lambda e:[label.configure(wraplength=max(150,e.width-20)) for label in (reason_label,help_label)],add='+')
+        # A non-expanding grid row reserves action space even when the form is taller
+        # than a remote desktop. Never put these controls inside the scrolled form.
+        self.footer=bottom=ttk.Frame(w);bottom.grid(row=3,column=0,sticky='ew',padx=12,pady=8)
+        self.action_buttons=[]
+        for title,command in [('Подтвердить и далее',lambda:self.decide('confirmed')),('Удалить плашку',lambda:self.decide('deleted')),('Вернуть на проверку',lambda:self.decide('pending')),('Отменить решение',self.undo),('Закрыть',self.close)]:
+            button=ttk.Button(bottom,text=title,command=command)
+            self.action_buttons.append(button)
+        self.footer_columns=0
+        def layout(event):
+            if event.widget is not w:return
+            status_label.configure(wraplength=max(200,event.width-24))
+            columns=max(1,min(3,(event.width-24)//max(230,max(b.winfo_reqwidth()+8 for b in self.action_buttons))))
+            if columns!=self.footer_columns:
+                self.footer_columns=columns
+                for i in range(3):bottom.columnconfigure(i,weight=1 if i<columns else 0)
+                for i,button in enumerate(self.action_buttons):button.grid(row=i//columns,column=i%columns,sticky='ew',padx=3,pady=3)
+        w.bind('<Configure>',layout,add='+')
+        # A balanced initial sash keeps the form reachable on small desktops.
+        w.after_idle(lambda:body.sashpos(0,max(180,int(body.winfo_width()*.36))) if w.winfo_exists() else None)
+        def wheel(event):
+            widget=event.widget
+            while widget is not None:
+                if widget is self.details:
+                    if not isinstance(event.widget,tk.Text):self.details.scroll(-1 if event.delta>0 else 1);return 'break'
+                    return
+                widget=getattr(widget,'master',None)
+        w.bind('<MouseWheel>',wheel,add='+')
         self.refresh();self.poll_id=w.after(80,self.poll);w.grab_set()
 
     @property
