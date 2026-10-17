@@ -59,7 +59,7 @@ async function prepare(mode){
  }
  throw new Error('Подготовка занимает больше времени. Обновите список и повторите позже.');
 }
-async function guard(fn){if(waiting)return;waiting=true;buttons();try{await fn()}catch(error){notice(error.message||'Нет связи с сервером. Проверьте подключение.')}finally{waiting=false;buttons()}}
+async function guard(fn){if(waiting)return;waiting=true;document.body.dataset.busy='true';buttons();try{await fn()}catch(error){notice(error.message||'Нет связи с сервером. Проверьте подключение.')}finally{waiting=false;document.body.dataset.busy='false';buttons()}}
 $('refresh').onclick=()=>guard(async()=>{back();await refresh();if(!state.locked)notice('Список обновлён.')});$('back').onclick=()=>guard(async()=>{back();await refresh()});
 $('clips').onclick=()=>{kind='clip';renderList()};$('cards').onclick=()=>{kind='card';renderList()};$('all').onchange=renderList;$('choice').onchange=choice;
 for(const [id,decision] of [['approve','confirmed'],['remove','deleted'],['pending','pending']])$(id).onclick=()=>guard(()=>decide(decision));
