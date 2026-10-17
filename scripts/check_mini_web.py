@@ -26,24 +26,28 @@ def check():
             with sync_playwright() as p:
                 browser=p.chromium.launch(headless=True)
                 page=browser.new_page(viewport={'width':390,'height':844},is_mobile=True,has_touch=True)
+                def click(selector):
+                    page.wait_for_function('!waiting')
+                    page.locator(selector).click()
+                    page.wait_for_function('!waiting',timeout=60000)
                 errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
                 script='window.Telegram={WebApp:{initData:'+json.dumps(signed())+',ready(){},expand(){}}};'
                 page.route('https://telegram.org/js/telegram-web-app.js',lambda r:r.fulfill(content_type='text/javascript',body=script))
-                page.goto(base);page.locator('.item').first.wait_for();page.locator('.item').first.click()
+                page.goto(base);page.locator('.item').first.wait_for();click('.item >> nth=0')
                 page.locator('#approve').wait_for();box=page.locator('#approve').bounding_box();assert box['y']+box['height']<=844
-                page.locator('#art').click();page.locator('#image').wait_for(state='visible',timeout=60000)
-                page.locator('#voice').click();page.locator('#audio').wait_for(state='visible',timeout=60000)
-                page.locator('#text').fill('Четыре гола');page.locator('#approve').click()
+                click('#art');page.locator('#image').wait_for(state='visible',timeout=60000)
+                click('#voice');page.locator('#audio').wait_for(state='visible',timeout=60000)
+                page.locator('#text').fill('Четыре гола');click('#approve')
                 page.locator('#list').wait_for(state='visible');page.wait_for_function('!document.getElementById("undo").disabled')
                 assert app.plan.cards[0].text=='Четыре гола';assert app.project_path.is_file()
-                page.locator('#undo').click();page.locator('.item').first.wait_for();page.locator('.item').first.click()
-                page.set_viewport_size({'width':844,'height':390});box=page.locator('#approve').bounding_box();assert box['y']+box['height']<=390
+                click('#undo');page.locator('.item').first.wait_for();click('.item >> nth=0')
+                page.locator('#approve').wait_for(state='visible');page.set_viewport_size({'width':844,'height':390});box=page.locator('#approve').bounding_box();assert box['y']+box['height']<=390
                 page.set_viewport_size({'width':390,'height':844})
                 (ROOT/'build').mkdir(exist_ok=True);page.screenshot(path=str(ROOT/'build/gui-mini-card.jpg'),full_page=True)
-                page.locator('#back').click();page.locator('#clips').click();page.locator('.item').first.click()
-                page.locator('#preview').click();page.locator('#video').wait_for(state='visible',timeout=60000)
+                click('#back');click('#clips');click('.item >> nth=0')
+                click('#preview');page.locator('#video').wait_for(state='visible',timeout=60000)
                 page.screenshot(path=str(ROOT/'build/gui-mini-clip.jpg'),full_page=True)
-                page.locator('#approve').click();page.locator('#list').wait_for(state='visible')
+                click('#approve');page.locator('#list').wait_for(state='visible')
                 assert app.project.blocks[0].events[0].selection.accepted
                 # Browser output-folder picker -> authenticated start -> real MP4 -> status.
                 app.cancel=threading.Event()
@@ -58,11 +62,11 @@ def check():
                         finally:app.busy=False
                     threading.Thread(target=worker,daemon=True).start()
                 app.start=render_start
-                page.locator('#exportTab').click();page.locator('#outputFolder').wait_for()
-                page.locator('#browseFolder').click();page.locator('#useFolder').wait_for()
-                page.locator('#useFolder').click();page.locator('#outputName').fill('Mobile export.mp4')
+                click('#exportTab');page.locator('#outputFolder').wait_for()
+                click('#browseFolder');page.locator('#useFolder').wait_for()
+                click('#useFolder');page.locator('#outputName').fill('Mobile export.mp4')
                 page.on('dialog',lambda dialog:dialog.accept())
-                page.locator('#startExport').click()
+                click('#startExport')
                 page.wait_for_function('document.getElementById("exportState").textContent==="Видео готово"',timeout=60000)
                 assert (root/'Mobile export.mp4').stat().st_size>1000
                 page.screenshot(path=str(ROOT/'build/gui-mini-export.jpg'),full_page=True)
