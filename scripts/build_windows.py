@@ -7,7 +7,7 @@ from hockey_editor import __version__
 cmd=[sys.executable,'-m','PyInstaller','--noconfirm','--clean','--windowed','--onedir','--name','AutoEditor',
      '--collect-all','espeakng_loader','--collect-all','imageio_ffmpeg','--collect-all','num2words',
      '--collect-all','rapidocr_onnxruntime','--collect-all','onnxruntime','--collect-data','cv2',
-     '--collect-all','faster_whisper','--collect-all','ctranslate2','--collect-all','av','--collect-all','tokenizers',
+     '--collect-all','faster_whisper','--collect-all','ctranslate2','--collect-all','av','--collect-all','tokenizers','--collect-data','certifi',
      '--collect-submodules','scipy.signal','--hidden-import','scipy.special._special_ufuncs','main.py']
 subprocess.run(cmd,check=True)
 dest=root/'dist'/'AutoEditor';licenses=dest/'licenses';licenses.mkdir(exist_ok=True)

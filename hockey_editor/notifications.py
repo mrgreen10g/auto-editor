@@ -1,7 +1,8 @@
 """Opt-in Telegram status messages. Never send media, scripts or raw errors."""
-import base64,json,os,queue,re,threading,time,uuid
+import base64,json,os,queue,re,threading,time,uuid,ssl,socket
+from functools import lru_cache
 from pathlib import Path
-from urllib.request import Request,urlopen
+from urllib.request import Request,urlopen,getproxies
 from urllib.error import HTTPError,URLError
 
 EVENTS={'started':'Начало этапа','clips':'Фрагменты готовы','cards':'Плашки готовы','attention':'Нужна проверка','render':'Рендер завершён','error':'Ошибка','cancelled':'Отмена'}
@@ -47,17 +48,40 @@ def save(config,path=None):
 class DeliveryError(Exception):
     def __init__(self,message,retry=False,delay=2):super().__init__(message);self.retry=retry;self.delay=delay
 
+@lru_cache(maxsize=1)
+def tls_context():
+    # Windows stores may lack intermediates/roots present on an ordinary desktop.
+    # Keep Windows trust and supplement it with the bundled public CA roots.
+    import certifi
+    context=ssl.create_default_context()
+    context.load_verify_locations(cafile=certifi.where())
+    return context
+
+def network_error(error):
+    cause=error.reason if isinstance(error,URLError) else error
+    proxy=' Обнаружен системный прокси: проверьте его настройки в Windows.' if getproxies().get('https') else ''
+    if isinstance(cause,ssl.SSLCertVerificationError):
+        return DeliveryError('TLS: не удалось проверить сертификат Telegram (код '+str(cause.verify_code)+'). Проверьте дату Windows и доверенные сертификаты.'+proxy)
+    if isinstance(cause,ssl.SSLError):return DeliveryError('TLS: ошибка защищённого соединения с Telegram.'+proxy)
+    if isinstance(cause,socket.gaierror):return DeliveryError('DNS: Python не смог определить адрес api.telegram.org.'+proxy,True)
+    if isinstance(cause,(TimeoutError,socket.timeout)):return DeliveryError('Тайм-аут: Telegram не ответил за 20 секунд.'+proxy,True)
+    number=getattr(cause,'winerror',None) or getattr(cause,'errno',None)
+    return DeliveryError('Соединение с Telegram не установлено'+(' (код '+str(number)+')' if isinstance(number,int) else '')+'.'+proxy,True)
+
 def api(token,method,payload):
     request=Request('https://api.telegram.org/bot'+token+'/'+method,data=json.dumps(payload).encode(),headers={'Content-Type':'application/json'})
     try:
-        with urlopen(request,timeout=12) as response:data=json.load(response)
+        with urlopen(request,timeout=20,context=tls_context()) as response:data=json.load(response)
     except HTTPError as error:
         delay=2
         if error.code==429:
             try:delay=min(60,max(1,int(json.load(error).get('parameters',{}).get('retry_after',2))))
             except (ValueError,TypeError):pass
-        raise DeliveryError('Telegram: HTTP '+str(error.code)+'. Проверьте токен, чат и доступ к боту.',error.code==429 or error.code>=500,delay) from None
-    except (URLError,TimeoutError,OSError,ValueError):raise DeliveryError('Telegram недоступен. Проверьте сеть.',True) from None
+        descriptions={401:'Telegram отклонил токен. Скопируйте актуальный токен из BotFather.',403:'Бот не может написать в этот чат. Разблокируйте его и нажмите Start.',404:'Проверьте токен: адрес бота не найден.',409:'Бот занят другим получателем обновлений или webhook. Используйте отдельного бота.',407:'Системный прокси требует авторизацию.',429:'Telegram ограничил частоту запросов. Повторите позже.'}
+        raise DeliveryError('Telegram: HTTP '+str(error.code)+'. '+descriptions.get(error.code,'Запрос отклонён; проверьте чат или повторите позже.'),error.code==429 or error.code>=500,delay) from None
+    except (URLError,TimeoutError,OSError) as error:raise network_error(error) from None
+    except (ValueError,UnicodeError):raise DeliveryError('Ответ от Telegram не является JSON. Возможна подмена ответа прокси или сетевым фильтром.') from None
+    if not isinstance(data,dict):raise DeliveryError('Telegram вернул неожиданный формат ответа.')
     if not data.get('ok'):raise DeliveryError('Telegram отклонил запрос. Проверьте подключение.')
     return data.get('result')
 

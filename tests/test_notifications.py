@@ -7,6 +7,27 @@ from hockey_editor import notifications as n
 def config():return dict(enabled=True,auto_timing=True,token='123:secret',chat_id='1234',events=list(n.EVENTS))
 
 class NotificationTests(unittest.TestCase):
+    def test_tls_bundle_keeps_verification_enabled(self):
+        import ssl
+        context=n.tls_context()
+        self.assertEqual(context.verify_mode,ssl.CERT_REQUIRED)
+        self.assertTrue(context.check_hostname)
+        self.assertGreater(context.cert_store_stats()['x509_ca'],0)
+
+    def test_network_failure_categories_and_secret_redaction(self):
+        import ssl,socket
+        certificate=ssl.SSLCertVerificationError('123:secret');certificate.verify_code=20
+        for error,label in [(certificate,'TLS'),(socket.gaierror(11001,'123:secret'),'DNS'),(TimeoutError('123:secret'),'Тайм-аут')]:
+            with self.subTest(label=label),patch.object(n,'getproxies',return_value={'https':'https://user:123:secret@proxy'}):
+                message=str(n.network_error(n.URLError(error)))
+                self.assertIn(label,message);self.assertIn('прокси',message);self.assertNotIn('secret',message)
+
+    def test_http_token_failure_distinct_from_network(self):
+        from urllib.error import HTTPError
+        with patch.object(n,'urlopen',side_effect=HTTPError('https://host/123:secret',401,'secret',{},None)):
+            with self.assertRaises(n.DeliveryError) as caught:n.api('123:secret','getMe',{})
+            self.assertIn('401',str(caught.exception));self.assertIn('токен',str(caught.exception));self.assertNotIn('secret',str(caught.exception))
+
     def test_secret_not_plaintext_and_roundtrip(self):
         with tempfile.TemporaryDirectory() as d,patch.object(n,'protect',side_effect=lambda b,decrypt=False:b[::-1]):
             path=Path(d)/'settings.json';n.save(config(),path)

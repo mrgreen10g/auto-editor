@@ -8,6 +8,11 @@ import sys,json,tempfile,threading
 from pathlib import Path
 
 def self_test(report):
+    from hockey_editor.notifications import tls_context
+    import ssl
+    context=tls_context()
+    assert context.verify_mode==ssl.CERT_REQUIRED and context.check_hostname
+    assert context.cert_store_stats()['x509_ca']>0
     from hockey_editor.media import run,probe
     from hockey_editor.alignment import synthesize,features,subsequence_dtw,normalized
     import numpy as np

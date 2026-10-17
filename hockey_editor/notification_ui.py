@@ -27,9 +27,13 @@ def show(app):
         data=values();busy=True;status.set('Подключаюсь к Telegram…')
         def task():
             try:
-                if kind=='pair':
+                if kind in ('pair','check'):
                     from .notifications import validate
                     validate({**data,'chat_id':'1'})
+                    bot=api(data['token'],'getMe',{})
+                    if kind=='check':
+                        jobs.put(('ok','Соединение и токен работают. Бот: @'+bot.get('username','')+'. Теперь отправьте команду этому боту и нажмите «Найти мой чат».'))
+                        return
                     updates=api(data['token'],'getUpdates',{'timeout':0,'limit':100})
                     chats={str(m['chat']['id']) for u in updates for m in [u.get('message',{})] if m.get('text')==code and m.get('chat',{}).get('type')=='private'}
                     if len(chats)!=1:raise ValueError('Команда не найдена однозначно. Отправьте указанную команду своему боту и повторите. Для редактора нужен отдельный бот без webhook.')
@@ -44,6 +48,7 @@ def show(app):
     row=ttk.Frame(body);row.pack(fill='x',pady=4)
     ttk.Button(row,text='Найти мой чат',command=lambda:work('pair')).pack(side='left')
     ttk.Button(row,text='Тестовое уведомление',command=lambda:work('test')).pack(side='left',padx=6)
+    ttk.Button(body,text='Проверить соединение и токен',command=lambda:work('check')).pack(anchor='w',pady=4)
     choices={k:tk.BooleanVar(value=k in config['events']) for k in EVENTS}
     for k,label in EVENTS.items():ttk.Checkbutton(body,text=label,variable=choices[k]).pack(anchor='w')
     ttk.Separator(body).pack(fill='x',pady=8)
