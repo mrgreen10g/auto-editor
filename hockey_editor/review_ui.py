@@ -26,7 +26,11 @@ class ReviewDialog:
         self.status=tk.StringVar();status_label=ttk.Label(w,textvariable=self.status,wraplength=1000)
         status_label.grid(row=0,column=0,sticky='ew',padx=12,pady=6)
         self.show_all=tk.BooleanVar(value=False)
-        ttk.Checkbutton(w,text='Показать также проверенные и удалённые',variable=self.show_all,command=self.refresh).grid(row=1,column=0,sticky='w',padx=12)
+        toolbar=ttk.Frame(w);toolbar.grid(row=1,column=0,sticky='ew',padx=12)
+        ttk.Checkbutton(toolbar,text='Показать также проверенные и удалённые',variable=self.show_all,command=self.refresh).pack(side='left')
+        self.interface=tk.StringVar(value='Классический')
+        mode=ttk.Combobox(toolbar,textvariable=self.interface,values=['Классический','Компактный'],state='readonly',width=16);mode.pack(side='right')
+        mode.bind('<<ComboboxSelected>>',lambda e:self.set_interface())
         body=ttk.Panedwindow(w,orient='horizontal');body.grid(row=2,column=0,sticky='nsew',padx=12,pady=6)
         from .ui import ScrollPage
         left=ttk.Frame(body);self.details=ScrollPage(body);right=self.details.content
@@ -37,9 +41,13 @@ class ReviewDialog:
         scroll=ttk.Scrollbar(left,orient='vertical',command=self.table.yview);self.table.configure(yscrollcommand=scroll.set)
         scroll.pack(side='right',fill='y');self.table.pack(fill='both',expand=True);self.table.bind('<<TreeviewSelect>>',self.select)
         self.reason=tk.StringVar();reason_label=ttk.Label(right,textvariable=self.reason,wraplength=550);reason_label.pack(fill='x')
-        self.script=tk.Text(right,height=4,wrap='word');ttk.Label(right,text='Сценарий').pack(anchor='w');self.script.pack(fill='x')
-        self.heard=tk.Text(right,height=3,wrap='word');ttk.Label(right,text='Распознано · можно исправить для этой проверки').pack(anchor='w');self.heard.pack(fill='x')
-        self.text=tk.Text(right,height=4,wrap='word');ttk.Label(right,text='Текст плашки в видео').pack(anchor='w');self.text.pack(fill='x')
+        self.text_fields=ttk.Frame(right);self.text_fields.pack(fill='both',expand=True)
+        self.text_panels=[]
+        for attr,title in [('script','Сценарий'),('heard','Распознано в речи'),('text','Текст плашки')]:
+            panel=ttk.Frame(self.text_fields);self.text_panels.append(panel)
+            ttk.Label(panel,text=title).pack(anchor='w')
+            box=tk.Text(panel,height=8,width=16,wrap='word');box.pack(fill='both',expand=True)
+            setattr(self,attr,box)
         times=ttk.Frame(right);times.pack(fill='x',pady=6)
         self.start=tk.StringVar();self.end=tk.StringVar()
         for label,var in [('Начало на дорожке',self.start),('Конец на дорожке',self.end)]:
@@ -82,7 +90,16 @@ class ReviewDialog:
                     return
                 widget=getattr(widget,'master',None)
         w.bind('<MouseWheel>',wheel,add='+')
-        self.refresh();self.poll_id=w.after(80,self.poll);w.grab_set()
+        self.set_interface();self.refresh();self.poll_id=w.after(80,self.poll);w.grab_set()
+
+    def set_interface(self):
+        compact=self.interface.get()=='Компактный'
+        for i in range(3):self.text_fields.columnconfigure(i,weight=0 if compact else 1,uniform='texts')
+        for i,panel in enumerate(self.text_panels):
+            panel.grid_forget();panel.grid(row=i if compact else 0,column=0 if compact else i,sticky='nsew',padx=3,pady=3)
+        if compact:self.text_fields.columnconfigure(0,weight=1)
+        for box in (self.script,self.heard,self.text):box.configure(height=3 if compact else 10)
+        self.details.canvas.yview_moveto(0)
 
     @property
     def plan(self):return self.history.plan
@@ -188,3 +205,4 @@ class ReviewDialog:
 
     def close(self):
         self.stop();self.closed=True;self.window.after_cancel(self.poll_id);self.window.destroy()
+

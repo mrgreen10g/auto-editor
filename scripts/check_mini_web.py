@@ -45,6 +45,27 @@ def check():
                 page.screenshot(path=str(ROOT/'build/gui-mini-clip.jpg'),full_page=True)
                 page.locator('#approve').click();page.locator('#list').wait_for(state='visible')
                 assert app.project.blocks[0].events[0].selection.accepted
+                # Browser output-folder picker -> authenticated start -> real MP4 -> status.
+                app.cancel=threading.Event()
+                def render_start(render,target=None,remote=False):
+                    assert render and remote
+                    app.busy=True
+                    def worker():
+                        try:
+                            run(['-y','-i',app.project.host,'-t','1','-c:v','libx264','-preset','ultrafast','-c:a','aac',target],app.cancel)
+                            bridge.export.event('result',target)
+                        except Exception as error:bridge.export.event('error',str(error))
+                        finally:app.busy=False
+                    threading.Thread(target=worker,daemon=True).start()
+                app.start=render_start
+                page.locator('#exportTab').click();page.locator('#outputFolder').wait_for()
+                page.locator('#browseFolder').click();page.locator('#useFolder').wait_for()
+                page.locator('#useFolder').click();page.locator('#outputName').fill('Mobile export.mp4')
+                page.on('dialog',lambda dialog:dialog.accept())
+                page.locator('#startExport').click()
+                page.wait_for_function('document.getElementById("exportState").textContent==="Видео готово"',timeout=60000)
+                assert (root/'Mobile export.mp4').stat().st_size>1000
+                page.screenshot(path=str(ROOT/'build/gui-mini-export.jpg'),full_page=True)
                 assert not errors,errors
                 browser.close()
         finally:stop.set();gateway.close()

@@ -1,6 +1,7 @@
 'use strict';
 const $=id=>document.getElementById(id),tg=window.Telegram?.WebApp;
 let session='',state=null,current=null,detail=null,kind='card',waiting=false,blob=null;
+let pageMode='review',exportState=null,folderState=null,exportRequest='';
 function notice(text){$('notice').textContent=text}
 async function api(route,data={},raw=false){
  const response=await fetch('/api/'+route,{method:'POST',headers:{'Content-Type':'application/json',...(session?{Authorization:'Bearer '+session}:{})},body:JSON.stringify(data),cache:'no-store'});
@@ -15,6 +16,7 @@ async function refresh(){
  if(state.locked)notice(state.busy?'Сервер обрабатывает выпуск. Проверка станет доступна после завершения.':'На ПК открыто окно правок. Закройте его перед изменениями с телефона.');
  renderList();buttons();
 }
+
 function renderList(){
  if(!state)return;$('items').replaceChildren();let rows=state.items.filter(x=>x.kind===kind);let pending=rows.filter(x=>x.status==='pending').length;
  $('counts').textContent=`Нужно проверить: ${pending} · всего: ${rows.length}`;
@@ -26,7 +28,7 @@ function renderList(){
  if(!$('items').children.length){const p=document.createElement('p');p.textContent='Нет элементов для проверки. Если поиск ещё идёт — обновите список после уведомления.';$('items').append(p)}
 }
 function clearMedia(){for(const id of ['video','audio']){$(id).pause();$(id).removeAttribute('src');$(id).hidden=true}$('image').hidden=true;$('image').removeAttribute('src');if(blob)URL.revokeObjectURL(blob);blob=null;$('translation').hidden=true;}
-function back(){clearMedia();current=null;$('detail').hidden=true;$('actions').hidden=true;$('list').hidden=false;buttons();}
+function back(){clearMedia();current=null;$('detail').hidden=true;$('actions').hidden=true;$('list').hidden=pageMode!=='review';buttons();}
 function payload(){return {id:current,revision:state.revision,text:$('text').value,recognized:$('recognized').value,owner:$('owner').value,choice:$('choice').value,start:Number($('start').value),end:Number($('end').value),time:Number($('eventTime').value)}}
 function choice(){const c=detail.options.find(x=>x.key===$('choice').value);if(c){$('start').value=c.start;$('end').value=c.end;$('eventTime').value=c.time}}
 async function open(id){
@@ -64,4 +66,41 @@ for(const [id,decision] of [['approve','confirmed'],['remove','deleted'],['pendi
 for(const [id,mode] of [['preview','clip'],['voice','voice'],['art','art'],['translate','translation']])$(id).onclick=()=>guard(()=>prepare(mode));
 $('undo').onclick=()=>guard(async()=>{await api('action',{revision:state.revision,decision:'undo'});back();await refresh();notice('Последнее решение отменено и сохранено.')});
 guard(async()=>{tg?.ready();tg?.expand();if(!tg?.initData)throw new Error('Откройте это приложение кнопкой в личном чате со своим Telegram-ботом.');session=(await api('auth',{initData:tg.initData})).session;await refresh();notice('Подключено к редактору.');});
-setInterval(()=>{if(session&&!waiting&&!current)guard(refresh)},15000);
+setInterval(()=>{if(session&&!waiting&&!current)guard(pageMode==='export'?refreshExport:refresh)},3000);
+
+
+async function refreshExport(){
+ exportState=await api('export-status');
+ $('exportScope').textContent=exportState.scope+' · '+exportState.profile;
+ $('exportChecks').textContent=`Нужно проверить: плашки — ${exportState.cards}, видео — ${exportState.clips}. `+(exportState.has_plan?'Дорожка подготовлена.':'Перед рендером будет выполнен анализ таймингов.');
+ if(!$('outputFolder').value)$('outputFolder').value=exportState.folder;
+ const job=exportState.job,active=job&&['starting','running','cancelling'].includes(job.status);
+ $('startExport').disabled=exportState.locked||exportState.cards>0||exportState.clips>0;
+ $('cancelExport').hidden=!active;$('cancelExport').disabled=job?.status==='cancelling';
+ $('exportJob').hidden=!job;
+ if(job){
+  $('exportState').textContent=({starting:'Запуск',running:'Идёт обработка',cancelling:'Отмена',cancelled:'Отменено',completed:'Видео готово',error:'Ошибка',review:'Нужна проверка'})[job.status]||job.status;
+  $('exportMessage').textContent=job.message;$('exportError').textContent=job.error||'';$('exportTarget').textContent=job.target;
+  $('exportElapsed').textContent='Прошло: '+Math.floor(job.elapsed/60)+' мин '+job.elapsed%60+' с';
+  if(job.progress===null)$('exportProgress').removeAttribute('value');else $('exportProgress').value=job.progress;
+ }
+}
+async function switchPage(mode){pageMode=mode;back();$('list').hidden=mode!=='review';$('exportPanel').hidden=mode!=='export';$('reviewTab').classList.toggle('active',mode==='review');$('exportTab').classList.toggle('active',mode==='export');if(mode==='export')await refreshExport();else await refresh();window.scrollTo(0,0)}
+async function browse(path='',offset=0){
+ const data=await api('folders',{path,offset});folderState=data;$('folderBrowser').hidden=false;$('folderPath').textContent=data.path||'Диски сервера';if(!offset)$('folders').replaceChildren();
+ for(const item of data.folders){const b=document.createElement('button');b.className='item';b.textContent='📁 '+item.name;b.onclick=()=>guard(()=>browse(item.path));$('folders').append(b)}
+ $('folderMore').hidden=data.next===null||data.next===undefined;$('useFolder').disabled=!data.path;$('folderUp').disabled=!data.path;
+ $('folderFree').textContent=data.free===null?'':'Свободно: '+(data.free/1073741824).toFixed(1)+' ГБ';
+}
+$('reviewTab').onclick=()=>guard(()=>switchPage('review'));$('exportTab').onclick=()=>guard(()=>switchPage('export'));
+$('browseFolder').onclick=()=>guard(()=>browse($('outputFolder').value));$('folderUp').onclick=()=>guard(()=>browse(folderState.parent));$('folderMore').onclick=()=>guard(()=>browse(folderState.path,folderState.next));
+$('useFolder').onclick=()=>{$('outputFolder').value=folderState.path;$('folderBrowser').hidden=true;exportRequest=''};$('closeFolders').onclick=()=>{$('folderBrowser').hidden=true};
+$('outputName').oninput=()=>{exportRequest=''};
+$('startExport').onclick=()=>guard(async()=>{
+ await refreshExport();if(exportState.locked||exportState.cards||exportState.clips)throw new Error('Сначала завершите обработку и проверку.');
+ if(!confirm('Запустить рендер: '+exportState.scope+'?\n'+$('outputFolder').value+'\n'+$('outputName').value))return;
+ if(!exportRequest)exportRequest=crypto.randomUUID();
+ await api('export-start',{revision:exportState.revision,request:exportRequest,folder:$('outputFolder').value,name:$('outputName').value});
+ exportRequest='';await refreshExport();notice('Рендер запущен на сервере. Telegram можно закрыть.');
+});
+$('cancelExport').onclick=()=>guard(async()=>{if(!confirm('Остановить текущий рендер?'))return;await api('export-cancel',{job:exportState.job.id});await refreshExport()});

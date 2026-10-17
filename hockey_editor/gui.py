@@ -1004,8 +1004,9 @@ class App(EpisodeMixin,MatchMixin):
             self.progress.configure(mode='determinate', value=100 if self.result else 0)
         self.update_summary()
 
-    def start(self, render):
+    def start(self, render, target=None, remote=False):
         if self.busy:
+            if remote:raise ValueError('Уже идёт обработка.')
             return
         self.collect()
         try:
@@ -1013,17 +1014,19 @@ class App(EpisodeMixin,MatchMixin):
                 try:self.project.validate(i)
                 except ValueError as error:raise ValueError(self.project.blocks[i].title+": "+str(error)) from error
         except Exception as e:
+            if remote:raise ValueError(str(e)) from e
             self.show_page('materials')
             from .notifications import emit
             emit(self,'error','Нельзя запустить тайминги или рендер: проверьте материалы выпуска на сервере.')
             return messagebox.showerror('Проверьте материалы', str(e))
-        target = None
-        if render:
+        if render and not remote:
             target = filedialog.asksaveasfilename(title='Готовый ролик — новое имя файла', defaultextension='.mp4', initialfile='Мой выпуск.mp4' if self.project.whole_episode else 'Мой разбор.mp4', filetypes=[('Видео MP4', '*.mp4')])
             if not target:
                 return
             if Path(target).exists():
                 return messagebox.showinfo('Выберите новое имя', 'Чтобы сохранить предыдущий результат, укажите новое имя MP4.')
+        if remote and (not target or Path(target).exists()):raise ValueError('Выберите новое имя файла.')
+        self.remote_render=remote
         self.invalidate()
         self.log_lines = []
         self.cancel.clear()
@@ -1097,6 +1100,7 @@ class App(EpisodeMixin,MatchMixin):
         try:
             while True:
                 kind, value = self.jobs.get_nowait()
+                if hasattr(self,'mini'):self.mini.export.event(kind,value)
                 if self.handle_match_job(kind, value):
                     continue
                 if kind == 'log':
@@ -1140,7 +1144,7 @@ class App(EpisodeMixin,MatchMixin):
                     self.auto_timing_ready=False
                     emit(self,'error','Этап не завершён. Требуется участие: откройте журнал на сервере. Исходники сохранены.')
                     self.log_lines.append(value)
-                    messagebox.showerror('Обработка не завершена', value + '\n\nКнопка «Журнал» открывает подробности.')
+                    if not getattr(self,'remote_render',False):messagebox.showerror('Обработка не завершена', value + '\n\nКнопка «Журнал» открывает подробности.')
                     self.status.set('Обработка не завершена. Исходники сохранены.')
                 elif kind=='notification_log':
                     self.log_lines.append(value)
@@ -1154,9 +1158,11 @@ class App(EpisodeMixin,MatchMixin):
                     elif self.stage=='footage_review_required':
                         self.show_page('review');self.reviewtabs.select(self.events_page)
                     elif self.stage=='review_required':
-                        self.show_page('review');self.root.after_idle(self.open_speech_review)
+                        self.show_page('review')
+                        if not getattr(self,'remote_render',False):self.root.after_idle(self.open_speech_review)
                     elif self.stage == 'analyze':
                         self.show_page('review')
+                    self.remote_render=False
                     if self.stage=='goals':
                         from .notifications import continue_timing
                         continue_timing(self)
@@ -1193,5 +1199,6 @@ def launch():
     root = tk.Tk()
     App(root)
     root.mainloop()
+
 
 

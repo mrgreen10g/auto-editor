@@ -9,6 +9,8 @@ class Bridge:
         self.app=app;self.gateway=None;self.commands=queue.Queue(maxsize=24);self.history=None
         self.jobs={};self.media_lock=threading.Lock();self.media_busy=False;self.closed=False
         self.instance=secrets.token_hex(16)
+        from .mini_export import Export
+        self.export=Export(self)
     def configure(self):
         if self.gateway:self.gateway.close();self.gateway=None
         config=self.app.notifier.config
@@ -203,6 +205,10 @@ class Bridge:
         threading.Thread(target=work,daemon=True).start()
         return dict(job=ident)
     def handle(self,kind,data):
+        if kind=='export-status':return self.export.status()
+        if kind=='folders':return self.export.browse(data)
+        if kind=='export-start':return self.export.start(data)
+        if kind=='export-cancel':return self.export.cancel(data)
         if kind=='state':return self.state()
         if kind=='item':return self.item(data)
         if kind=='action':return self.action(data)
@@ -216,3 +222,4 @@ class Bridge:
                 return dict(file=job['file'])
             return {k:v for k,v in job.items() if k not in ('file','revision','created')}
         raise RemoteError('Неизвестный запрос.',404)
+
