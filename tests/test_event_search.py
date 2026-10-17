@@ -98,8 +98,14 @@ class EventSearchTests(unittest.TestCase):
                       script='Мой выбор — победа СКА. Спасибо за внимание, до новых встреч.')
         app = app_for(Project(blocks=[block], matches=[source]), 'Текущий разбор')
         MatchMixin.search_matches(app)
-        App.primary_action(app)
         app.search_matches.assert_not_called()
+        app.start.assert_called_once_with(False)
+        # Auto mode replaces the old explicit click, but manual mode stays available.
+        app.start.reset_mock()
+        app.notifier.config={'auto_timing':False}
+        MatchMixin.search_matches(app)
+        app.start.assert_not_called()
+        App.primary_action(app)
         app.start.assert_called_once_with(False)
 
     def test_completion_survives_save_and_expires_with_material_changes(self):
