@@ -20,7 +20,7 @@ class ExportTests(unittest.TestCase):
             app.start=Mock(side_effect=start);bridge=Bridge(app)
             data=dict(revision=bridge.revision(),request='request-1234',folder=d,name='Выпуск')
             result=bridge.export.start(data);bridge.export.start(data)
-            app.start.assert_called_once_with(True,target=str(root/'Выпуск.mp4'),remote=True)
+            app.start.assert_called_once_with(True,target=str(root.resolve()/'Выпуск.mp4'),remote=True)
             with self.assertRaises(RemoteError):bridge.export.start(dict(data,request='another-request'))
             with self.assertRaises(RemoteError):bridge.export.cancel({'job':'wrong'})
             bridge.export.cancel({'job':result['job']['id']});self.assertTrue(app.cancel.is_set())

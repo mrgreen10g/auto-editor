@@ -5,7 +5,7 @@ let pageMode='review',exportState=null,folderState=null,exportRequest='';
 function notice(text){$('notice').textContent=text}
 async function api(route,data={},raw=false){
  const response=await fetch('/api/'+route,{method:'POST',headers:{'Content-Type':'application/json',...(session?{Authorization:'Bearer '+session}:{})},body:JSON.stringify(data),cache:'no-store'});
- if(!response.ok){const result=await response.json();throw new Error(result.error||'Ошибка сервера')}
+ if(!response.ok){const result=await response.json();const error=new Error(result.error||'Ошибка сервера');error.status=response.status;throw error}
  return raw?response.blob():response.json();
 }
 function buttons(){for(const id of ['approve','remove','pending'])$(id).disabled=waiting||!current||state?.locked;$('undo').disabled=waiting||!state?.undo||state?.locked;}
@@ -93,14 +93,15 @@ async function browse(path='',offset=0){
  $('folderFree').textContent=data.free===null?'':'Свободно: '+(data.free/1073741824).toFixed(1)+' ГБ';
 }
 $('reviewTab').onclick=()=>guard(()=>switchPage('review'));$('exportTab').onclick=()=>guard(()=>switchPage('export'));
-$('browseFolder').onclick=()=>guard(()=>browse($('outputFolder').value));$('folderUp').onclick=()=>guard(()=>browse(folderState.parent));$('folderMore').onclick=()=>guard(()=>browse(folderState.path,folderState.next));
+$('folderRoots').onclick=()=>guard(()=>browse());
+$('browseFolder').onclick=()=>guard(async()=>{try{await browse($('outputFolder').value)}catch(error){if(error.status===400)await browse();else throw error}});$('folderUp').onclick=()=>guard(()=>browse(folderState.parent));$('folderMore').onclick=()=>guard(()=>browse(folderState.path,folderState.next));
 $('useFolder').onclick=()=>{$('outputFolder').value=folderState.path;$('folderBrowser').hidden=true;exportRequest=''};$('closeFolders').onclick=()=>{$('folderBrowser').hidden=true};
 $('outputName').oninput=()=>{exportRequest=''};
 $('startExport').onclick=()=>guard(async()=>{
  await refreshExport();if(exportState.locked||exportState.cards||exportState.clips)throw new Error('Сначала завершите обработку и проверку.');
  if(!confirm('Запустить рендер: '+exportState.scope+'?\n'+$('outputFolder').value+'\n'+$('outputName').value))return;
  if(!exportRequest)exportRequest=crypto.randomUUID();
- await api('export-start',{revision:exportState.revision,request:exportRequest,folder:$('outputFolder').value,name:$('outputName').value});
+ try{await api('export-start',{revision:exportState.revision,request:exportRequest,folder:$('outputFolder').value,name:$('outputName').value})}catch(error){if(error.status)exportRequest='';throw error}
  exportRequest='';await refreshExport();notice('Рендер запущен на сервере. Telegram можно закрыть.');
 });
 $('cancelExport').onclick=()=>guard(async()=>{if(!confirm('Остановить текущий рендер?'))return;await api('export-cancel',{job:exportState.job.id});await refreshExport()});
