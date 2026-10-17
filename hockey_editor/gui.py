@@ -96,6 +96,10 @@ class App(EpisodeMixin,MatchMixin):
         root.bind('<Control-s>', lambda _: self.save() if not self.busy else None)
         root.bind('<Control-o>', lambda _: self.load() if not self.busy else None)
         self.show_page('materials')
+        from .mini_bridge import Bridge
+        self.mini=Bridge(self)
+        try:self.mini.configure()
+        except ValueError as error:self.log_lines.append(str(error))
         self.poll_id = root.after(100, self.poll)
         root.protocol('WM_DELETE_WINDOW', self.close)
 
@@ -1089,6 +1093,7 @@ class App(EpisodeMixin,MatchMixin):
         self.update_summary()
 
     def poll(self):
+        if hasattr(self,'mini'):self.mini.drain()
         try:
             while True:
                 kind, value = self.jobs.get_nowait()
@@ -1180,6 +1185,7 @@ class App(EpisodeMixin,MatchMixin):
             return
         if self.poll_id:
             self.root.after_cancel(self.poll_id)
+        if hasattr(self,'mini'):self.mini.close()
         self.root.destroy()
 
 

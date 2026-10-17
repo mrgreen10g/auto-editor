@@ -1,0 +1,14 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Auto Editor · Проверка</title><link rel="stylesheet" href="/app.css"><script src="https://telegram.org/js/telegram-web-app.js"></script><script defer src="/app.js"></script></head><body>
+<header><small>AUTO EDITOR · НА СЕРВЕРЕ</small><h1>Проверка выпуска</h1><p id="title">Подключение…</p></header>
+<div id="notice" role="status"></div><nav><button id="refresh">Обновить</button><button id="undo">Отменить решение</button></nav>
+<main><section id="list"><div class="tabs"><button id="clips">Видео</button><button id="cards">Плашки</button></div><label class="check"><input id="all" type="checkbox"> Показать проверенные и удалённые</label><p id="counts"></p><div id="items"></div></section>
+<section id="detail" hidden><button id="back">← К списку</button><h2 id="itemTitle"></h2><p id="where"></p><p id="reason" class="hint"></p>
+<div id="clipFields" hidden><label>Кандидат<select id="choice"></select></label><p class="hint">Проверьте соответствие матча и счёта. Выбор другого кандидата изменит вставку.</p><label>Момент события, секунды<input id="eventTime" type="number" step="0.01"></label></div>
+<div class="times"><label>Начало, секунды<input id="start" type="number" min="0" step="0.01"></label><label>Конец, секунды<input id="end" type="number" min="0" step="0.01"></label></div><p id="sourceTime" class="hint"></p>
+<div class="mediaButtons"><button id="preview">Посмотреть вставку</button><button id="voice">Послушать речь</button><button id="art">Вид плашки</button><button id="translate">Перевести на русский</button></div>
+<video id="video" controls playsinline hidden></video><audio id="audio" controls hidden></audio><img id="image" alt="Оформление плашки" hidden>
+<label>Сценарий<textarea id="script" readonly rows="4"></textarea></label><label>Распознано в речи<textarea id="recognized" rows="4"></textarea></label><label id="textLabel">Текст плашки<textarea id="text" rows="4"></textarea></label>
+<label id="ownerLabel">Ставка относится к матчу<select id="owner"></select></label><div id="translation" hidden></div>
+<p class="hint">Перевод помогает понять смысл, но не заменяет проверку чисел и условий ставки. Изменение расшифровки не меняет звук ведущего.</p>
+</section></main><footer id="actions" hidden><button id="approve" class="primary">Подтвердить и далее</button><button id="remove" class="danger">Удалить</button><button id="pending">На проверку</button></footer>
+</body></html>

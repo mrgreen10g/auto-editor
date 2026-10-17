@@ -25,12 +25,12 @@ def protect(data,decrypt=False):
         ctypes.windll.kernel32.LocalFree(ctypes.cast(dst.data,ctypes.c_void_p))
 
 def load(path=None):
-    result=dict(enabled=False,auto_timing=True,token='',chat_id='',events=list(EVENTS))
+    result=dict(enabled=False,auto_timing=True,token='',chat_id='',events=list(EVENTS),mini_enabled=False,mini_url='')
     try:
         data=json.loads(Path(path or location()).read_text(encoding='utf-8'))
-        result.update({k:data[k] for k in ('enabled','auto_timing','chat_id','events') if k in data})
+        result.update({k:data[k] for k in ('enabled','auto_timing','chat_id','events','mini_enabled','mini_url') if k in data})
         if data.get('secret'):result['token']=protect(base64.b64decode(data['secret']),True).decode()
-    except (OSError,ValueError,TypeError):result['enabled']=False
+    except (OSError,ValueError,TypeError):result['enabled']=False;result['mini_enabled']=False
     return result
 
 def validate(config):
@@ -40,6 +40,10 @@ def validate(config):
 def save(config,path=None):
     if config['enabled']:validate(config)
     data={k:config[k] for k in ('enabled','auto_timing','chat_id','events')}
+    data.update(mini_enabled=bool(config.get('mini_enabled')),mini_url=config.get('mini_url',''))
+    if data['mini_enabled']:
+        from .mini_server import validate_url
+        validate(config);data['mini_url']=validate_url(data['mini_url'])
     data['secret']=base64.b64encode(protect(config['token'].encode())).decode() if config['token'] else ''
     target=Path(path or location());target.parent.mkdir(parents=True,exist_ok=True)
     temp=target.with_name(target.name+'.'+uuid.uuid4().hex+'.tmp')
@@ -87,7 +91,10 @@ def api(token,method,payload):
 
 def send(config,text):
     validate(config)
-    return api(config['token'],'sendMessage',{'chat_id':config['chat_id'],'text':text[:4000]})
+    payload={'chat_id':config['chat_id'],'text':text[:4000]}
+    if config.get('mini_enabled') and config.get('mini_url'):
+        payload['reply_markup']={'inline_keyboard':[[{'text':'Открыть проверку','web_app':{'url':config['mini_url']}}]]}
+    return api(config['token'],'sendMessage',payload)
 
 class Notifier:
     def __init__(self,report=lambda _:None):

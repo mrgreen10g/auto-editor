@@ -8,6 +8,7 @@ cmd=[sys.executable,'-m','PyInstaller','--noconfirm','--clean','--windowed','--o
      '--collect-all','espeakng_loader','--collect-all','imageio_ffmpeg','--collect-all','num2words',
      '--collect-all','rapidocr_onnxruntime','--collect-all','onnxruntime','--collect-data','cv2',
      '--collect-all','faster_whisper','--collect-all','ctranslate2','--collect-all','av','--collect-all','tokenizers','--collect-data','certifi',
+     '--add-data','hockey_editor/mini_web'+os.pathsep+'hockey_editor/mini_web',
      '--collect-submodules','scipy.signal','--hidden-import','scipy.special._special_ufuncs','main.py']
 subprocess.run(cmd,check=True)
 dest=root/'dist'/'AutoEditor';licenses=dest/'licenses';licenses.mkdir(exist_ok=True)

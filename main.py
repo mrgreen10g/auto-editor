@@ -13,6 +13,9 @@ def self_test(report):
     context=tls_context()
     assert context.verify_mode==ssl.CERT_REQUIRED and context.check_hostname
     assert context.cert_store_stats()['x509_ca']>0
+    from hockey_editor import mini_server
+    mini_assets=Path(mini_server.__file__).with_name('mini_web')
+    assert all((mini_assets/name).is_file() for name in ('index.html','app.js','app.css'))
     from hockey_editor.media import run,probe
     from hockey_editor.alignment import synthesize,features,subsequence_dtw,normalized
     import numpy as np

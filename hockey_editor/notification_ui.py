@@ -12,6 +12,7 @@ def show(app):
     config=dict(app.notifier.config);jobs=queue.Queue();closed=False;busy=False
     enabled=tk.BooleanVar(value=config['enabled']);auto=tk.BooleanVar(value=config['auto_timing'])
     token=tk.StringVar(value=config['token']);chat=tk.StringVar(value=config['chat_id']);status=tk.StringVar()
+    mini=tk.BooleanVar(value=config.get('mini_enabled',False));mini_url=tk.StringVar(value=config.get('mini_url',''))
     ttk.Checkbutton(body,text='Отправлять уведомления в Telegram',variable=enabled).pack(anchor='w',pady=8)
     ttk.Label(body,text='Создайте отдельного бота через @BotFather (/newbot). Вставьте токен ниже.\nТокен сохраняется защищённо в текущем профиле Windows, не в проекте.',wraplength=580).pack(fill='x')
     ttk.Label(body,text='Токен бота').pack(anchor='w');ttk.Entry(body,textvariable=token,show='•').pack(fill='x',pady=4)
@@ -20,7 +21,7 @@ def show(app):
     command=ttk.Entry(body);command.insert(0,code);command.configure(state='readonly');command.pack(fill='x',pady=4)
     ttk.Label(body,text='Затем нажмите «Найти мой чат». Чужие сообщения не используются.').pack(anchor='w')
     ttk.Label(body,text='ID личного чата').pack(anchor='w');ttk.Entry(body,textvariable=chat).pack(fill='x',pady=4)
-    def values():return dict(enabled=enabled.get(),auto_timing=auto.get(),token=token.get().strip(),chat_id=chat.get().strip(),events=[k for k,v in choices.items() if v.get()])
+    def values():return dict(enabled=enabled.get(),auto_timing=auto.get(),token=token.get().strip(),chat_id=chat.get().strip(),events=[k for k,v in choices.items() if v.get()],mini_enabled=mini.get(),mini_url=mini_url.get().strip().rstrip('/'))
     def work(kind):
         nonlocal busy
         if busy:return
@@ -54,6 +55,10 @@ def show(app):
     ttk.Separator(body).pack(fill='x',pady=8)
     ttk.Checkbutton(body,text='Автоматически искать тайминги после успешного поиска фрагментов',variable=auto).pack(anchor='w')
     ttk.Label(body,text='При спорных фрагментах, ошибке или отмене автоматический переход не выполняется.\nРендер запускается вручную. Настройка работает и без Telegram.',wraplength=580).pack(fill='x')
+    ttk.Separator(body).pack(fill='x',pady=8)
+    ttk.Checkbutton(body,text='Mini App: проверка текущего проекта с телефона',variable=mini).pack(anchor='w')
+    ttk.Label(body,text='HTTPS-адрес Tailscale Funnel').pack(anchor='w');ttk.Entry(body,textvariable=mini_url).pack(fill='x')
+    ttk.Label(body,text='Сервис слушает только 127.0.0.1:18473. Команда на сервере:\ntailscale funnel --bg http://127.0.0.1:18473\nУкажите выданный HTTPS-адрес и сохраните. Затем отправьте тестовое уведомление: в нём появится кнопка проверки. Доступ — только владельцу привязанного личного чата. Предпросмотры доступны через туннель после авторизации.',wraplength=580).pack(fill='x',pady=6)
     ttk.Label(body,textvariable=status,wraplength=580).pack(fill='x',pady=8)
     footer=ttk.Frame(w);footer.grid(row=1,column=0,sticky='ew',padx=10,pady=8)
     def close():
@@ -61,7 +66,13 @@ def show(app):
         closed=True;w.after_cancel(timer[0]);w.destroy()
     def apply():
         try:
-            data=values();save(data);app.notifier.config=data;close()
+            data=values()
+            if data['mini_enabled']:
+                from .mini_server import validate_url
+                data['mini_url']=validate_url(data['mini_url'])
+            save(data);app.notifier.config=data
+            if hasattr(app,'mini'):app.mini.configure()
+            close()
         except (OSError,ValueError) as error:messagebox.showerror('Telegram',str(error),parent=w)
     ttk.Button(footer,text='Сохранить',command=apply).pack(side='left')
     ttk.Button(footer,text='Закрыть',command=close).pack(side='right')
