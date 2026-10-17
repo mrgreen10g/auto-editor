@@ -23,6 +23,10 @@ def check():
     errors = []
     root.report_callback_exception = lambda *exc: errors.append(str(exc[1]))
     app = App(root)
+    from hockey_editor.notification_ui import show as notification_settings
+    notification_window=notification_settings(app);root.update()
+    assert notification_window.winfo_ismapped()
+    notification_window.tk.call(notification_window.protocol('WM_DELETE_WINDOW'));root.update()
     def select_profile(profile):
         from hockey_editor.profiles import PROFILES
         language='uz' if profile.startswith('uz_') else 'ru'

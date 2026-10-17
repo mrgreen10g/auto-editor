@@ -56,6 +56,9 @@ class App(EpisodeMixin,MatchMixin):
         self.index = 0
         self.plan = self.result = None
         self.jobs = queue.Queue()
+        from .notifications import Notifier
+        self.notifier=Notifier(lambda message:self.jobs.put(('notification_log',message)))
+        self.auto_timing_ready=False
         self.cancel = threading.Event()
         self.busy = False
         self.worker = None
@@ -278,6 +281,9 @@ class App(EpisodeMixin,MatchMixin):
 
     def build_settings(self):
         page = self.scrollable('settings')
+        telegram=ui.card(page,'Telegram и автоматизация','Общие уведомления для всех шаблонов. Автопереход к таймингам без спорных фрагментов.')
+        from .notification_ui import show as notification_settings
+        self.button(telegram,'Настроить уведомления',lambda:notification_settings(self)).pack(anchor='w')
         saved=ui.card(page,'Мои настройки','Шаблоны хранятся отдельно для русского хоккея, узбекского футбола и боёв.')
         self.presetbox=ttk.Combobox(saved,state='readonly');self.presetbox.pack(fill='x')
         row=ttk.Frame(saved);row.pack(fill='x',pady=6)
@@ -1004,6 +1010,8 @@ class App(EpisodeMixin,MatchMixin):
                 except ValueError as error:raise ValueError(self.project.blocks[i].title+": "+str(error)) from error
         except Exception as e:
             self.show_page('materials')
+            from .notifications import emit
+            emit(self,'error','Нельзя запустить тайминги или рендер: проверьте материалы выпуска на сервере.')
             return messagebox.showerror('Проверьте материалы', str(e))
         target = None
         if render:
@@ -1016,6 +1024,8 @@ class App(EpisodeMixin,MatchMixin):
         self.log_lines = []
         self.cancel.clear()
         self.stage = 'render' if render else 'analyze'
+        from .notifications import begin
+        begin(self,self.stage)
         self.show_page('export' if render else 'review')
         self.review_summary.set('Ищем фразы в записи ведущего…')
         self.status.set('Начинаю обработку. Можно остановить её кнопкой «Отменить».')
@@ -1043,6 +1053,7 @@ class App(EpisodeMixin,MatchMixin):
                 elif render:
                     self.jobs.put(('result', engine.render(plan, target)))
             except Cancelled:
+                self.jobs.put(('cancelled',None))
                 self.jobs.put(('log', 'Отменено. Можно изменить настройки и повторить.'))
             except Exception as e:
                 self.jobs.put(('error', str(e)))
@@ -1098,13 +1109,21 @@ class App(EpisodeMixin,MatchMixin):
                     self.project=value;self.refresh()
                 elif kind == 'plan':
                     self.display_plan(value)
+                    from .notifications import emit
+                    from .review import pending
+                    count=len(pending(value))
+                    emit(self,'attention' if count else 'cards',f'Тайминги и плашки готовы. Требуют проверки: {count}.'+(' Можно запустить рендер на сервере.' if not count and self.stage=='analyze' else ''))
                 elif kind=='footage_review_required':
+                    from .notifications import emit
+                    emit(self,'attention','Нужна проверка боевых вставок. Рендер не запущен.')
                     self.stage='footage_review_required'
                     self.status.set('Дорожка готова. Просмотрите боевые вставки или выберите «Оставить ведущего».')
                 elif kind=='review_required':
                     self.stage='review_required'
                     self.status.set('Черновая дорожка готова. Проверьте спорные плашки перед экспортом.')
                 elif kind == 'result':
+                    from .notifications import emit
+                    emit(self,'render','Рендер завершён. Файл на сервере: '+Path(value).name)
                     self.result = Path(value)
                     self.output_label.set(str(value))
                     self.previewbutton.configure(state='normal')
@@ -1112,9 +1131,17 @@ class App(EpisodeMixin,MatchMixin):
                     self.show_page('export')
                     self.status.set('Готово! Нажмите «Открыть результат», чтобы посмотреть ролик.')
                 elif kind == 'error':
+                    from .notifications import emit
+                    self.auto_timing_ready=False
+                    emit(self,'error','Этап не завершён. Требуется участие: откройте журнал на сервере. Исходники сохранены.')
                     self.log_lines.append(value)
                     messagebox.showerror('Обработка не завершена', value + '\n\nКнопка «Журнал» открывает подробности.')
                     self.status.set('Обработка не завершена. Исходники сохранены.')
+                elif kind=='notification_log':
+                    self.log_lines.append(value)
+                elif kind=='cancelled':
+                    from .notifications import emit
+                    self.auto_timing_ready=False;emit(self,'cancelled','Обработка отменена.')
                 elif kind == 'done':
                     self.set_busy(False)
                     if self.plan is None and self.stage in ('analyze', 'render'):
@@ -1125,6 +1152,9 @@ class App(EpisodeMixin,MatchMixin):
                         self.show_page('review');self.root.after_idle(self.open_speech_review)
                     elif self.stage == 'analyze':
                         self.show_page('review')
+                    if self.stage=='goals':
+                        from .notifications import continue_timing
+                        continue_timing(self)
         except queue.Empty:
             pass
         self.poll_id = self.root.after(100, self.poll)

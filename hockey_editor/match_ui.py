@@ -180,9 +180,13 @@ class MatchMixin:
 
     def match_job(self, stage, work):
         self.cancel.clear(); self.stage = stage; self.set_busy(True)
+        if stage=='goals':
+            from .notifications import begin
+            begin(self,stage)
         def wrapped():
             try: work()
-            except Cancelled: self.jobs.put(('log', 'Отменено. Исходные файлы сохранены.'))
+            except Cancelled:
+                self.jobs.put(('cancelled',None));self.jobs.put(('log', 'Отменено. Исходные файлы сохранены.'))
             except Exception as e: self.jobs.put(('error', str(e)))
             finally: self.jobs.put(('done', None))
         self.worker = threading.Thread(target=wrapped, daemon=True); self.worker.start()
@@ -205,6 +209,8 @@ class MatchMixin:
             self.refresh_events();self.update_summary()
             self.review_summary.set('Поиск завершён · нет запросов на игровые вставки')
             self.review_note.set(EMPTY_SEARCH_NOTE);self.status.set(EMPTY_SEARCH_NOTE)
+            from .notifications import begin,clips_finished,continue_timing
+            begin(self,'goals');clips_finished(self,[]);continue_timing(self)
             return
         sources = copy.deepcopy([m for m in self.project.matches if m.id in block.match_ids])
         allow_other = self.project.settings.allow_other_matches
@@ -264,7 +270,10 @@ class MatchMixin:
             self.review_note.set(errors[0] if errors else 'Все эпизоды показаны в одном списке. Столбец «Разбор» указывает принадлежность. Затем определите тайминги выпуска.')
             empty=[b.title for b in self.project.blocks if b.uid in output and not b.events and b.event_search_key]
             if empty and not errors:self.review_note.set('Без игровых вставок: '+', '.join(empty)+'. '+EMPTY_SEARCH_NOTE)
-            self.log_lines.extend(errors);self.status.set('Поиск по всем разборам завершён.');return True
+            self.log_lines.extend(errors);self.status.set('Поиск по всем разборам завершён.')
+            from .notifications import clips_finished
+            clips_finished(self,errors)
+            return True
         if kind == 'goals':
             events, scans, errors = value
             block=self.project.blocks[self.index]
@@ -275,6 +284,8 @@ class MatchMixin:
             self.review_summary.set(f'Найдено привязок: {sum(e.selection is not None for e in events)} · Для проверки: {count}')
             self.review_note.set(errors[0] if errors else 'Игровые и архивные замены уже включены. Их можно посмотреть и заменить перед монтажом.')
             self.log_lines.extend(errors); self.status.set('Поиск завершён. Проверьте эпизоды в таблице.')
+            from .notifications import clips_finished
+            clips_finished(self,errors)
             return True
         if kind == 'roi':
             # Defer the modal until the queue has restored enabled controls.
