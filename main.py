@@ -8,6 +8,17 @@ import sys,json,tempfile,threading
 from pathlib import Path
 
 def self_test(report):
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    from google.auth.transport.requests import AuthorizedSession
+    from google.oauth2.credentials import Credentials
+    oauth = InstalledAppFlow.from_client_config({'installed': {
+        'client_id': 'bundle-check.apps.googleusercontent.com', 'client_secret': 'bundle-check',
+        'auth_uri': 'https://accounts.google.com/o/oauth2/auth',
+        'token_uri': 'https://oauth2.googleapis.com/token'}},
+        scopes=['https://www.googleapis.com/auth/drive'], autogenerate_code_verifier=True)
+    assert oauth.oauth2session is not None
+    with AuthorizedSession(Credentials(token='offline-bundle-check')) as session:
+        assert session.credentials.token == 'offline-bundle-check'
     from hockey_editor.notifications import tls_context
     import ssl
     context=tls_context()
@@ -47,7 +58,7 @@ def self_test(report):
         import cv2
         for name in ('haarcascade_frontalface_default.xml','haarcascade_eye_tree_eyeglasses.xml'):
             assert not cv2.CascadeClassifier(str(Path(cv2.data.haarcascades)/name)).empty(), name
-    Path(report).write_text(json.dumps({'status':'ok','checks':['espeak-ru','espeak-uz','audio-alignment','ffmpeg-h264-aac','pillow','whisper-runtime','whisper-audio-decoder','ctranslate2-cpu-int8']+(['bundled-score-ocr'] if sys.platform == 'win32' else [])},indent=2),encoding='utf-8')
+    Path(report).write_text(json.dumps({'status':'ok','checks':['google-drive-oauth-runtime','espeak-ru','espeak-uz','audio-alignment','ffmpeg-h264-aac','pillow','whisper-runtime','whisper-audio-decoder','ctranslate2-cpu-int8']+(['bundled-score-ocr'] if sys.platform == 'win32' else [])},indent=2),encoding='utf-8')
 
 if __name__=='__main__':
     try:
