@@ -14,10 +14,18 @@ def snapshot(project,plan,index,task,card,data):
     start=float(data.get('start',card.start));end=float(data.get('end',card.end))
     if not all(math.isfinite(v) for v in (start,end)) or not 0<=start<end<=plan.duration or end-start<.15:
         raise RemoteError('Границы плашки должны находиться внутри дорожки и длиться не менее 0,15 с.')
-    selected=next(c for c in plan.cards if c.review_id==task['id'])
+    selected=next((c for c in plan.cards if c.review_id==task['id']),None)
+    if selected is None:
+        selected=copy.deepcopy(card);plan.cards.append(selected)
     selected.start=frame(start);selected.end=frame(end)
     selected.text=str(data.get('text',card.text)).strip()
     if not selected.text or len(selected.text)>4000:raise RemoteError('Введите текст плашки (до 4000 символов).')
+    owner=str(data.get('owner',selected.forecast_id))
+    if owner and owner not in {b.uid for b in project.blocks}:raise RemoteError('Матч для ставки не найден.')
+    selected.forecast_id=owner
+    if owner:
+        for other in plan.cards:
+            if other.forecast_id==owner:other.text=selected.text
     # Keep one second around the card; long cards get a clearly labelled excerpt.
     lo=frame(max(0,start-1));hi=frame(min(plan.duration,end+1,lo+20))
     media=plan.media or [dict(path=project.host,start=plan.source_start+a,end=plan.source_start+b,rotation=plan.rotation or 0,kind='host') for a,b in plan.keep]

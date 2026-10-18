@@ -36,3 +36,11 @@ class MiniPreviewTests(unittest.TestCase):
             self.assertEqual(item['block'],app.project.blocks[0].uid)
             self.assertEqual(item['block_title'],'СКА — Лада')
             self.assertEqual(item['category'],'Статистика')
+    def test_deleted_card_preview_and_forecast_group_are_detached(self):
+        with tempfile.TemporaryDirectory() as d:
+            app=app_fixture(Path(d));p=app.plan;card=p.cards.pop()
+            card.title='ПРОГНОЗ';card.forecast_id=app.project.blocks[0].uid
+            p.cards.append(Card(4,6,'ПРОГНОЗ','Старый повтор',forecast_id=card.forecast_id))
+            result=snapshot(app.project,p,0,p.review_items[0],card,dict(text='Новая ставка',owner=card.forecast_id))['plan']
+            self.assertEqual([c.text for c in result.cards],['Новая ставка','Новая ставка'])
+            self.assertEqual(len(p.cards),1);self.assertEqual(p.cards[0].text,'Старый повтор')

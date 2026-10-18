@@ -1,5 +1,5 @@
 """Mobile browser -> authenticated HTTP -> editor transaction and real previews."""
-import json,sys,tempfile,threading,time
+import copy,json,sys,tempfile,threading,time
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];sys.path[:0]=[str(ROOT),str(ROOT/'tests')]
 from test_mini_app import app_fixture,signed,TOKEN,OWNER
@@ -14,7 +14,17 @@ def check():
     with tempfile.TemporaryDirectory() as d:
         root=Path(d);app=app_fixture(root)
         app.project.blocks[0].script+=' В этом матче команда уверенно сыграла в атаке.'
+        from hockey_editor.timeline import Insert
+        app.plan.inserts=[Insert(app.project.host,2,3,0,'Тестовый игровой фрагмент')]
         run(['-y','-f','lavfi','-i','color=c=0x248875:s=640x360:r=24:d=8','-f','lavfi','-i','sine=frequency=440:duration=8','-c:v','libx264','-preset','ultrafast','-c:a','aac','-shortest',app.project.host])
+        # Exercise the vertical compositor too, without changing the live project.
+        from hockey_editor.mini_preview import snapshot,render
+        from hockey_editor.media import probe
+        portrait=copy.deepcopy(app.project);portrait.profile='uz_hockey_shorts'
+        portrait.settings.width=720;portrait.settings.height=1280;portrait.blocks[0].language='uz'
+        spec=snapshot(portrait,app.plan,0,app.plan.review_items[0],app.plan.cards[0],{})
+        info=probe(render(spec,root,'portrait-context')['file'])
+        assert (info['width'],info['height'])==(360,640) and info['audio']
         source=MatchSource(app.project.host,'СКА','Лада');app.project.matches=[source];block=app.project.blocks[0];block.match_ids=[source.id]
         block.events=[EventRequest(source.id,'Команда забила три гола.',selection=EventSelection('test',1,4,2,source_signature(source),False))]
         bridge=Bridge(app);gateway=Gateway(bridge,dict(token=TOKEN,chat_id=OWNER,mini_url='https://test.ts.net'),port=0)
@@ -64,6 +74,8 @@ def check():
                 timing_calls=[]
                 def timing_start(render,remote=False):
                     assert not render and remote;timing_calls.append(True);app.stage='analyze'
+                    from hockey_editor.timeline import Plan
+                    app.plan=Plan(0,8,[(0,8)],[],[],[],[],8)
                     bridge.process.begin('analyze');bridge.process.event('plan',None);bridge.process.event('done',None)
                 app.start=timing_start
                 click('#processTab');expect(page.locator('#findTimings')).to_be_enabled()
