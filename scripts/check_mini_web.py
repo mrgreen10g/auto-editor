@@ -35,7 +35,9 @@ def check():
         thread=threading.Thread(target=pump,daemon=True);thread.start()
         try:
             with sync_playwright() as p:
-                browser=p.chromium.launch(headless=True)
+                # Windows' bundled test Chromium lacks H.264/AAC. The runner's
+                # stock Chrome exercises the same MP4 codecs used by phones.
+                browser=p.chromium.launch(headless=True,**({'channel':'chrome'} if sys.platform=='win32' else {}))
                 page=browser.new_page(viewport={'width':390,'height':844},is_mobile=True,has_touch=True)
                 def click(selector):
                     page.locator('body[data-busy="false"]').wait_for(timeout=60000)
@@ -107,7 +109,6 @@ def check():
                 video=page.locator('#resultVideo')
                 # Mobile browsers may defer preload until playback is requested.
                 video.evaluate('(v) => { v.play().catch(() => {}); }')
-                import time
                 deadline=time.monotonic()+30
                 while time.monotonic()<deadline:
                     media=video.evaluate('(v) => ({ready:v.readyState,error:v.error?.message,network:v.networkState})')
