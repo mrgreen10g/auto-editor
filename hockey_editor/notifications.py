@@ -155,7 +155,7 @@ def clips_finished(app,errors):
     emit(app,'attention' if errors or count or incomplete else 'clips',f'Поиск фрагментов завершён. Требуют проверки: {count}.'+(' Есть ошибки поиска; откройте журнал на сервере.' if errors or incomplete else ''))
 
 def continue_timing(app):
-    if hasattr(app,'mini') and app.notifier.config.get('mini_enabled'):
+    if hasattr(app,'mini') and app.notifier.config.get('mini_enabled') is True:
         app.auto_timing_ready=False;app.mini.process.maybe_auto();return
     ready=getattr(app,'auto_timing_ready',False);app.auto_timing_ready=False
     if ready and not app.cancel.is_set() and app.notifier.config.get('auto_timing',True):app.start(False)
