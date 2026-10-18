@@ -3,6 +3,38 @@ const $=id=>document.getElementById(id),tg=window.Telegram?.WebApp;
 let session='',state=null,current=null,detail=null,kind='card',waiting=false,blob=null;
 let pageMode='review',exportState=null,folderState=null,exportRequest='';
 let processState=null,processRequest='',primaryRoute='';
+let resultsState=null,driveInitialized=false,resultSelected='',driveProfile='';
+const driveKeys=['ru_long','ru_shorts','uz_long','uz_shorts'];
+function driveDefault(profile){return (profile.startsWith('uz_')?'uz':'ru')+(profile.endsWith('_shorts')?'_shorts':'_long')}
+function driveFolder(){return $('driveChoice').value==='custom'?$('customDrive').value.trim():resultsState?.drive.folders[$('driveChoice').value]||''}
+function destinationLabel(){$('customDriveLabel').hidden=$('driveChoice').value!=='custom';$('driveDestination').textContent=driveFolder()?'Папка: '+driveFolder():'Укажите папку в настройках ниже.'}
+function selectedResult(){return resultsState?.results.find(x=>x.id===$('resultChoice').value)}
+function showResult(){
+ const row=selectedResult();$('finishedPanel').hidden=!row;$('sendDrive').hidden=!row;
+ if(!row)return;
+ if(resultSelected!==row.id){$('resultVideo').pause();$('resultVideo').removeAttribute('src');$('resultVideo').hidden=true;resultSelected=row.id}
+ $('resultMeta').textContent=(row.size/1048576).toFixed(1)+' МБ'+(row.duration?' · '+Math.round(row.duration)+' с':'')+(row.available?'':' · файл недоступен на сервере');
+ $('watchResult').disabled=!row.available;
+ const upload=row.upload,active=upload?.status==='uploading';
+ $('uploadMessage').textContent=upload?(upload.message||'')+(upload.folder_name?' · '+upload.folder_name:''):'Видео готово на сервере.';
+ $('uploadProgress').hidden=!upload;$('uploadProgress').value=upload?.progress||0;
+ $('pauseUpload').hidden=!active;$('sendDrive').disabled=!row.available||!resultsState.drive.connected||resultsState.upload_busy;
+ $('sendDrive').textContent=upload&&['error','paused'].includes(upload.status)?'Продолжить отправку на Диск':'Отправить готовое видео на Диск';
+ const link=upload?.status==='completed'&&/^https:\/\/drive\.google\.com\/file\/d\/[A-Za-z0-9_-]+\/view$/.test(upload.url||'');
+ $('driveLink').hidden=!link;if(link)$('driveLink').href=upload.url;
+}
+async function refreshResults(){
+ resultsState=await api('result-status');const old=$('resultChoice').value;
+ $('resultChoice').replaceChildren();for(const row of resultsState.results)$('resultChoice').add(new Option(row.name+' · '+new Date(row.created*1000).toLocaleString(),row.id));
+ if(resultsState.results.some(x=>x.id===old))$('resultChoice').value=old;
+ $('driveAccount').textContent=resultsState.drive.connected?'Подключён: '+resultsState.drive.account:'Сначала подключите аккаунт в настройках Google Диска на сервере.';
+ if(!driveInitialized){
+  for(const key of driveKeys)$('folder_'+key).value=resultsState.drive.folders[key]||'';
+  $('driveChoice').value=driveDefault(exportState.profile);$('autoUpload').checked=resultsState.drive.auto;driveInitialized=true;
+ }
+ if(driveProfile!==exportState.profile){driveProfile=exportState.profile;$('driveChoice').value=driveDefault(driveProfile)}
+ destinationLabel();showResult();
+}
 function notice(text){$('notice').textContent=text}
 async function api(route,data={},raw=false){
  const response=await fetch('/api/'+route,{method:'POST',headers:{'Content-Type':'application/json',...(session?{Authorization:'Bearer '+session}:{})},body:JSON.stringify(data),cache:'no-store'});
@@ -108,8 +140,9 @@ async function refreshExport(){
   $('exportElapsed').textContent='Прошло: '+Math.floor(job.elapsed/60)+' мин '+job.elapsed%60+' с';
   if(job.progress===null)$('exportProgress').removeAttribute('value');else $('exportProgress').value=job.progress;
  }
+ await refreshResults();
 }
-async function switchPage(mode){pageMode=mode;back();notice('');$('pageTitle').textContent=({review:'Проверка',export:'Результат',process:'Процесс'})[mode];$('list').hidden=mode!=='review';$('exportPanel').hidden=mode!=='export';$('processPanel').hidden=mode!=='process';for(const name of ['review','export','process']){$(name+'Tab').classList.toggle('active',mode===name);$(name+'Tab').setAttribute('aria-current',mode===name?'page':'false')}await refreshPage();window.scrollTo(0,0)}
+async function switchPage(mode){pageMode=mode;if(mode!=='export')$('resultVideo').pause();back();notice('');$('pageTitle').textContent=({review:'Проверка',export:'Результат',process:'Процесс'})[mode];$('list').hidden=mode!=='review';$('exportPanel').hidden=mode!=='export';$('processPanel').hidden=mode!=='process';for(const name of ['review','export','process']){$(name+'Tab').classList.toggle('active',mode===name);$(name+'Tab').setAttribute('aria-current',mode===name?'page':'false')}await refreshPage();window.scrollTo(0,0)}
 async function browse(path='',offset=0){
  const data=await api('folders',{path,offset});folderState=data;$('folderBrowser').hidden=false;$('folderPath').textContent=data.path||'Диски сервера';if(!offset)$('folders').replaceChildren();
  for(const item of data.folders){const b=document.createElement('button');b.className='item';b.textContent='📁 '+item.name;b.onclick=()=>guard(()=>browse(item.path));$('folders').append(b)}
@@ -125,10 +158,18 @@ $('startExport').onclick=()=>guard(async()=>{
  await refreshExport();if(exportState.locked||exportState.cards||exportState.clips)throw new Error('Сначала завершите обработку и проверку.');
  if(!confirm('Запустить рендер: '+exportState.scope+'?\n'+$('outputFolder').value+'\n'+$('outputName').value))return;
  if(!exportRequest)exportRequest=crypto.randomUUID();
- try{await api('export-start',{revision:exportState.revision,request:exportRequest,folder:$('outputFolder').value,name:$('outputName').value})}catch(error){if(error.status)exportRequest='';throw error}
+ try{await api('export-start',{revision:exportState.revision,request:exportRequest,folder:$('outputFolder').value,name:$('outputName').value,drive_upload:$('autoUpload').checked,drive_folder:driveFolder()})}catch(error){if(error.status)exportRequest='';throw error}
  exportRequest='';await refreshExport();notice('Рендер запущен на сервере. Telegram можно закрыть.');
 });
 $('cancelExport').onclick=()=>guard(async()=>{if(!confirm('Остановить текущий рендер?'))return;await api('export-cancel',{job:exportState.job.id});await refreshExport()});
+$('driveChoice').onchange=()=>{destinationLabel();exportRequest=''};$('customDrive').oninput=destinationLabel;
+$('autoUpload').onchange=()=>{exportRequest=''};
+$('resultChoice').onchange=()=>{const row=selectedResult();if(row)$('driveChoice').value=driveDefault(row.profile);destinationLabel();showResult()};
+$('watchResult').onclick=()=>guard(async()=>{const row=selectedResult();if(!row)return;const result=await api('result-stream',{id:row.id});$('resultVideo').src=result.url;$('resultVideo').hidden=false;notice('Видео готово к просмотру. Нажмите воспроизведение.')});
+$('resultVideo').onerror=()=>notice('Не удалось воспроизвести видео. Нажмите «Посмотреть полное видео» для обновления ссылки; при истечении сессии откройте Mini App заново.');
+$('saveDriveFolders').onclick=()=>guard(async()=>{const folders={};for(const key of driveKeys)folders[key]=$('folder_'+key).value;await api('drive-config',{folders,auto:$('autoUpload').checked});await refreshResults();notice('Папки Google Диска сохранены.')});
+$('sendDrive').onclick=()=>guard(async()=>{const row=selectedResult();if(!row)return;await api('drive-start',{id:row.id,folder:driveFolder()});await refreshResults();notice('Отправка выполняется на сервере. Telegram можно закрыть.')});
+$('pauseUpload').onclick=()=>guard(async()=>{await api('drive-pause',{id:selectedResult().id});notice('Останавливаем отправку после текущего запроса…');await refreshResults()});
 
 async function refreshProcess(){
  processState=await api('process-status');const s=processState,j=s.job;
@@ -165,5 +206,6 @@ $('primaryAction').onclick=()=>guard(async()=>{
  else if(route)await startProcess(route);
 });
 $('cancelProcess').onclick=()=>guard(async()=>{if(!confirm('Остановить текущий этап? Автоматическое продолжение будет отменено.'))return;await api('process-cancel',{job:processState.job.id});await refreshProcess()});
+
 
 

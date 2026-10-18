@@ -68,6 +68,11 @@ class Export:
         except OSError:raise RemoteError('Нет разрешения на запись в эту папку.') from None
         bridge.checkpoint()
         self.job=dict(id=secrets.token_hex(16),request=request,status='starting',target=str(target),started=time.time(),elapsed=0,progress=None,message='Запуск рендера',error='')
+        from .drive_upload import folder_id,public_config
+        destination=folder_id(data.get('drive_folder','')) if data.get('drive_upload') is True else ''
+        if data.get('drive_upload') is True and (not destination or not public_config()['connected']):
+            self.job=None;raise RemoteError('Подключите Google Диск и выберите папку результата.')
+        self.job.update(drive_folder=destination,profile=app.project.profile,result_journal=str(bridge.results.file()))
         self.last_folder=str(path)
         try:app.start(True,target=str(target),remote=True)
         except Exception as error:
@@ -81,6 +86,9 @@ class Export:
         return self.status()
     def event(self,kind,value):
         job=self.job
+        if kind=='result':
+            try:self.bridge.results.register(value,job if job and job['status'] in ('running','cancelling') else None)
+            except Exception:self.bridge.app.log_lines.append('Видео готово, но не удалось сохранить мобильный список результатов. Проверьте доступ к папке разметки.')
         if not job or job['status'] not in ('running','cancelling'):return
         job['elapsed']=round(time.time()-job['started'])
         if kind=='log':
@@ -92,3 +100,4 @@ class Export:
         elif kind=='cancelled':job.update(status='cancelled',message='Рендер отменён')
         elif kind in ('review_required','footage_review_required'):job.update(status='review',message='Найдены спорные элементы. Откройте проверку, затем запустите рендер снова.')
         elif kind=='done':job.update(status='error',message='Обработка завершилась без готового видео. Проверьте журнал.')
+

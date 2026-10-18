@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Auto Editor</title><link rel="stylesheet" href="/app.css"><script src="https://telegram.org/js/telegram-web-app.js"></script><script defer src="/app.js"></script></head>
 <body>
-<header><div class="heading"><div><small>AUTO EDITOR · 0.8.2</small><h1 id="pageTitle">Процесс</h1></div><button id="refresh" class="quiet" aria-label="Обновить данные">↻</button></div><p id="title">Подключение…</p></header>
+<header><div class="heading"><div><small>AUTO EDITOR · 0.8.3</small><h1 id="pageTitle">Процесс</h1></div><button id="refresh" class="quiet" aria-label="Обновить данные">↻</button></div><p id="title">Подключение…</p></header>
 <div id="notice" role="status" aria-live="polite"></div>
 <main>
 <section id="processPanel" hidden>
@@ -40,6 +40,18 @@
 </details>
 </section>
 <section id="exportPanel" hidden><h2>Сохранить готовое видео</h2><p id="exportScope"></p><p id="exportChecks" class="hint"></p>
+<div id="finishedPanel" class="surface" hidden><label>Готовые видео этого проекта<select id="resultChoice"></select></label><p id="resultMeta" class="hint"></p>
+<video id="resultVideo" controls playsinline preload="metadata" hidden></video><button id="watchResult" class="primary wide">Посмотреть полное видео</button>
+<p id="uploadMessage"></p><progress id="uploadProgress" max="100" hidden></progress><button id="pauseUpload" hidden>Приостановить отправку</button><a id="driveLink" target="_blank" rel="noopener noreferrer" hidden>Открыть видео на Google Диске ↗</a></div>
+<div class="surface"><h3>Google Диск</h3><p id="driveAccount" class="hint"></p>
+<label>Папка назначения<select id="driveChoice"><option value="ru_long">РУ · лонг</option><option value="ru_shorts">РУ · Shorts</option><option value="uz_long">УЗ · лонг</option><option value="uz_shorts">УЗ · Shorts</option><option value="custom">Другая папка</option></select></label>
+<label id="customDriveLabel" hidden>Ссылка на другую папку<input id="customDrive" placeholder="https://drive.google.com/drive/folders/…"></label><p id="driveDestination" class="hint"></p>
+<label class="check"><input id="autoUpload" type="checkbox"> Отправить на Диск после следующего рендера</label>
+<button id="sendDrive" class="wide" hidden>Отправить готовое видео на Диск</button>
+<details id="driveSettings"><summary>Настроить четыре папки</summary>
+<p class="hint">Вставьте ссылки на папки, в которые подключённый аккаунт может загружать файлы. Аккаунт подключается на сервере: «Оформление и звук → Google Диск».</p>
+<label>РУ · лонг<input id="folder_ru_long"></label><label>РУ · Shorts<input id="folder_ru_shorts"></label><label>УЗ · лонг<input id="folder_uz_long"></label><label>УЗ · Shorts<input id="folder_uz_shorts"></label>
+<button id="saveDriveFolders">Сохранить папки</button></details></div>
 <div class="surface"><label>Папка результата на сервере<input id="outputFolder" readonly></label><button id="browseFolder" class="wide">Выбрать папку</button>
 <div id="folderBrowser" hidden><h3>Папки сервера</h3><p id="folderPath"></p><div class="mediaButtons"><button id="folderRoots">Диски</button><button id="folderUp">↑ Выше</button></div><div id="folders"></div><button id="folderMore" hidden>Ещё папки</button><button id="useFolder" class="primary wide">Выбрать эту папку</button><button id="closeFolders">Закрыть</button><p id="folderFree" class="hint"></p></div>
 <label>Имя видео<input id="outputName" value="Мой выпуск.mp4" maxlength="160"></label>
@@ -50,3 +62,4 @@
 <footer id="actions" hidden><button id="approve" class="primary">Подтвердить и далее</button><button id="remove" class="danger">Удалить</button><button id="pending">Проверить позже</button></footer>
 <nav id="navigation" aria-label="Разделы"><button id="processTab"><span>01</span>Процесс</button><button id="reviewTab"><span id="reviewBadge">02</span>Проверка</button><button id="exportTab"><span>03</span>Результат</button></nav>
 </body></html>
+

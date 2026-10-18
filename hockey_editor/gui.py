@@ -288,6 +288,8 @@ class App(EpisodeMixin,MatchMixin):
         telegram=ui.card(page,'Telegram и автоматизация','Общие уведомления для всех шаблонов. Автопереход к таймингам без спорных фрагментов.')
         from .notification_ui import show as notification_settings
         self.button(telegram,'Настроить уведомления',lambda:notification_settings(self)).pack(anchor='w')
+        from .drive_ui import show as drive_settings
+        self.button(telegram,'Google Диск · аккаунт и папки',lambda:drive_settings(self)).pack(anchor='w',pady=8)
         saved=ui.card(page,'Мои настройки','Шаблоны хранятся отдельно для русского хоккея, узбекского футбола и боёв.')
         self.presetbox=ttk.Combobox(saved,state='readonly');self.presetbox.pack(fill='x')
         row=ttk.Frame(saved);row.pack(fill='x',pady=6)
@@ -1201,6 +1203,7 @@ def launch():
     root = tk.Tk()
     App(root)
     root.mainloop()
+
 
 
 

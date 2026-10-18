@@ -9,6 +9,8 @@ class Bridge:
         self.app=app;self.gateway=None;self.commands=queue.Queue(maxsize=24);self.history=None
         self.jobs={};self.media_lock=threading.Lock();self.media_busy=False;self.closed=False
         self.instance=secrets.token_hex(16)
+        from .mini_results import Results
+        self.results=Results(self)
         from .mini_export import Export
         self.export=Export(self)
         from .mini_process import Process
@@ -21,6 +23,7 @@ class Bridge:
             except OSError:self.app.log_lines.append('Mini App: порт 18473 занят. Закройте второй экземпляр редактора и повторите включение.');raise ValueError('Mini App: порт 18473 занят. Закройте второй экземпляр редактора.') from None
     def close(self):
         self.closed=True
+        self.results.cancel.set()
         if self.gateway:self.gateway.close();self.gateway=None
     def request(self,kind,data):
         if self.closed:raise RemoteError('Редактор закрыт.',503)
@@ -215,6 +218,13 @@ class Bridge:
         threading.Thread(target=work,daemon=True).start()
         return dict(job=ident)
     def handle(self,kind,data):
+        if kind=='result-status':return self.results.status()
+        if kind=='result-stream':return self.results.media(data)
+        if kind=='drive-start':return self.results.start(data)
+        if kind=='drive-pause':return self.results.pause(data)
+        if kind=='drive-config':
+            from .drive_upload import save_config
+            return save_config(data)
         if kind=='process-status':return self.process.status()
         if kind=='process-start':return self.process.start(data)
         if kind=='process-cancel':return self.process.cancel(data)
@@ -236,6 +246,7 @@ class Bridge:
                 return dict(file=job['file'])
             return {k:v for k,v in job.items() if k not in ('file','revision','created')}
         raise RemoteError('Неизвестный запрос.',404)
+
 
 
 

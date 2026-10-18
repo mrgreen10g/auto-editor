@@ -102,6 +102,14 @@ def check():
                 click('#startExport')
                 expect(page.locator('#exportState')).to_have_text('Видео готово',timeout=60000)
                 assert (root/'Mobile export.mp4').stat().st_size>1000
+                click('#watchResult');page.locator('#resultVideo').wait_for(state='visible')
+                # Real authenticated range playback, without fetching the whole MP4 into a blob.
+                video=page.locator('#resultVideo')
+                video.evaluate('(v) => new Promise((resolve,reject) => { if(v.readyState>=1)return resolve(); v.onloadedmetadata=resolve; v.onerror=reject; })')
+                duration=video.evaluate('(v) => v.duration');assert .8<duration<1.2
+                video.evaluate('(v) => {v.currentTime=0.5}')
+                expect(page.locator('#driveChoice')).to_have_value('ru_long')
+                assert len(bridge.results.records())==1
                 page.screenshot(path=str(ROOT/'build/gui-mini-export.jpg'),full_page=True)
                 assert not errors,errors
                 browser.close()
@@ -109,5 +117,6 @@ def check():
     print('Mobile review, clip preview, audio, card image, persistence and undo: OK')
 
 if __name__=='__main__':check()
+
 
 

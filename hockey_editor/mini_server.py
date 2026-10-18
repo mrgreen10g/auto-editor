@@ -1,10 +1,23 @@
 """Loopback-only Telegram Mini App gateway. No unauthenticated project/media APIs."""
-import hashlib,hmac,json,mimetypes,secrets,threading,time
+import hashlib,hmac,json,mimetypes,secrets,threading,time,re,os
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qsl,urlsplit
 
 PORT=18473
+
+def byte_range(value,size):
+    if not value:return 0,size-1,False
+    match=re.fullmatch(r'bytes=(\d*)-(\d*)',value)
+    if not match or not any(match.groups()):raise RemoteError('Некорректный диапазон.',416)
+    a,b=match.groups()
+    if not a:
+        length=int(b)
+        if length<=0:raise RemoteError('Некорректный диапазон.',416)
+        start=max(0,size-length);end=size-1
+    else:start=int(a);end=min(size-1,int(b)) if b else size-1
+    if start>=size or start>end:raise RemoteError('Диапазон вне файла.',416)
+    return start,end,True
 
 class RemoteError(Exception):
     def __init__(self,message,status=400):super().__init__(message);self.status=status
@@ -34,7 +47,7 @@ def validate_url(value):
 
 class Gateway:
     def __init__(self,bridge,config,port=PORT):
-        self.bridge=bridge;self.config=dict(config);self.sessions={};self.lock=threading.Lock();self.attempts=[]
+        self.bridge=bridge;self.config=dict(config);self.sessions={};self.lock=threading.Lock();self.attempts=[];self.streams={}
         class BoundedServer(ThreadingHTTPServer):
             daemon_threads=True
             def __init__(self,*args):self.slots=threading.BoundedSemaphore(12);super().__init__(*args)
@@ -49,7 +62,7 @@ class Gateway:
         self.server.gateway=self
         self.thread=threading.Thread(target=self.server.serve_forever,daemon=True);self.thread.start()
     def close(self):
-        with self.lock:self.sessions.clear()
+        with self.lock:self.sessions.clear();self.streams.clear()
         threading.Thread(target=self.server.shutdown,daemon=True).start();self.server.server_close()
     def login(self,raw):
         with self.lock:
@@ -83,6 +96,29 @@ class Gateway:
                 try:
                     path=urlsplit(self.path).path
                     if len(self.path)>2048:raise RemoteError('Слишком длинный запрос.',414)
+                    if self.command in ('GET','HEAD') and path.startswith('/stream/'):
+                        with gateway.lock:ticket=gateway.streams.get(path.removeprefix('/stream/'))
+                        if not ticket or ticket['expires']<time.time():raise RemoteError('Обновите видео в Mini App.',401)
+                        gateway.authorize(ticket['authorization'])
+                        with Path(ticket['file']).open('rb') as source:
+                            stat=os.fstat(source.fileno())
+                            if [stat.st_size,stat.st_mtime_ns]!=ticket['identity']:raise RemoteError('Готовый файл изменился.',409)
+                            try:start,end,partial=byte_range(self.headers.get('Range',''),stat.st_size)
+                            except RemoteError:
+                                self.send_response(416);self.send_header('Content-Range',f'bytes */{stat.st_size}');self.send_header('Content-Length','0');self.end_headers();return
+                            self.send_response(206 if partial else 200)
+                            self.send_header('Content-Type','video/mp4');self.send_header('Accept-Ranges','bytes')
+                            self.send_header('Content-Length',str(end-start+1));self.send_header('Cache-Control','no-store')
+                            self.send_header('X-Content-Type-Options','nosniff');self.send_header('Referrer-Policy','no-referrer')
+                            if partial:self.send_header('Content-Range',f'bytes {start}-{end}/{stat.st_size}')
+                            self.end_headers()
+                            if self.command=='HEAD':return
+                            source.seek(start);remaining=end-start+1
+                            while remaining>0:
+                                chunk=source.read(min(65536,remaining))
+                                if not chunk:break
+                                self.wfile.write(chunk);remaining-=len(chunk)
+                        return
                     if self.command=='GET' and path in ('/','/app.js','/app.css'):
                         file=Path(__file__).with_name('mini_web')/({'/':'index.html','/app.js':'app.js','/app.css':'app.css'}[path])
                         return self.response(200,file.read_bytes(),{'/':'text/html; charset=utf-8','/app.js':'text/javascript; charset=utf-8','/app.css':'text/css; charset=utf-8'}[path])
@@ -96,8 +132,15 @@ class Gateway:
                     if not isinstance(data,dict):raise RemoteError('Нужен объект JSON.')
                     if path=='/api/auth':return self.response(200,{'session':gateway.login(data.get('initData'))})
                     gateway.authorize(self.headers.get('Authorization',''))
-                    if path not in ('/api/process-status','/api/process-start','/api/process-cancel','/api/process-config','/api/export-status','/api/folders','/api/export-start','/api/export-cancel','/api/state','/api/item','/api/action','/api/prepare','/api/job','/api/media'):raise RemoteError('Не найдено.',404)
+                    if path not in ('/api/result-status','/api/result-stream','/api/drive-config','/api/drive-start','/api/drive-pause','/api/process-status','/api/process-start','/api/process-cancel','/api/process-config','/api/export-status','/api/folders','/api/export-start','/api/export-cancel','/api/state','/api/item','/api/action','/api/prepare','/api/job','/api/media'):raise RemoteError('Не найдено.',404)
                     result=gateway.bridge.request(path.removeprefix('/api/'),data)
+                    if path=='/api/result-stream':
+                        with gateway.lock:
+                            now=time.time();gateway.streams={k:v for k,v in gateway.streams.items() if v['expires']>now}
+                            while len(gateway.streams)>=32:gateway.streams.pop(next(iter(gateway.streams)))
+                            token=secrets.token_urlsafe(32)
+                            gateway.streams[token]=dict(result,expires=now+1800,authorization=self.headers.get('Authorization',''))
+                        return self.response(200,{'url':'/stream/'+token})
                     if path=='/api/media':
                         file=Path(result['file'])
                         if file.stat().st_size>32*1024*1024:raise RemoteError('Превью слишком большое.')
@@ -108,7 +151,9 @@ class Gateway:
                 except (BrokenPipeError,ConnectionResetError,TimeoutError):pass
                 except Exception:self.response(500,{'error':'Ошибка сервиса. Проверьте редактор на сервере.'})
             do_GET=handle_request
+            do_HEAD=handle_request
             do_POST=handle_request
         return Handler
+
 
 
