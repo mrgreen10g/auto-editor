@@ -7,6 +7,14 @@ from hockey_editor import notifications as n
 def config():return dict(enabled=True,auto_timing=True,token='123:secret',chat_id='1234',events=list(n.EVENTS))
 
 class NotificationTests(unittest.TestCase):
+    def test_buttons_target_the_matching_mobile_page(self):
+        settings=config();settings.update(mini_enabled=True,mini_url='https://server.test.ts.net')
+        for page in ('process','cards','clips','export','review'):
+            with patch.object(n,'api') as api:
+                n.send(dict(settings,_mini_page=page),'hello')
+                button=api.call_args.args[2]['reply_markup']['inline_keyboard'][0][0]
+                self.assertEqual(button['web_app']['url'],settings['mini_url']+'?view='+page)
+
     def test_tls_bundle_keeps_verification_enabled(self):
         import ssl
         context=n.tls_context()
@@ -74,3 +82,4 @@ class NotificationTests(unittest.TestCase):
     def test_windows_secret(self):
         data=b'test-not-a-real-bot-token';cipher=n.protect(data)
         self.assertNotEqual(cipher,data);self.assertEqual(n.protect(cipher,True),data)
+

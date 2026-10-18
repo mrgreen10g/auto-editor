@@ -1025,7 +1025,7 @@ class App(EpisodeMixin,MatchMixin):
                 return
             if Path(target).exists():
                 return messagebox.showinfo('Выберите новое имя', 'Чтобы сохранить предыдущий результат, укажите новое имя MP4.')
-        if remote and (not target or Path(target).exists()):raise ValueError('Выберите новое имя файла.')
+        if remote and render and (not target or Path(target).exists()):raise ValueError('Выберите новое имя файла.')
         self.remote_render=remote
         self.invalidate()
         self.log_lines = []
@@ -1101,6 +1101,7 @@ class App(EpisodeMixin,MatchMixin):
             while True:
                 kind, value = self.jobs.get_nowait()
                 if hasattr(self,'mini'):self.mini.export.event(kind,value)
+                if hasattr(self,'mini') and kind!='done':self.mini.process.event(kind,value)
                 if self.handle_match_job(kind, value):
                     continue
                 if kind == 'log':
@@ -1163,6 +1164,7 @@ class App(EpisodeMixin,MatchMixin):
                     elif self.stage == 'analyze':
                         self.show_page('review')
                     self.remote_render=False
+                    if hasattr(self,'mini'):self.mini.process.event('done',None)
                     if self.stage=='goals':
                         from .notifications import continue_timing
                         continue_timing(self)
@@ -1199,6 +1201,7 @@ def launch():
     root = tk.Tk()
     App(root)
     root.mainloop()
+
 
 
 

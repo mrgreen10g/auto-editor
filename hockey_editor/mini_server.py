@@ -96,7 +96,7 @@ class Gateway:
                     if not isinstance(data,dict):raise RemoteError('Нужен объект JSON.')
                     if path=='/api/auth':return self.response(200,{'session':gateway.login(data.get('initData'))})
                     gateway.authorize(self.headers.get('Authorization',''))
-                    if path not in ('/api/export-status','/api/folders','/api/export-start','/api/export-cancel','/api/state','/api/item','/api/action','/api/prepare','/api/job','/api/media'):raise RemoteError('Не найдено.',404)
+                    if path not in ('/api/process-status','/api/process-start','/api/process-cancel','/api/process-config','/api/export-status','/api/folders','/api/export-start','/api/export-cancel','/api/state','/api/item','/api/action','/api/prepare','/api/job','/api/media'):raise RemoteError('Не найдено.',404)
                     result=gateway.bridge.request(path.removeprefix('/api/'),data)
                     if path=='/api/media':
                         file=Path(result['file'])
@@ -110,4 +110,5 @@ class Gateway:
             do_GET=handle_request
             do_POST=handle_request
         return Handler
+
 

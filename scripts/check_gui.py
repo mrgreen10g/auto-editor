@@ -119,6 +119,14 @@ def check():
                 drain()
             assert app.result == target and app.page == 'export'
             assert str(app.previewbutton.cget('state')) == 'normal'
+            with patch('hockey_editor.gui.filedialog.asksaveasfilename',side_effect=AssertionError('remote dialog')):
+                app.start(False,remote=True);drain()
+                assert app.plan is not None
+                assert app.mini.process.job['status']=='completed',app.mini.process.job
+                app.mini.export.start(dict(revision=app.mini.revision(),request='mobile-gui-export',folder=str(tmp),name='mobile-gui.mp4'))
+                drain()
+                assert app.mini.export.job['status']=='completed'
+                assert (tmp/'mobile-gui.mp4').is_file()
         app.script.insert('end', '\nЕщё одна фраза.')
         root.update()
         assert app.plan is None and app.result is None
@@ -552,5 +560,6 @@ def check():
 
 if __name__ == '__main__':
     check()
+
 
 

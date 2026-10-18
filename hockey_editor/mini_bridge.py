@@ -11,6 +11,8 @@ class Bridge:
         self.instance=secrets.token_hex(16)
         from .mini_export import Export
         self.export=Export(self)
+        from .mini_process import Process
+        self.process=Process(self)
     def configure(self):
         if self.gateway:self.gateway.close();self.gateway=None
         config=self.app.notifier.config
@@ -135,7 +137,7 @@ class Bridge:
     def action(self,data):
         app=self.app;self.check_revision(data)
         if self.locked():raise RemoteError('Сейчас идёт обработка или открыто окно правок на ПК. Дождитесь окончания или закройте окно.',409)
-        before=(copy.deepcopy(app.project),copy.deepcopy(app.plan));old_result=app.result
+        before=(copy.deepcopy(app.project),copy.deepcopy(app.plan));old_result=app.result;auto_candidate=False
         try:
             if data.get('decision')=='undo':
                 if not self.history or self.history['after']!=self.revision():raise RemoteError('Отмена недоступна: проект изменился.',409)
@@ -153,6 +155,7 @@ class Bridge:
                     next(t for t in plan.review_items if t['id']==first['id'])['recognized']=str(data.get('recognized',first.get('recognized','')))[:8000]
                     app.display_plan(plan)
                 else:
+                    auto_candidate=first.uid in {b.uid for b in self.process.blocks()} and not second.skipped and (not second.selection or not second.selection.accepted)
                     if decision=='confirmed':
                         source,selection=self.selection(first,second,data);second.source_id=source.id;second.selection=selection;second.skipped=False
                     elif decision=='deleted':second.skipped=True
@@ -164,6 +167,8 @@ class Bridge:
             app.result=None
             saved=self.checkpoint()
             self.history=None if data.get('decision')=='undo' else dict(before=before,after=self.revision())
+            if auto_candidate and data.get('decision') in ('confirmed','deleted'):
+                self.process.approved('clip')
             return dict(ok=True,saved=saved,revision=self.revision())
         except Exception:
             app.project,app.plan=before;app.result=old_result;app.refresh()
@@ -205,6 +210,10 @@ class Bridge:
         threading.Thread(target=work,daemon=True).start()
         return dict(job=ident)
     def handle(self,kind,data):
+        if kind=='process-status':return self.process.status()
+        if kind=='process-start':return self.process.start(data)
+        if kind=='process-cancel':return self.process.cancel(data)
+        if kind=='process-config':return self.process.configure(data)
         if kind=='export-status':return self.export.status()
         if kind=='folders':return self.export.browse(data)
         if kind=='export-start':return self.export.start(data)
@@ -222,4 +231,5 @@ class Bridge:
                 return dict(file=job['file'])
             return {k:v for k,v in job.items() if k not in ('file','revision','created')}
         raise RemoteError('Неизвестный запрос.',404)
+
 

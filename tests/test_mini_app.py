@@ -27,6 +27,8 @@ def app_fixture(root):
     def display(plan):app.plan=plan;app.project.blocks[0].edit_plan=plan.to_dict()
     def invalidate():app.plan=None;app.result=None
     app.display_plan=display;app.invalidate=invalidate
+    app.notifier=SimpleNamespace(config={'auto_timing':False,'mini_enabled':True})
+    app.root.after=Mock();app.cancel=threading.Event()
     return app
 
 class MiniAuthTests(unittest.TestCase):
@@ -48,7 +50,7 @@ class MiniAuthTests(unittest.TestCase):
             return urlopen(Request(base+path,data=json.dumps(data).encode(),headers=headers),timeout=3)
         try:
             with urlopen(base) as response:self.assertIn(b'AUTO EDITOR',response.read())
-            for path in ('/api/state','/api/media','/api/action'):
+            for path in ('/api/state','/api/media','/api/action','/api/process-start','/api/process-cancel','/api/process-config'):
                 with self.assertRaises(HTTPError) as error:post(path,{})
                 self.assertEqual(error.exception.code,401)
             bridge.request.assert_not_called()
@@ -103,3 +105,4 @@ class MiniReviewTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             bridge=Bridge(app_fixture(Path(d)));event=threading.Event();command=dict(kind='action',data={},deadline=0,event=event)
             bridge.commands.put(command);bridge.drain();self.assertTrue(event.is_set());self.assertIn('error',command)
+

@@ -2,3 +2,5 @@
 
 
 #exportPanel progress{width:100%;height:16px;accent-color:var(--accent)}#exportJob,#folderBrowser{padding:16px;margin-top:16px;background:var(--panel);border-radius:12px}#exportError{color:#ffb1aa}#exportTarget{font-size:14px}#folders{max-height:300px;overflow:auto}
+#processSteps{background:var(--panel);border-radius:12px;padding:12px}#processSteps p{display:flex;justify-content:space-between;gap:12px;margin:8px 0}#processSteps span{color:var(--accent);text-align:right}#processProgress{width:100%;accent-color:var(--accent)}#processError{color:#ffb1aa;white-space:pre-wrap}#processLog{white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.5 system-ui}
+

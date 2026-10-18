@@ -2,6 +2,7 @@
 const $=id=>document.getElementById(id),tg=window.Telegram?.WebApp;
 let session='',state=null,current=null,detail=null,kind='card',waiting=false,blob=null;
 let pageMode='review',exportState=null,folderState=null,exportRequest='';
+let processState=null,processRequest='';
 function notice(text){$('notice').textContent=text}
 async function api(route,data={},raw=false){
  const response=await fetch('/api/'+route,{method:'POST',headers:{'Content-Type':'application/json',...(session?{Authorization:'Bearer '+session}:{})},body:JSON.stringify(data),cache:'no-store'});
@@ -60,13 +61,14 @@ async function prepare(mode){
  throw new Error('Подготовка занимает больше времени. Обновите список и повторите позже.');
 }
 async function guard(fn){if(waiting)return;waiting=true;document.body.dataset.busy='true';buttons();try{await fn()}catch(error){notice(error.message||'Нет связи с сервером. Проверьте подключение.')}finally{waiting=false;document.body.dataset.busy='false';buttons()}}
-$('refresh').onclick=()=>guard(async()=>{back();await refresh();if(!state.locked)notice('Список обновлён.')});$('back').onclick=()=>guard(async()=>{back();await refresh()});
+$('refresh').onclick=()=>guard(async()=>{back();await refreshPage();notice('Данные обновлены.')});$('back').onclick=()=>guard(async()=>{back();await refresh()});
 $('clips').onclick=()=>{kind='clip';renderList()};$('cards').onclick=()=>{kind='card';renderList()};$('all').onchange=renderList;$('choice').onchange=choice;
 for(const [id,decision] of [['approve','confirmed'],['remove','deleted'],['pending','pending']])$(id).onclick=()=>guard(()=>decide(decision));
 for(const [id,mode] of [['preview','clip'],['voice','voice'],['art','art'],['translate','translation']])$(id).onclick=()=>guard(()=>prepare(mode));
 $('undo').onclick=()=>guard(async()=>{await api('action',{revision:state.revision,decision:'undo'});back();await refresh();notice('Последнее решение отменено и сохранено.')});
-guard(async()=>{tg?.ready();tg?.expand();if(!tg?.initData)throw new Error('Откройте это приложение кнопкой в личном чате со своим Telegram-ботом.');session=(await api('auth',{initData:tg.initData})).session;await refresh();notice('Подключено к редактору.');});
-setInterval(()=>{if(session&&!waiting&&!current)guard(pageMode==='export'?refreshExport:refresh)},3000);
+guard(async()=>{tg?.ready();tg?.expand();if(!tg?.initData)throw new Error('Откройте это приложение кнопкой в личном чате со своим Telegram-ботом.');session=(await api('auth',{initData:tg.initData})).session;const page=new URLSearchParams(location.search).get('view');if(page==='clips')kind='clip';if(page==='cards')kind='card';await refresh();if(page==='process'||page==='export')await switchPage(page);notice('Подключено к редактору.');});
+async function refreshPage(){if(pageMode==='process')await refreshProcess();else if(pageMode==='export')await refreshExport();else await refresh()}
+setInterval(()=>{if(session&&!waiting&&!current)guard(refreshPage)},3000);
 
 
 async function refreshExport(){
@@ -85,7 +87,7 @@ async function refreshExport(){
   if(job.progress===null)$('exportProgress').removeAttribute('value');else $('exportProgress').value=job.progress;
  }
 }
-async function switchPage(mode){pageMode=mode;back();$('list').hidden=mode!=='review';$('exportPanel').hidden=mode!=='export';$('reviewTab').classList.toggle('active',mode==='review');$('exportTab').classList.toggle('active',mode==='export');if(mode==='export')await refreshExport();else await refresh();window.scrollTo(0,0)}
+async function switchPage(mode){pageMode=mode;back();$('list').hidden=mode!=='review';$('exportPanel').hidden=mode!=='export';$('processPanel').hidden=mode!=='process';for(const name of ['review','export','process'])$(name+'Tab').classList.toggle('active',mode===name);await refreshPage();window.scrollTo(0,0)}
 async function browse(path='',offset=0){
  const data=await api('folders',{path,offset});folderState=data;$('folderBrowser').hidden=false;$('folderPath').textContent=data.path||'Диски сервера';if(!offset)$('folders').replaceChildren();
  for(const item of data.folders){const b=document.createElement('button');b.className='item';b.textContent='📁 '+item.name;b.onclick=()=>guard(()=>browse(item.path));$('folders').append(b)}
@@ -105,3 +107,31 @@ $('startExport').onclick=()=>guard(async()=>{
  exportRequest='';await refreshExport();notice('Рендер запущен на сервере. Telegram можно закрыть.');
 });
 $('cancelExport').onclick=()=>guard(async()=>{if(!confirm('Остановить текущий рендер?'))return;await api('export-cancel',{job:exportState.job.id});await refreshExport()});
+
+async function refreshProcess(){
+ processState=await api('process-status');const s=processState,j=s.job;
+ $('processScope').textContent=s.scope;$('processNext').textContent='Следующий шаг: '+s.next;
+ $('processSteps').replaceChildren();
+ for(const step of s.steps){const row=document.createElement('p'),name=document.createElement('strong'),value=document.createElement('span');name.textContent=step.name;value.textContent=step.state;row.append(name,value);$('processSteps').append(row)}
+ $('autoTiming').checked=s.auto_timing;$('findClips').disabled=!s.can_goals;$('findTimings').disabled=!s.can_analyze;$('processRender').disabled=!s.can_render;
+ $('cancelProcess').hidden=!s.can_cancel;$('processReview').textContent=`Проверить: видео ${s.clips}, плашки ${s.cards}`;
+ $('processState').textContent=j?({running:'Идёт обработка',cancelling:'Остановка',completed:'Этап завершён',cancelled:'Отменено',error:'Нужен повторный запуск',review:'Нужна проверка'})[j.status]:'';
+ $('processMessage').textContent=j?.message||s.message;$('processError').textContent=j?.error||'';
+ $('processElapsed').textContent=j?'Прошло: '+Math.floor(j.elapsed/60)+' мин '+j.elapsed%60+' с':'';
+ $('processProgress').hidden=!s.busy;if(j?.progress===null||!j)$('processProgress').removeAttribute('value');else $('processProgress').value=j.progress;
+ $('processLog').textContent=s.log.join('\n');
+}
+async function startProcess(stage){
+ await refreshProcess();if(!processState['can_'+stage])throw new Error('Этап пока недоступен. Завершите проверку или текущую обработку.');
+ const prompt=stage==='goals'?'Запустить поиск фрагментов? При повторном подборе существующие вставки и правки дорожки могут быть заменены.':'Запустить поиск таймингов и плашек?';
+ if(!confirm(prompt+'\n'+processState.scope))return;
+ if(!processRequest)processRequest=crypto.randomUUID();
+ try{await api('process-start',{stage,revision:processState.revision,request:processRequest,replace:stage==='goals'})}catch(error){if(error.status)processRequest='';throw error}
+ processRequest='';await refreshProcess();notice('Этап запущен на сервере. Telegram можно закрыть.');
+}
+$('processTab').onclick=()=>guard(()=>switchPage('process'));
+$('findClips').onclick=()=>guard(()=>startProcess('goals'));$('findTimings').onclick=()=>guard(()=>startProcess('analyze'));
+$('autoTiming').onchange=()=>guard(async()=>{const value=$('autoTiming').checked;try{await api('process-config',{revision:processState.revision,auto_timing:value})}finally{await refreshProcess()}});
+$('processReview').onclick=()=>guard(async()=>{kind=processState.clips?'clip':'card';await switchPage('review')});$('processRender').onclick=()=>guard(()=>switchPage('export'));
+$('cancelProcess').onclick=()=>guard(async()=>{if(!confirm('Остановить текущий этап? Автоматическое продолжение будет отменено.'))return;await api('process-cancel',{job:processState.job.id});await refreshProcess()});
+

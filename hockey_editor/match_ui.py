@@ -191,15 +191,20 @@ class MatchMixin:
             finally: self.jobs.put(('done', None))
         self.worker = threading.Thread(target=wrapped, daemon=True); self.worker.start()
 
-    def search_matches(self):
-        if self.busy: return
-        if self.scope.get()=="Все разборы":return self.search_episode_matches()
+    def search_matches(self,remote=False,replace=False):
+        if self.busy:
+            if remote:raise ValueError('Уже идёт обработка.')
+            return
+        if self.scope.get()=="Все разборы":return self.search_episode_matches(remote=remote,replace=replace)
         self.collect(); block = self.project.blocks[self.index]
         if not block.match_ids or len(block.script.strip()) < 30:
+            if remote:raise ValueError('Добавьте исходную запись матча и сценарий разбора.')
             return messagebox.showinfo('Материалы', 'Добавьте исходную запись матча и сценарий разбора.')
         if block.events and any(e.selection and e.selection.accepted for e in block.events):
-            if not messagebox.askyesno('Повторить поиск', 'Заново подобрать эпизоды? Выбор эпизодов и правки дорожки этого разбора будут заменены; сохранённое видео останется.'):
+            if remote and not replace:raise ValueError('Подтвердите замену найденных вставок.')
+            if not remote and not messagebox.askyesno('Повторить поиск', 'Заново подобрать эпизоды? Выбор эпизодов и правки дорожки этого разбора будут заменены; сохранённое видео останется.'):
                 return
+        self.remote_render=remote
         events = requests_for(block, self.project.matches, self.project.settings.use_manual_clips)
         if not events:
             block.events=[]
@@ -210,7 +215,10 @@ class MatchMixin:
             self.review_summary.set('Поиск завершён · нет запросов на игровые вставки')
             self.review_note.set(EMPTY_SEARCH_NOTE);self.status.set(EMPTY_SEARCH_NOTE)
             from .notifications import begin,clips_finished,continue_timing
-            begin(self,'goals');clips_finished(self,[]);continue_timing(self)
+            self.cancel.clear();self.stage='goals'
+            begin(self,'goals');clips_finished(self,[])
+            if hasattr(self,'mini'):self.mini.process.event('done',None)
+            continue_timing(self)
             return
         sources = copy.deepcopy([m for m in self.project.matches if m.id in block.match_ids])
         allow_other = self.project.settings.allow_other_matches
@@ -228,16 +236,21 @@ class MatchMixin:
             self.jobs.put(('goals', (propose_events(events, scans, sources, allow_other), scans, errors)))
         self.match_job('goals', work)
 
-    def search_episode_matches(self):
+    def search_episode_matches(self,remote=False,replace=False):
         self.collect()
         blocks=copy.deepcopy(self.project.blocks)
         pending=[b for b in blocks if needs_search(b,self.project.matches,self.project.settings.use_manual_clips)]
         if not pending:
-            if not messagebox.askyesno('Повторить поиск','Заменить подбор эпизодов и заново сформировать дорожки всех разборов?'):return
+            if remote and not replace:raise ValueError('Подтвердите повторный подбор эпизодов.')
+            if not remote and not messagebox.askyesno('Повторить поиск','Заменить подбор эпизодов и заново сформировать дорожки всех разборов?'):return
             pending=[b for b in blocks if b.match_ids]
-        if not pending:return messagebox.showinfo('Материалы','Добавьте исходные матчи к разборам.')
+        if not pending:
+            if remote:raise ValueError('Добавьте исходные матчи к разборам.')
+            return messagebox.showinfo('Материалы','Добавьте исходные матчи к разборам.')
         if any(len(b.script.strip())<30 for b in pending):
+            if remote:raise ValueError('Добавьте сценарий к каждому разбору перед поиском.')
             return messagebox.showinfo('Материалы','Добавьте сценарий к каждому разбору перед поиском.')
+        self.remote_render=remote
         manual=self.project.settings.use_manual_clips;allow=self.project.settings.allow_other_matches
         requests={b.uid:requests_for(b,self.project.matches,manual) for b in pending}
         ids={mid for b in pending if requests[b.uid] for mid in b.match_ids}
@@ -453,4 +466,5 @@ class MatchMixin:
 def propose_events(events, scans, sources=(), allow_other=False):
     from .goals import propose
     return propose(events, scans, sources, allow_other)
+
 

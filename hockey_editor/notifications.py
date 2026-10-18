@@ -93,7 +93,10 @@ def send(config,text):
     validate(config)
     payload={'chat_id':config['chat_id'],'text':text[:4000]}
     if config.get('mini_enabled') and config.get('mini_url'):
-        payload['reply_markup']={'inline_keyboard':[[{'text':'Открыть проверку','web_app':{'url':config['mini_url']}}]]}
+        page=config.get('_mini_page','review')
+        if page not in ('review','process','export','clips','cards'):page='review'
+        label={'review':'Открыть проверку','process':'Посмотреть процесс','export':'Открыть результат','clips':'Проверить видео-вставки','cards':'Проверить плашки'}[page]
+        payload['reply_markup']={'inline_keyboard':[[{'text':label,'web_app':{'url':config['mini_url']+'?view='+page}}]]}
     return api(config['token'],'sendMessage',payload)
 
 class Notifier:
@@ -101,6 +104,7 @@ class Notifier:
         self.config=load();self.report=report;self.queue=queue.Queue(maxsize=64);self.seen=set();self.lock=threading.Lock();self.worker=None
     def emit(self,job,event,text):
         config=dict(self.config)
+        config['_mini_page']={'started':'process','render':'export','error':'process','cancelled':'process','clips':'clips','cards':'cards'}.get(event,'review')
         if not config['enabled'] or event not in config['events']:return
         key=(job,event)
         with self.lock:
@@ -131,6 +135,7 @@ def begin(app,stage):
     app.notification_job=uuid.uuid4().hex
     app.notification_title=(Path(app.project_path).stem if app.project_path else Path(app.project.host).stem or 'Выпуск')+' · '+app.project.profile
     app.notification_started=time.monotonic();app.auto_timing_ready=False
+    if hasattr(app,'mini'):app.mini.process.begin(stage)
     emit(app,'started',{'goals':'Поиск фрагментов начат.','analyze':'Поиск таймингов и плашек начат.','render':'Подготовка и рендер начаты.'}.get(stage,stage))
 
 def emit(app,event,text):
@@ -146,8 +151,12 @@ def clips_finished(app,errors):
     count=sum(len(unresolved(b)) for b in blocks)
     incomplete=any(needs_search(b,app.project.matches,app.project.settings.use_manual_clips) for b in blocks)
     app.auto_timing_ready=bool(blocks) and not errors and not count and not incomplete and not app.cancel.is_set()
+    if hasattr(app,'mini'):app.mini.process.clips_finished(errors)
     emit(app,'attention' if errors or count or incomplete else 'clips',f'Поиск фрагментов завершён. Требуют проверки: {count}.'+(' Есть ошибки поиска; откройте журнал на сервере.' if errors or incomplete else ''))
 
 def continue_timing(app):
+    if hasattr(app,'mini') and app.notifier.config.get('mini_enabled'):
+        app.auto_timing_ready=False;app.mini.process.maybe_auto();return
     ready=getattr(app,'auto_timing_ready',False);app.auto_timing_ready=False
     if ready and not app.cancel.is_set() and app.notifier.config.get('auto_timing',True):app.start(False)
+

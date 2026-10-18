@@ -49,6 +49,17 @@ def check():
                 page.screenshot(path=str(ROOT/'build/gui-mini-clip.jpg'),full_page=True)
                 click('#approve');page.locator('#list').wait_for(state='visible')
                 assert app.project.blocks[0].events[0].selection.accepted
+                # A separate timing launch must work without an output filename/dialog.
+                page.on('dialog',lambda dialog:dialog.accept())
+                timing_calls=[]
+                def timing_start(render,remote=False):
+                    assert not render and remote;timing_calls.append(True);app.stage='analyze'
+                    bridge.process.begin('analyze');bridge.process.event('plan',None);bridge.process.event('done',None)
+                app.start=timing_start
+                click('#processTab');expect(page.locator('#findTimings')).to_be_enabled()
+                click('#findTimings');assert timing_calls==[True]
+                expect(page.locator('#processState')).to_have_text('Этап завершён')
+                page.screenshot(path=str(ROOT/'build/gui-mini-process.jpg'),full_page=True)
                 # Browser output-folder picker -> authenticated start -> real MP4 -> status.
                 app.cancel=threading.Event()
                 def render_start(render,target=None,remote=False):
@@ -65,7 +76,6 @@ def check():
                 click('#exportTab');page.locator('#outputFolder').wait_for()
                 click('#browseFolder');page.locator('#useFolder').wait_for()
                 click('#useFolder');page.locator('#outputName').fill('Mobile export.mp4')
-                page.on('dialog',lambda dialog:dialog.accept())
                 click('#startExport')
                 expect(page.locator('#exportState')).to_have_text('Видео готово',timeout=60000)
                 assert (root/'Mobile export.mp4').stat().st_size>1000
@@ -76,3 +86,4 @@ def check():
     print('Mobile review, clip preview, audio, card image, persistence and undo: OK')
 
 if __name__=='__main__':check()
+
