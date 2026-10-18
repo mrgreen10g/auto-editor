@@ -105,7 +105,15 @@ def check():
                 click('#watchResult');page.locator('#resultVideo').wait_for(state='visible')
                 # Real authenticated range playback, without fetching the whole MP4 into a blob.
                 video=page.locator('#resultVideo')
-                video.evaluate('(v) => new Promise((resolve,reject) => { if(v.readyState>=1)return resolve(); v.onloadedmetadata=resolve; v.onerror=reject; })')
+                # Mobile browsers may defer preload until playback is requested.
+                video.evaluate('(v) => { v.play().catch(() => {}); }')
+                import time
+                deadline=time.monotonic()+30
+                while time.monotonic()<deadline:
+                    media=video.evaluate('(v) => ({ready:v.readyState,error:v.error?.message,network:v.networkState})')
+                    if media['ready']>=1 or media.get('error'):break
+                    page.wait_for_timeout(100)
+                assert media['ready']>=1,media
                 duration=video.evaluate('(v) => v.duration');assert .8<duration<1.2
                 video.evaluate('(v) => {v.currentTime=0.5}')
                 expect(page.locator('#driveChoice')).to_have_value('ru_long')
