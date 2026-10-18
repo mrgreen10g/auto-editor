@@ -80,14 +80,16 @@ class Bridge:
         for block in app.project.blocks:
             for i,event in enumerate(block.events):
                 status='deleted' if event.skipped else 'confirmed' if event.selection and event.selection.accepted else 'pending'
-                items.append(dict(id=f'clip:{block.uid}:{i}',kind='clip',title=block.title,text=event.phrase,status=status))
+                items.append(dict(id=f'clip:{block.uid}:{i}',kind='clip',title=block.title,text=event.phrase,status=status,block=block.uid,block_title=block.title,category='Видео-вставка'))
         if app.plan:
             from .review import update_task_times,describe_card
             update_task_times(app.plan)
             for task in app.plan.review_items:
                 card=next((c for c in app.plan.cards if c.review_id==task['id']),None)
                 title,where=describe_card(card,task,app.project,app.plan)
-                items.append(dict(id='card:'+task['id'],kind='card',title=title+' · '+where,text=card.text if card else task['script'],status=task['status']))
+                owner=next((b.title for b in [app.project.intro,*app.project.blocks,app.project.outro] if b.uid==task.get('block_id')),None)
+                if not owner:owner=next((s.get('title','Разбор') for s in app.plan.sections if s.get('block_id')==task.get('block_id')),'Начало / завершение')
+                items.append(dict(id='card:'+task['id'],kind='card',title=title+' · '+where,text=card.text if card else task['script'],status=task['status'],block=task.get('block_id','framing'),block_title=owner,category=title))
         return dict(revision=self.revision(),title=Path(app.project_path or app.project.host or 'Выпуск').stem,profile=app.project.profile,items=items,busy=app.busy,locked=self.locked(),stage=app.status.get(),undo=bool(self.history and self.history['after']==self.revision()),saved=bool(app.project_path),scope='Весь выпуск' if app.project.whole_episode else 'Плашки текущего разбора')
     def options(self,block,event):
         from .goals import source_signature,scan_root
@@ -188,6 +190,9 @@ class Bridge:
             spec=dict(mode=mode,spans=slice_media(media,a,b))
         elif mode=='art' and data['id'].startswith('card:') and second:
             spec=dict(mode=mode,card=copy.deepcopy(second),profile=app.project.profile,logos=copy.deepcopy(app.project.team_logos))
+        elif mode=='context' and data['id'].startswith('card:') and second:
+            from .mini_preview import snapshot
+            spec=snapshot(app.project,app.plan,app.index,first,second,data)
         elif mode=='translation':
             from .review_translation import installed,model_folder
             if not installed(model_folder()):raise RemoteError('Модель перевода ещё не установлена. Один раз нажмите «Перевод на русский» в редакторе и завершите установку.')
@@ -231,5 +236,6 @@ class Bridge:
                 return dict(file=job['file'])
             return {k:v for k,v in job.items() if k not in ('file','revision','created')}
         raise RemoteError('Неизвестный запрос.',404)
+
 
 

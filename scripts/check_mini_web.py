@@ -13,6 +13,7 @@ from playwright.sync_api import sync_playwright,expect
 def check():
     with tempfile.TemporaryDirectory() as d:
         root=Path(d);app=app_fixture(root)
+        app.project.blocks[0].script+=' В этом матче команда уверенно сыграла в атаке.'
         run(['-y','-f','lavfi','-i','color=c=0x248875:s=640x360:r=24:d=8','-f','lavfi','-i','sine=frequency=440:duration=8','-c:v','libx264','-preset','ultrafast','-c:a','aac','-shortest',app.project.host])
         source=MatchSource(app.project.host,'СКА','Лада');app.project.matches=[source];block=app.project.blocks[0];block.match_ids=[source.id]
         block.events=[EventRequest(source.id,'Команда забила три гола.',selection=EventSelection('test',1,4,2,source_signature(source),False))]
@@ -33,9 +34,18 @@ def check():
                 errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
                 script='window.Telegram={WebApp:{initData:'+json.dumps(signed())+',ready(){},expand(){}}};'
                 page.route('https://telegram.org/js/telegram-web-app.js',lambda r:r.fulfill(content_type='text/javascript',body=script))
-                page.goto(base);page.locator('.item').first.wait_for();click('.item >> nth=0')
+                page.goto(base+'?view=cards');page.locator('.item').first.wait_for()
+                page.locator('#blockFilter').select_option(block.uid)
+                page.locator('#typeFilter').select_option(label='Статистика')
+                assert page.locator('#items .item').count()==1
+                click('.item >> nth=0')
                 page.locator('#approve').wait_for();box=page.locator('#approve').bounding_box();assert box['y']+box['height']<=844
-                click('#art');page.locator('#image').wait_for(state='visible',timeout=60000)
+                click('#context');page.locator('#video').wait_for(state='visible',timeout=60000)
+                context_files=list((root/'mobile-previews').glob('*.mp4'));assert context_files
+                from hockey_editor.media import probe
+                info=probe(context_files[0]);assert info['video'] and info['audio'] and 4.8<info['duration']<5.2
+                assert app.plan.cards[0].start==1 and app.plan.duration==8
+                click('#timingDetails summary');click('#art');page.locator('#image').wait_for(state='visible',timeout=60000)
                 click('#voice');page.locator('#audio').wait_for(state='visible',timeout=60000)
                 page.locator('#text').fill('Четыре гола');click('#approve')
                 page.locator('#list').wait_for(state='visible');expect(page.locator('#undo')).to_be_enabled()
@@ -57,7 +67,8 @@ def check():
                     bridge.process.begin('analyze');bridge.process.event('plan',None);bridge.process.event('done',None)
                 app.start=timing_start
                 click('#processTab');expect(page.locator('#findTimings')).to_be_enabled()
-                click('#findTimings');assert timing_calls==[True]
+                expect(page.locator('#primaryAction')).to_have_text('Найти тайминги и плашки')
+                click('#primaryAction');assert timing_calls==[True]
                 expect(page.locator('#processState')).to_have_text('Этап завершён')
                 page.screenshot(path=str(ROOT/'build/gui-mini-process.jpg'),full_page=True)
                 # Browser output-folder picker -> authenticated start -> real MP4 -> status.
@@ -86,4 +97,5 @@ def check():
     print('Mobile review, clip preview, audio, card image, persistence and undo: OK')
 
 if __name__=='__main__':check()
+
 

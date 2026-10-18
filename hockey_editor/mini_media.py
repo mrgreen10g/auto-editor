@@ -7,6 +7,9 @@ def generate(spec,cache,ident):
     for path in cache.iterdir():
         if path.is_file() and path.suffix in ('.mp4','.m4a','.png') and time.time()-path.stat().st_mtime>86400:path.unlink(missing_ok=True)
     mode=spec['mode'];target=cache/(ident+('.png' if mode=='art' else '.m4a' if mode=='voice' else '.mp4'))
+    if mode=='context':
+        from .mini_preview import render
+        return render(spec,cache,ident)
     if mode=='translation':
         from .review_translation import translate
         return dict(texts=translate(spec['texts'],cache,threading.Event(),lambda _:None))

@@ -1,33 +1,52 @@
-<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Auto Editor · Проверка</title><link rel="stylesheet" href="/app.css"><script src="https://telegram.org/js/telegram-web-app.js"></script><script defer src="/app.js"></script></head><body>
-<header><small>AUTO EDITOR · НА СЕРВЕРЕ</small><h1>Auto Editor · 0.8</h1><p id="title">Подключение…</p></header>
-<div id="notice" role="status"></div><nav><button id="refresh">Обновить</button><button id="undo">Отменить решение</button></nav>
-<nav><button id="processTab">Процесс</button><button id="reviewTab" class="active">Проверка</button><button id="exportTab">Рендер</button></nav>
-<main><section id="list"><div class="tabs"><button id="clips">Видео</button><button id="cards">Плашки</button></div><label class="check"><input id="all" type="checkbox"> Показать проверенные и удалённые</label><p id="counts"></p><div id="items"></div></section>
-<section id="detail" hidden><button id="back">← К списку</button><h2 id="itemTitle"></h2><p id="where"></p><p id="reason" class="hint"></p>
-<div id="clipFields" hidden><label>Кандидат<select id="choice"></select></label><p class="hint">Проверьте соответствие матча и счёта. Выбор другого кандидата изменит вставку.</p><label>Момент события, секунды<input id="eventTime" type="number" step="0.01"></label></div>
-<div class="times"><label>Начало, секунды<input id="start" type="number" min="0" step="0.01"></label><label>Конец, секунды<input id="end" type="number" min="0" step="0.01"></label></div><p id="sourceTime" class="hint"></p>
-<div class="mediaButtons"><button id="preview">Посмотреть вставку</button><button id="voice">Послушать речь</button><button id="art">Вид плашки</button><button id="translate">Перевести на русский</button></div>
-<video id="video" controls playsinline hidden></video><audio id="audio" controls hidden></audio><img id="image" alt="Оформление плашки" hidden>
-<label>Сценарий<textarea id="script" readonly rows="4"></textarea></label><label>Распознано в речи<textarea id="recognized" rows="4"></textarea></label><label id="textLabel">Текст плашки<textarea id="text" rows="4"></textarea></label>
-<label id="ownerLabel">Ставка относится к матчу<select id="owner"></select></label><div id="translation" hidden></div>
-<p class="hint">Перевод помогает понять смысл, но не заменяет проверку чисел и условий ставки. Изменение расшифровки не меняет звук ведущего.</p>
-</section>
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Auto Editor</title><link rel="stylesheet" href="/app.css"><script src="https://telegram.org/js/telegram-web-app.js"></script><script defer src="/app.js"></script></head>
+<body>
+<header><div class="heading"><div><small>AUTO EDITOR · 0.8.2</small><h1 id="pageTitle">Процесс</h1></div><button id="refresh" class="quiet" aria-label="Обновить данные">↻</button></div><p id="title">Подключение…</p></header>
+<div id="notice" role="status" aria-live="polite"></div>
+<main>
 <section id="processPanel" hidden>
-<h2>Обработка выпуска</h2><p id="processScope"></p><div id="processSteps"></div><p id="processNext"></p>
-<label class="check"><input id="autoTiming" type="checkbox"> Искать тайминги автоматически после проверки всех видео-вставок</label>
-<p class="hint">Настройка общая с редактором на ПК. После ошибки или отмены автоматический переход не выполняется. Рендер запускается отдельно.</p>
-<div class="mediaButtons"><button id="findClips">Поиск фрагментов</button><button id="findTimings" class="primary">Поиск таймингов и плашек</button><button id="processReview">Открыть проверку</button><button id="processRender">Перейти к рендеру</button><button id="cancelProcess" class="danger" hidden>Отменить обработку</button></div>
-<h3 id="processState"></h3><progress id="processProgress" max="100"></progress><p id="processMessage"></p><p id="processElapsed"></p><p id="processError"></p>
-<details><summary>Последние сообщения сервера</summary><pre id="processLog"></pre></details>
+<div class="surface"><div class="eyebrow">ТЕКУЩИЙ ВЫПУСК</div><p id="processScope"></p><div id="processSteps"></div></div>
+<div class="surface next-step"><h2 id="processNext">Следующий шаг</h2><p id="primaryHint" class="hint"></p><button id="primaryAction" class="primary wide">Подключение…</button></div>
+<div id="processJob"><h3 id="processState"></h3><progress id="processProgress" max="100"></progress><p id="processMessage"></p><p id="processElapsed" class="hint"></p><p id="processError"></p><button id="cancelProcess" class="danger" hidden>Остановить обработку</button></div>
+<details class="surface"><summary>Настройки и повторный запуск</summary>
+<label class="check"><input id="autoTiming" type="checkbox"> После проверки видео автоматически искать тайминги</label>
+<p class="hint">Рендер запускается отдельно. После ошибки или отмены автоматический переход не выполняется.</p>
+<div class="secondary-actions"><button id="findClips">Заново найти фрагменты</button><button id="findTimings">Заново найти тайминги</button></div>
+</details>
+<details class="surface"><summary>Журнал обработки</summary><pre id="processLog"></pre></details>
 </section>
-<section id="exportPanel" hidden><h2>Рендер на сервере</h2><p id="exportScope"></p><p id="exportChecks" class="hint"></p>
-<label>Папка результата на сервере<input id="outputFolder" readonly></label><button id="browseFolder">Выбрать папку</button>
-<div id="folderBrowser" hidden><h3>Папки сервера</h3><p id="folderPath"></p><button id="folderRoots">Диски сервера</button><button id="folderUp">↑ На уровень выше</button><div id="folders"></div><button id="folderMore" hidden>Ещё папки</button><button id="useFolder" class="primary">Выбрать эту папку</button><button id="closeFolders">Закрыть</button><p id="folderFree" class="hint"></p></div>
+<section id="list">
+<div class="tabs" aria-label="Что проверить"><button id="clips">Видео</button><button id="cards">Плашки</button></div>
+<div class="filters"><label>Разбор<select id="blockFilter"><option value="">Все разборы</option></select></label><label id="typeFilterLabel">Тип плашки<select id="typeFilter"><option value="">Все типы</option></select></label></div>
+<div class="list-meta"><p id="counts"></p><button id="undo" class="quiet">Отменить решение</button></div>
+<label class="check"><input id="all" type="checkbox"> Также проверенные и удалённые</label>
+<div id="items"></div>
+</section>
+<section id="detail" hidden>
+<div class="detail-nav"><button id="back" class="quiet">← Список</button><span id="itemPosition"></span><button id="previousItem" aria-label="Предыдущий элемент">←</button><button id="nextItem" aria-label="Следующий элемент">→</button></div>
+<h2 id="itemTitle"></h2><p id="where"></p><p id="reason" class="hint"></p>
+<button id="preview" class="primary wide">Посмотреть вставку</button><button id="context" class="primary wide">Плашка в видео</button>
+<p id="contextHint" class="hint">Короткий черновой фрагмент до 20 секунд: ведущий, игровые вставки и соседние плашки. Правки из полей ниже учитываются, но не сохраняются до подтверждения.</p>
+<video id="video" controls playsinline hidden></video><audio id="audio" controls hidden></audio><img id="image" alt="Оформление плашки" hidden>
+<div class="mediaButtons"><button id="voice">Послушать речь</button><button id="translate">Перевести на русский</button></div><div id="translation" hidden></div>
+<label>Сценарий<textarea id="script" readonly rows="3"></textarea></label>
+<label id="recognizedLabel">Распознано в речи<textarea id="recognized" rows="3"></textarea></label>
+<label id="textLabel">Текст плашки<textarea id="text" rows="3"></textarea></label>
+<div id="clipFields" hidden><label>Кандидат<select id="choice"></select></label><p class="hint">Проверьте соответствие матча и счёта. Выбор другого кандидата изменит вставку.</p><label>Момент события, секунды<input id="eventTime" type="number" step="0.01"></label></div>
+<details id="timingDetails" class="surface"><summary>Тайминги и оформление</summary>
+<div class="times"><label>Начало, секунды<input id="start" type="number" min="0" step="0.01"></label><label>Конец, секунды<input id="end" type="number" min="0" step="0.01"></label></div><p id="sourceTime" class="hint"></p>
+<label id="ownerLabel">Ставка относится к матчу<select id="owner"></select></label><button id="art">Только вид плашки</button>
+<p class="hint">Исправление расшифровки не меняет звук ведущего. Перевод помогает понять смысл, но числа и условия ставки нужно проверить.</p>
+</details>
+</section>
+<section id="exportPanel" hidden><h2>Сохранить готовое видео</h2><p id="exportScope"></p><p id="exportChecks" class="hint"></p>
+<div class="surface"><label>Папка результата на сервере<input id="outputFolder" readonly></label><button id="browseFolder" class="wide">Выбрать папку</button>
+<div id="folderBrowser" hidden><h3>Папки сервера</h3><p id="folderPath"></p><div class="mediaButtons"><button id="folderRoots">Диски</button><button id="folderUp">↑ Выше</button></div><div id="folders"></div><button id="folderMore" hidden>Ещё папки</button><button id="useFolder" class="primary wide">Выбрать эту папку</button><button id="closeFolders">Закрыть</button><p id="folderFree" class="hint"></p></div>
 <label>Имя видео<input id="outputName" value="Мой выпуск.mp4" maxlength="160"></label>
-<p class="hint">Используются настройки монтажа и качества текущего проекта на ПК. Существующие файлы не перезаписываются.</p>
-<button id="startExport" class="primary">Запустить рендер</button><button id="cancelExport" class="danger" hidden>Отменить рендер</button>
-<div id="exportJob"><h3 id="exportState"></h3><progress id="exportProgress" max="100"></progress><p id="exportMessage"></p><p id="exportElapsed"></p><p id="exportTarget"></p><p id="exportError"></p></div>
-</section></main><footer id="actions" hidden><button id="approve" class="primary">Подтвердить и далее</button><button id="remove" class="danger">Удалить</button><button id="pending">На проверку</button></footer>
+<p class="hint">Настройки качества — из проекта на ПК. Существующие файлы не перезаписываются.</p><button id="startExport" class="primary wide">Запустить рендер</button></div>
+<div id="exportJob" class="surface"><h3 id="exportState"></h3><progress id="exportProgress" max="100"></progress><p id="exportMessage"></p><p id="exportElapsed"></p><p id="exportTarget"></p><p id="exportError"></p><button id="cancelExport" class="danger" hidden>Остановить рендер</button></div>
+</section>
+</main>
+<footer id="actions" hidden><button id="approve" class="primary">Подтвердить и далее</button><button id="remove" class="danger">Удалить</button><button id="pending">Проверить позже</button></footer>
+<nav id="navigation" aria-label="Разделы"><button id="processTab"><span>01</span>Процесс</button><button id="reviewTab"><span id="reviewBadge">02</span>Проверка</button><button id="exportTab"><span>03</span>Результат</button></nav>
 </body></html>
-
-
