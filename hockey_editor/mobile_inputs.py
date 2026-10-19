@@ -293,6 +293,9 @@ class Inputs:
                     if any(len(v)>1 for v in choices.values()):raise RemoteError('В папке несколько файлов одной роли. Оставьте один дисклеймер, Telegram и подписку.')
                     project.asset_folder=d['asset_folder'];project.assets={k:str(v[0]) for k,v in choices.items() if len(v)==1}
                 project.intro=Block(**d['intro']);project.outro=Block(**d['outro']);project.blocks=[Block(**b) for b in d['blocks']]
+                # Imported drafts carry IDs from their temporary project. Rebuild
+                # those links against the source objects created below.
+                for block in project.blocks:block.match_ids=[]
                 ready=[r for r in d['files'] if r['status']=='ready'];project.hosts=[r['path'] for r in ready if r['role']=='host'];project.host=project.hosts[0]
                 project.full_video=True;project.whole_episode=True;project.settings.use_manual_clips=False
                 sport='combat' if d['profile']=='uz_combat' else 'football' if 'football' in d['profile'] else 'hockey'

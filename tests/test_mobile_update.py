@@ -45,6 +45,12 @@ class MobileUpdateTests(unittest.TestCase):
             self.assertEqual(inputs.server_import(payload),result)
             self.assertEqual(host.read_bytes(),b'host')
             self.assertTrue(inputs.summary(draft)['can_create'])
+            bridge.app.restore_plan=Mock();bridge.app.status.set=Mock()
+            inputs.activate(dict(id=result['id'],revision=bridge.revision()))
+            sources={m.id:m.path for m in bridge.app.project.matches}
+            for block in bridge.app.project.blocks:
+                expected=[f['path'] for f in draft['files'] if f['role']=='match' and f['block']==block.uid]
+                self.assertEqual([sources[ident] for ident in block.match_ids],expected)
 
     def test_short_folder_does_not_use_long_presenter(self):
         with tempfile.TemporaryDirectory() as d:
