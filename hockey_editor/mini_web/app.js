@@ -121,7 +121,7 @@ for(const [id,decision] of [['approve','confirmed'],['remove','deleted'],['pendi
 for(const [id,mode] of [['preview','clip'],['context','context'],['voice','voice'],['art','art'],['translate','translation']])$(id).onclick=()=>guard(()=>prepare(mode));
 $('undo').onclick=()=>guard(async()=>{await api('action',{revision:state.revision,decision:'undo'});back();await refresh();notice('Последнее решение отменено и сохранено.')});
 guard(async()=>{tg?.ready();tg?.expand();if(!tg?.initData)throw new Error('Откройте это приложение кнопкой в личном чате со своим Telegram-ботом.');session=(await api('auth',{initData:tg.initData})).session;const page=new URLSearchParams(location.search).get('view');if(page==='clips')kind='clip';if(page==='cards')kind='card';await refresh();await switchPage(['clips','cards','review'].includes(page)?'review':page==='export'?'export':'process');notice('');});
-async function refreshPage(){if(pageMode==='input')await refreshInputs();else if(pageMode==='process')await refreshProcess();else if(pageMode==='export')await refreshExport();else await refresh()}
+async function refreshPage(){if(pageMode==='process')await refreshProcess();else if(pageMode==='export')await refreshExport();else await refresh()}
 setInterval(()=>{if(session&&!waiting&&!current)guard(refreshPage)},3000);
 
 
@@ -142,7 +142,7 @@ async function refreshExport(){
  }
  await refreshResults();
 }
-async function switchPage(mode){pageMode=mode;if(mode!=='export')$('resultVideo').pause();back();notice('');$('pageTitle').textContent=({input:'Создание выпуска',review:'Проверка',export:'Результат',process:'Процесс'})[mode];$('inputPanel').hidden=mode!=='input';$('list').hidden=mode!=='review';$('exportPanel').hidden=mode!=='export';$('processPanel').hidden=mode!=='process';for(const name of ['input','review','export','process']){$(name+'Tab').classList.toggle('active',mode===name);$(name+'Tab').setAttribute('aria-current',mode===name?'page':'false')}await refreshPage();window.scrollTo(0,0)}
+async function switchPage(mode){pageMode=mode;if(mode!=='export')$('resultVideo').pause();back();notice('');$('pageTitle').textContent=({review:'Проверка',export:'Результат',process:'Процесс'})[mode];$('list').hidden=mode!=='review';$('exportPanel').hidden=mode!=='export';$('processPanel').hidden=mode!=='process';for(const name of ['review','export','process']){$(name+'Tab').classList.toggle('active',mode===name);$(name+'Tab').setAttribute('aria-current',mode===name?'page':'false')}await refreshPage();window.scrollTo(0,0)}
 async function browse(path='',offset=0){
  const data=await api('folders',{path,offset});folderState=data;$('folderBrowser').hidden=false;$('folderPath').textContent=data.path||'Диски сервера';if(!offset)$('folders').replaceChildren();
  for(const item of data.folders){const b=document.createElement('button');b.className='item';b.textContent='📁 '+item.name;b.onclick=()=>guard(()=>browse(item.path));$('folders').append(b)}
@@ -206,7 +206,6 @@ $('primaryAction').onclick=()=>guard(async()=>{
  else if(route)await startProcess(route);
 });
 $('cancelProcess').onclick=()=>guard(async()=>{if(!confirm('Остановить текущий этап? Автоматическое продолжение будет отменено.'))return;await api('process-cancel',{job:processState.job.id});await refreshProcess()});
-
 
 
 

@@ -20,6 +20,9 @@ def exclusive(cards):
         if not valid:omitted.append(original);continue
         a,z=max(valid,key=lambda span:span[1]-span[0])
         card=copy.copy(original);card.start=a;card.end=z
-        if card.asset:card.source_in+=a-original.start
+        # Frame rounding may move the start backwards by a sub-frame epsilon.
+        # Only actual trimming consumes time in the animation source.
+        if card.asset:card.source_in+=max(0.,a-original.start)
         accepted.append(card)
     return sorted(accepted,key=lambda c:(c.start,c.end)),omitted
+

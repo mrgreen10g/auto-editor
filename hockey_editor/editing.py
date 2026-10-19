@@ -64,7 +64,8 @@ def validate_plan(plan, check_files=True):
         span(c.start,c.end,'Плашка «'+c.title+'»')
         if c.asset:
             if check_files and not Path(c.asset).is_file():raise ValueError('Не найдена анимация: '+c.asset)
-            if not math.isfinite(c.source_in) or c.source_in<0:raise ValueError('Некорректное начало анимации.')
+            if not math.isfinite(c.source_in) or c.source_in < -1e-9:raise ValueError('Некорректное начало анимации.')
+            if c.source_in<0:c.source_in=0.  # Recover already saved rounding residue.
         if c.title=='ТЕЛЕГРАМ' and c.line>=0:
             line=plan.lines[c.line]
             if abs(c.start-line.start)>.035 or abs(c.end-line.end)>.035:
@@ -123,3 +124,4 @@ def saved_plan(project,index):
     if block.edit_plan and block.edit_key==project_edit_key(project,index):
         return validate_plan(Plan.from_dict(copy.deepcopy(block.edit_plan)))
     return None
+

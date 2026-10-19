@@ -119,31 +119,19 @@ class Gateway:
                                 if not chunk:break
                                 self.wfile.write(chunk);remaining-=len(chunk)
                         return
-                    if self.command=='GET' and path=='/input.js':
-                        return self.response(200,Path(__file__).with_name('mini_web').joinpath('input.js').read_bytes(),'text/javascript; charset=utf-8')
                     if self.command=='GET' and path in ('/','/app.js','/app.css'):
                         file=Path(__file__).with_name('mini_web')/({'/':'index.html','/app.js':'app.js','/app.css':'app.css'}[path])
                         return self.response(200,file.read_bytes(),{'/':'text/html; charset=utf-8','/app.js':'text/javascript; charset=utf-8','/app.css':'text/css; charset=utf-8'}[path])
                     if self.command!='POST':raise RemoteError('Не найдено.',404)
                     origin=self.headers.get('Origin')
                     if origin and origin!=gateway.config['mini_url']:raise RemoteError('Недопустимый источник запроса.',403)
-                    if path=='/api/input-chunk':
-                        gateway.authorize(self.headers.get('Authorization',''))
-                        from .mobile_inputs import CHUNK
-                        size=int(self.headers.get('Content-Length','0'))
-                        if self.headers.get('Transfer-Encoding') or self.headers.get('Content-Type')!='application/octet-stream' or not 0<size<=CHUNK:raise RemoteError('Некорректный блок файла.',413)
-                        content=self.rfile.read(size)
-                        if len(content)!=size:raise RemoteError('Блок передан не полностью.')
-                        return self.response(200,gateway.bridge.inputs.chunk(dict(id=self.headers.get('X-Draft'),file=self.headers.get('X-File'),offset=self.headers.get('X-Offset')),content))
                     if self.headers.get('Transfer-Encoding') or 'application/json' not in self.headers.get('Content-Type',''):raise RemoteError('Нужен JSON.',415)
                     size=int(self.headers.get('Content-Length','0'))
-                    if not 0<size<=(1048576 if path=='/api/input-script' else 65536):raise RemoteError('Некорректный размер запроса.',413)
+                    if not 0<size<=65536:raise RemoteError('Некорректный размер запроса.',413)
                     data=json.loads(self.rfile.read(size))
                     if not isinstance(data,dict):raise RemoteError('Нужен объект JSON.')
                     if path=='/api/auth':return self.response(200,{'session':gateway.login(data.get('initData'))})
                     gateway.authorize(self.headers.get('Authorization',''))
-                    if path in {'/api/input-'+k for k in ('status','mkdir','create','script','settings','upload','finish','link','retry','edit','reuse','activate','pause')}:
-                        return self.response(200,gateway.bridge.request(path.removeprefix('/api/'),data))
                     if path not in ('/api/result-status','/api/result-stream','/api/drive-config','/api/drive-start','/api/drive-pause','/api/process-status','/api/process-start','/api/process-cancel','/api/process-config','/api/export-status','/api/folders','/api/export-start','/api/export-cancel','/api/state','/api/item','/api/action','/api/prepare','/api/job','/api/media'):raise RemoteError('Не найдено.',404)
                     result=gateway.bridge.request(path.removeprefix('/api/'),data)
                     if path=='/api/result-stream':
@@ -166,7 +154,6 @@ class Gateway:
             do_HEAD=handle_request
             do_POST=handle_request
         return Handler
-
 
 
 

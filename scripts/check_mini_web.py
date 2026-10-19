@@ -120,35 +120,12 @@ def check():
                 expect(page.locator('#driveChoice')).to_have_value('ru_long')
                 assert len(bridge.results.records())==1
                 page.screenshot(path=str(ROOT/'build/gui-mini-export.jpg'),full_page=True)
-                # Create a release entirely through the mobile UI and upload a real MP4.
-                from hockey_editor.mobile_inputs import Inputs
-                bridge.inputs=Inputs(bridge,root/'draft-index.json')
-                app.restore_plan=lambda:None;app.status.set=lambda value:None
-                original_host=app.project.host
-                click('#inputTab');click('#chooseInputParent')
-                # Navigate via the authenticated picker to the fixture's parent.
-                page.locator('#inputParent').evaluate('(e,p)=>{e.value=p}',str(root))
-                click('#inputCloseBrowser');click('#chooseInputParent');click('#inputUseFolder')
-                page.locator('#inputName').fill('Телефон выпуск');click('#createDraft')
-                from test_folder_import import SCRIPT
-                page.locator('#inputScript').fill(SCRIPT);click('#parseInput')
-                assert page.locator('#inputBlocks input').count()==2
-                click('#saveTitles');page.locator('#hostMethod').select_option('device')
-                page.locator('#hostFile').set_input_files(original_host)
-                expect(page.locator('#deviceProgress')).to_contain_text('готово',timeout=60000)
-                click('[data-step="summary"]');expect(page.locator('#activateInput')).to_be_enabled()
-                page.screenshot(path=str(ROOT/'build/gui-mini-create.jpg'),full_page=True)
-                click('#activateInput');expect(page.locator('#processPanel')).to_be_visible()
-                assert Path(app.project_path).name=='Выпуск.hockeyproj'
-                assert len(app.project.blocks)==2 and Path(app.project.host).is_file()
-                assert app.project.full_video and app.project.whole_episode
                 assert not errors,errors
                 browser.close()
         finally:stop.set();gateway.close()
     print('Mobile review, clip preview, audio, card image, persistence and undo: OK')
 
 if __name__=='__main__':check()
-
 
 
 

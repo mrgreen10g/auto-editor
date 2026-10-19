@@ -1,32 +1,9 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Auto Editor</title><link rel="stylesheet" href="/app.css"><script src="https://telegram.org/js/telegram-web-app.js"></script><script defer src="/app.js"></script></head>
 <body>
-<header><div class="heading"><div><small>AUTO EDITOR · 0.8.4</small><h1 id="pageTitle">Процесс</h1></div><button id="refresh" class="quiet" aria-label="Обновить данные">↻</button></div><p id="title">Подключение…</p></header>
+<header><div class="heading"><div><small>AUTO EDITOR · 0.8.3</small><h1 id="pageTitle">Процесс</h1></div><button id="refresh" class="quiet" aria-label="Обновить данные">↻</button></div><p id="title">Подключение…</p></header>
 <div id="notice" role="status" aria-live="polite"></div>
 <main>
-<section id="inputPanel" hidden>
-<div class="surface"><label>Сохранённые выпуски<select id="draftChoice"><option value="">Новый выпуск…</option></select></label><p id="draftFolder" class="hint"></p></div>
-<div id="inputSteps" class="tabs"><button data-step="setup">Папка</button><button data-step="script">Сценарий</button><button data-step="files">Материалы</button><button data-step="summary">Сводка</button></div>
-<div id="input_setup" class="input-step surface"><h2>Где хранить выпуск</h2>
-<label>Родительская папка на сервере<input id="inputParent" readonly placeholder="Выберите папку"></label><button id="chooseInputParent">Выбрать папку</button>
-<label>Название новой папки выпуска<input id="inputName" maxlength="100" placeholder="2026-10-19 · УЗ футбол"></label>
-<label>Ведущий<select id="inputSpeaker"><option value="ru">РУ</option><option value="uz">УЗ</option></select></label><label>Шаблон<select id="inputProfile"></select></label>
-<label>Сохранённые настройки<select id="inputPreset"><option value="">Стандартные</option></select></label><button id="createDraft" class="primary wide">Создать папку и выпуск</button></div>
-<div id="input_script" class="input-step surface" hidden><h2>Сценарий выпуска</h2><p class="hint">Вставьте текст или загрузите TXT/DOCX. Сначала определите разборы, затем добавляйте записи матчей.</p>
-<label>Файл сценария<input id="scriptFile" type="file" accept=".txt,.docx"></label><label>Полный сценарий<textarea id="inputScript" rows="10"></textarea></label><button id="parseInput" class="primary wide">Сохранить и определить разборы</button><div id="inputBlocks"></div><button id="saveTitles">Сохранить названия разборов</button></div>
-<div id="input_files" class="input-step" hidden>
-<div class="surface"><h2>Ведущий</h2><label>Способ добавления<select id="hostMethod"><option value="drive">Ссылка Google Диска</option><option value="device">Загрузить с устройства</option></select></label>
-<div id="hostDrive"><label>Ссылка на видео<input id="hostUrl" type="url" placeholder="https://drive.google.com/file/d/…"></label><button id="addHostLink">Скачать ведущего на сервер</button></div>
-<div id="hostDevice" hidden><label>Видео ведущего<input id="hostFile" type="file" accept="video/*,.mov,.mp4" multiple></label><p class="hint">До завершения передачи оставьте мини-апку открытой. После обрыва выберите тот же файл повторно. Части ведущего добавляются в порядке выбора.</p></div></div>
-<div class="surface"><h2>Записи матчей / боёв</h2><label>Для какого разбора<select id="inputBlock"></select></label><label>Ссылка на запись YouTube<input id="matchUrl" type="url" placeholder="https://www.youtube.com/watch?v=…"></label>
-<p class="hint">Укажите участников именно архивной записи, если они не определятся из названия видео.</p><label>Команда 1 / боец<input id="matchHome"></label><label>Команда 2<input id="matchAway"></label><button id="addMatchLink">Скачать запись</button>
-<details><summary>Загрузить готовую запись с устройства</summary><input id="matchFile" type="file" accept="video/*,.mp4,.mov"></details></div>
-<details class="surface"><summary>Взять запись из другого выпуска</summary><label>Ранее добавленные записи<select id="reuseChoice"></select></label><button id="reuseInput">Добавить к выбранному разбору</button><p class="hint">Используется исходный файл и его кэш анализа. Папку исходного выпуска нужно сохранить.</p></details>
-<div class="surface"><h3>Полученные материалы</h3><p id="deviceProgress" role="status"></p><div id="inputFiles"></div><button id="pauseInput">Остановить скачивание по ссылке</button></div>
-<details class="surface"><summary>Настройки и постоянные материалы</summary><label>Набор настроек<select id="draftPreset"></select></label><label>Папка дисклеймера, Telegram и подписки<input id="inputAssets" readonly></label><button id="chooseInputAssets">Выбрать папку на сервере</button><button id="saveInputSettings">Сохранить настройки</button><p class="hint">Если папка не выбрана, используются сохранённые материалы выбранного шаблона. Музыка и логотипы берутся из набора настроек.</p></details></div>
-<div id="input_summary" class="input-step surface" hidden><h2>Перед запуском</h2><div id="inputSummary"></div><button id="activateInput" class="primary wide">Создать проект и перейти к обработке</button><p class="hint">Текущий проект редактора будет сохранён. Поиск запускается на следующем экране.</p></div>
-<div id="inputBrowser" class="surface" hidden><h3>Папки сервера</h3><p id="inputBrowserPath"></p><button id="inputRoots">Диски</button><button id="inputUp">↑ Выше</button><div id="inputFolders"></div><button id="inputMore" hidden>Ещё</button><label>Создать вложенную папку<input id="inputNewFolder" maxlength="100"></label><button id="inputMkdir">Создать папку</button><button id="inputUseFolder" class="primary wide">Выбрать эту папку</button><button id="inputCloseBrowser">Закрыть</button></div>
-</section>
 <section id="processPanel" hidden>
 <div class="surface"><div class="eyebrow">ТЕКУЩИЙ ВЫПУСК</div><p id="processScope"></p><div id="processSteps"></div></div>
 <div class="surface next-step"><h2 id="processNext">Следующий шаг</h2><p id="primaryHint" class="hint"></p><button id="primaryAction" class="primary wide">Подключение…</button></div>
@@ -83,8 +60,6 @@
 </section>
 </main>
 <footer id="actions" hidden><button id="approve" class="primary">Подтвердить и далее</button><button id="remove" class="danger">Удалить</button><button id="pending">Проверить позже</button></footer>
-<nav id="navigation" aria-label="Разделы"><button id="inputTab"><span>＋</span>Выпуск</button><button id="processTab"><span>01</span>Процесс</button><button id="reviewTab"><span id="reviewBadge">02</span>Проверка</button><button id="exportTab"><span>03</span>Результат</button></nav>
-<script defer src="/input.js"></script>
+<nav id="navigation" aria-label="Разделы"><button id="processTab"><span>01</span>Процесс</button><button id="reviewTab"><span id="reviewBadge">02</span>Проверка</button><button id="exportTab"><span>03</span>Результат</button></nav>
 </body></html>
-
 

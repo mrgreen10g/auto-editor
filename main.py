@@ -8,12 +8,6 @@ import sys,json,tempfile,threading
 from pathlib import Path
 
 def self_test(report):
-    from hockey_editor.mobile_downloads import deno_path
-    from yt_dlp import YoutubeDL
-    import yt_dlp_ejs,subprocess
-    subprocess.run([deno_path(),'--version'],check=True,capture_output=True,timeout=15)
-    with YoutubeDL({'quiet':True,'js_runtimes':{'deno':{'path':deno_path()}}}) as downloader:
-        assert downloader is not None
     from google_auth_oauthlib.flow import InstalledAppFlow
     from google.auth.transport.requests import AuthorizedSession
     from google.oauth2.credentials import Credentials
@@ -92,4 +86,3 @@ if __name__=='__main__':
             import tkinter.messagebox
             tkinter.messagebox.showerror('Auto Editor',str(e))
         sys.exit(1)
-

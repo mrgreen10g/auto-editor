@@ -2,6 +2,4 @@
 @media(max-height:500px){body.reviewing{padding-bottom:150px}footer{grid-template-columns:2fr 1fr 1fr;padding:8px 12px}footer .primary{grid-column:auto}#navigation{padding-top:4px;padding-bottom:calc(4px + env(safe-area-inset-bottom))}#navigation button span{display:none}footer{bottom:calc(55px + env(safe-area-inset-bottom))}}
 @media(max-width:360px){body{padding-left:12px;padding-right:12px}.filters{grid-template-columns:1fr}footer{padding-left:12px;padding-right:12px}}
 #resultVideo{max-height:65vh;background:#000}#driveLink{display:block;color:var(--accent);padding:12px 0}#driveSettings{margin-top:16px}#uploadMessage{font-size:14px}
-#inputSteps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}#inputSteps button{font-size:12px;padding:10px 3px;min-width:0}.input-file{padding:14px 0;border-bottom:1px solid var(--line)}.input-file small{display:block;color:var(--muted);overflow-wrap:anywhere}.input-file button{font-size:13px;margin:6px 6px 0 0}#inputFolders{max-height:260px;overflow:auto;display:grid;gap:6px}#draftFolder,#inputBrowserPath{overflow-wrap:anywhere;font-size:13px}#deviceProgress{overflow-wrap:anywhere}
-
 

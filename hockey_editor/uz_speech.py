@@ -382,6 +382,7 @@ def synchronize(project,cache,cancel,log):
         return combat_sync(project,cache,cancel,log)
     from .review import retain_legacy_edits
     retain_legacy_edits(project)
+    previous_events={b.uid:copy.deepcopy(b.events) for b in project.blocks}
     key=speech_key(project)
     if not all(b.speech_key==key and b.asr_lines for b in [project.intro,*project.blocks,project.outro]):
         segments=transcribe(project,cache,cancel,log)
@@ -398,7 +399,7 @@ def synchronize(project,cache,cancel,log):
                 from .timeline import format_time
                 log(f"Проверьте плашку {format_time(line['start'])}–{format_time(line['end'])}: {card['text']}. Текст взят из сценария; часть слов распознана неуверенно.")
     from .uzbek import events
-    from .goals import GoalScanner,propose
+    from .goals import GoalScanner,propose,restore_archive_decisions
     for b in project.blocks:
         if b.events:continue
         local=[m for m in project.matches if m.id in b.match_ids]
@@ -408,7 +409,9 @@ def synchronize(project,cache,cancel,log):
         scans={m.id:reused[m.id] if m.id in reused else GoalScanner(cancel=cancel,log=log).scan(m) for m in local}
         if reused:log('Использую проверенные эпизоды из лонга: '+b.title)
         actual=copy.deepcopy(b);actual.script='\n'.join(l['text'] for l in b.asr_lines)
-        b.events=propose(events(actual,local),scans,local,False)
+        requests=events(actual,local)
+        restore_archive_decisions(requests,previous_events.get(b.uid,[]),scans)
+        b.events=propose(requests,scans,local,False)
         for event in b.events:
             if event.selection:
                 source=next(m for m in local if m.id==event.source_id)
@@ -472,4 +475,5 @@ def prepare(project,segments,review=False,duration=None):
         old.events=new.events
     project.episode_key=''
     return bounds
+
 

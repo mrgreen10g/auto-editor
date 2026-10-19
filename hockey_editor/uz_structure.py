@@ -16,7 +16,12 @@ OUTRO = {'yakun', 'xulosa', 'yakuniy xulosa', 'yakuniy tanlovlar',
 TIME = re.compile(r'^(\d{1,2}):(\d{2})\s*[—–-]\s*(\d{1,2}):(\d{2})$')
 
 
+def narrative_heading(line):
+    return bool(re.match(r"^(?:(?:birinchi|ikkinchi|uchinchi|to'rtinchi|beshinchi|oltinchi|yettinchi|sakkizinchi|to'qqizinchi|o'ninchi|\d+)\s+)?(?:qism|bo'lim)\b", key(line)))
+
+
 def fixture(line, sport):
+    if narrative_heading(line):return None
     line = re.sub(r'^\d+[.)]\s*', '', line).strip(' #*')
     oral=re.match(r"(?:birinchi|ikkinchi|uchinchi|to'rtinchi|beshinchi)\s+(?:uchrashuv|o'yin|jang)\s*[—–:-]?\s+(.+)",key(line),re.I)
     if oral:
@@ -71,6 +76,16 @@ def parse(text, sport):
             index.append(fixture(values[first].split('|')[0].strip(), sport))
             first += 1
     single = [p for p in index if p]
+    # A leading pair is an index, not the start of the analysis, when the
+    # script then has an introduction and thematic sections of that same game.
+    if first is None and values and fixture(values[0].split('|')[0].strip(), sport) and any(narrative_heading(r) for r in values):
+        declared=[];pos=0
+        while pos<len(values):
+            pair=fixture(values[pos].split('|')[0].strip(), sport)
+            if not pair:break
+            declared.append(pair);pos+=1
+        if len(declared)==1:
+            index=declared;single=declared;first=pos
     single = single[0] if len(single) == 1 else None
     body_rows = values[first if first is not None else 0:]
     explicit_pairs = any(fixture(r.split('|')[0].strip(), sport) for r in body_rows)
@@ -81,6 +96,11 @@ def parse(text, sport):
     for raw in body_rows:
         line = re.sub(r'\s*\|\s*\d{1,2}:\d{2}\s*[—–-]\s*\d{1,2}:\d{2}\s*$', '', raw).strip()
         k = key(line)
+        if narrative_heading(line):
+            if single and not blocks and current is intro:
+                current=Block(title=single,language='uz',sport=sport)
+                blocks.append(current)
+            continue  # Editorial section label, not spoken text or a new game.
         if k in INTRO:
             if blocks:
                 raise ValueError('Заголовок вступления найден внутри разбора: проверьте сценарий.')
@@ -129,3 +149,4 @@ def parse(text, sport):
         raise ValueError('У пары отсутствует текст разбора: проверьте заголовки сценария.')
     intro.featured_pairs = list(dict.fromkeys([p for p in index if p] + [b.title for b in blocks]))
     return intro, blocks, outro
+

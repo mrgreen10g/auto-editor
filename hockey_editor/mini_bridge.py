@@ -15,8 +15,6 @@ class Bridge:
         self.export=Export(self)
         from .mini_process import Process
         self.process=Process(self)
-        from .mobile_inputs import Inputs
-        self.inputs=Inputs(self)
     def configure(self):
         if self.gateway:self.gateway.close();self.gateway=None
         config=self.app.notifier.config
@@ -26,7 +24,6 @@ class Bridge:
     def close(self):
         self.closed=True
         self.results.cancel.set()
-        self.inputs.cancel.set()
         if self.gateway:self.gateway.close();self.gateway=None
     def request(self,kind,data):
         if self.closed:raise RemoteError('Редактор закрыт.',503)
@@ -221,16 +218,6 @@ class Bridge:
         threading.Thread(target=work,daemon=True).start()
         return dict(job=ident)
     def handle(self,kind,data):
-        if kind.startswith('input-'):
-            actions={'status':self.inputs.status,'mkdir':self.inputs.mkdir,'create':self.inputs.create,
-                     'script':self.inputs.script,'settings':self.inputs.settings,'upload':self.inputs.upload_init,
-                     'finish':self.inputs.finish,'link':self.inputs.link,'retry':self.inputs.retry,
-                     'edit':self.inputs.edit_file,'reuse':self.inputs.reuse,'activate':self.inputs.activate}
-            if kind=='input-pause':self.inputs.cancel.set();return dict(ok=True)
-            action=actions.get(kind[6:])
-            if not action:raise RemoteError('Неизвестное действие.',404)
-            try:return action(data)
-            except ValueError as error:raise RemoteError(str(error)) from None
         if kind=='result-status':return self.results.status()
         if kind=='result-stream':return self.results.media(data)
         if kind=='drive-start':return self.results.start(data)
@@ -259,7 +246,6 @@ class Bridge:
                 return dict(file=job['file'])
             return {k:v for k,v in job.items() if k not in ('file','revision','created')}
         raise RemoteError('Неизвестный запрос.',404)
-
 
 
 

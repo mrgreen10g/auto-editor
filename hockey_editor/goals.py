@@ -245,6 +245,23 @@ class GoalScanner:
         return json.loads(payload)
 
 
+def restore_archive_decisions(requests, previous, scans):
+    """Keep reviewed decisions when script requests are replaced by ASR clauses."""
+    import copy
+    def phrase(text):return ' '.join(text.casefold().split())
+    exact={(e.source_id,e.kind,phrase(e.phrase)):e for e in previous}
+    missing_sources={e.source_id for e in previous if e.kind=='play' and e.skipped and e.selection is None}
+    for event in requests:
+        old=exact.get((event.source_id,event.kind,phrase(event.phrase)))
+        data=scans.get(event.source_id)
+        if old and old.selection and data and old.selection.source_signature==data.get('signature'):
+            event.selection=copy.deepcopy(old.selection);event.skipped=old.skipped;event.note=old.note
+        elif old and old.skipped:
+            event.skipped=True;event.note=old.note
+        elif event.kind=='play' and event.source_id in missing_sources and data is not None and not any(c['kind']=='play' and c['confidence']>=.65 for c in data.get('candidates',[])):
+            event.skipped=True;event.note='В этой записи нет пригодных игровых сцен; ранее выбрано оставить ведущего.'
+
+
 def propose(requests, scans, sources=(), allow_other=False):
     from .event_rules import clean, team_position
     source_map = {m.id: m for m in sources}
@@ -265,6 +282,9 @@ def propose(requests, scans, sources=(), allow_other=False):
         used.add(candidate.id)
         return candidate
     for event in requests:
+        if event.skipped:continue
+        if event.selection and event.selection.accepted and event.selection.source_signature==scans.get(event.source_id,{}).get('signature'):
+            continue
         if (source_map.get(event.source_id) and source_map[event.source_id].sport=='combat') or (sources and all(m.sport=='combat' for m in sources)):
             from .combat import propose_event
             propose_event(event,scans,usage,source_map.get(event.source_id))
@@ -315,7 +335,16 @@ def propose(requests, scans, sources=(), allow_other=False):
             event.note = 'Точный гол не подтверждён — игровая вставка из этой встречи. '+c.note
         else:
             event.note = c.note
-    return requests
+    # Missing generic b-roll is one source problem, not a separate review of
+    # every sentence. Keep exact goal requests independent.
+    missing=set();result=[]
+    for event in requests:
+        source=source_map.get(event.source_id)
+        if source and source.sport=='football' and event.kind=='play' and not event.skipped and event.selection is None:
+            if event.source_id in missing:continue
+            missing.add(event.source_id)
+        result.append(event)
+    return result
 
 
 def unresolved(block):
@@ -374,3 +403,4 @@ def montage_block(project, index, cache, cancel):
         block.clips.append(Clip(str(path), event.phrase, selection.event_time-selection.source_start, selection.context_label,
                                 sources[event.source_id].path,selection.source_start,event.kind,event.flexible_source))
     return block
+
