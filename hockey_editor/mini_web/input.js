@@ -4,6 +4,7 @@ let createRequest=crypto.randomUUID();
 function inputStepTo(step){
  if(step!=='setup'&&!draftId){notice('Сначала создайте папку выпуска или выберите сохранённый черновик.');return}
  inputStep=step;for(const s of ['setup','script','files','summary'])$('input_'+s).hidden=s!==step;
+ $('serverImportPanel').hidden=step!=='setup';
  for(const b of $('inputSteps').querySelectorAll('button'))b.classList.toggle('active',b.dataset.step===step);
 }
 function inputProfiles(){
@@ -59,6 +60,10 @@ async function inputBrowse(path='',offset=0){
  $('inputBrowser').scrollIntoView({block:'start'});
 }
 $('inputTab').onclick=()=>guard(()=>switchPage('input'));
+function serverPayload(){return {folder:$('serverFolder').value,profile:$('inputProfile').value,preset:$('inputPreset').value}}
+$('chooseServerFolder').onclick=()=>guard(async()=>{inputFolderTarget='serverFolder';await inputBrowse($('serverFolder').value)});
+$('scanServerFolder').onclick=()=>guard(async()=>{const r=await api('input-server-files',serverPayload());for(const [id,key] of [['serverHost','hosts'],['serverScript','scripts']]){$(id).replaceChildren();for(const p of r[key])$(id).add(new Option(p.split(/[\\/]/).pop(),p));}notice('Выберите ведущего и сценарий, затем импортируйте выпуск.');});
+$('importServerFolder').onclick=()=>guard(async()=>{const r=await api('input-server-import',{...serverPayload(),host:$('serverHost').value,script:$('serverScript').value});draftId=r.id;draftLoaded='';await refreshInputs();inputStepTo('summary')});
 for(const b of $('inputSteps').querySelectorAll('button'))b.onclick=()=>inputStepTo(b.dataset.step);
 $('inputSpeaker').onchange=inputProfiles;
 $('draftChoice').onchange=()=>guard(async()=>{draftId=$('draftChoice').value;draftLoaded='';await refreshInputs()});
@@ -101,3 +106,4 @@ async function filesSelected(element,role){
  catch(error){notice(error.message);}finally{deviceBusy=false;element.value='';}
 }
 $('hostFile').onchange=()=>filesSelected($('hostFile'),'host');$('scriptFile').onchange=()=>filesSelected($('scriptFile'),'script');$('matchFile').onchange=()=>filesSelected($('matchFile'),'match');
+

@@ -60,6 +60,11 @@ def drive_download(item,path,update,cancel):
     finally:client.close()
 
 def deno_path():
+    import sys
+    if getattr(sys,'frozen',False):
+        binary=Path(sys._MEIPASS)/'deno_bin'/'deno.exe'
+        if not binary.is_file():raise ValueError('В сборке отсутствует компонент Deno. Распакуйте полный архив программы.')
+        return str(binary)
     import deno
     found=Path(deno.find_deno_bin())
     if found.is_file():return str(found)
@@ -107,3 +112,4 @@ def youtube_download(item,path,update,cancel):
     except Exception:
         if cancel.is_set():raise InterruptedError() from None
         raise ValueError('YouTube не отдал запись. Проверьте ссылку и доступность с сервера. Ограничения входа/региона могут мешать скачиванию; можно загрузить файл с устройства.') from None
+

@@ -12,6 +12,7 @@
 <label>Название новой папки выпуска<input id="inputName" maxlength="100" placeholder="2026-10-19 · УЗ футбол"></label>
 <label>Ведущий<select id="inputSpeaker"><option value="ru">РУ</option><option value="uz">УЗ</option></select></label><label>Шаблон<select id="inputProfile"></select></label>
 <label>Сохранённые настройки<select id="inputPreset"><option value="">Стандартные</option></select></label><button id="createDraft" class="primary wide">Создать папку и выпуск</button></div>
+<details id="serverImportPanel" class="surface"><summary>Собрать из готовой папки сервера</summary><p class="hint">Используются ведущий, шаблон и настройки, выбранные выше. Для Shorts выбирайте папку лонга: ведущий и сценарий будут взяты из shorts.</p><label>Папка материалов<input id="serverFolder" readonly></label><button id="chooseServerFolder">Выбрать папку</button><button id="scanServerFolder">Найти файлы</button><label>Запись ведущего<select id="serverHost"></select></label><label>Сценарий<select id="serverScript"></select></label><button id="importServerFolder">Проверить и импортировать</button></details>
 <div id="input_script" class="input-step surface" hidden><h2>Сценарий выпуска</h2><p class="hint">Вставьте текст или загрузите TXT/DOCX. Сначала определите разборы, затем добавляйте записи матчей.</p>
 <label>Файл сценария<input id="scriptFile" type="file" accept=".txt,.docx"></label><label>Полный сценарий<textarea id="inputScript" rows="10"></textarea></label><button id="parseInput" class="primary wide">Сохранить и определить разборы</button><div id="inputBlocks"></div><button id="saveTitles">Сохранить названия разборов</button></div>
 <div id="input_files" class="input-step" hidden>
@@ -51,6 +52,7 @@
 <button id="preview" class="primary wide">Посмотреть вставку</button><button id="context" class="primary wide">Плашка в видео</button>
 <p id="contextHint" class="hint">Короткий черновой фрагмент до 20 секунд: ведущий, игровые вставки и соседние плашки. Правки из полей ниже учитываются, но не сохраняются до подтверждения.</p>
 <video id="video" controls playsinline hidden></video><audio id="audio" controls hidden></audio><img id="image" alt="Оформление плашки" hidden>
+<label>Скорость просмотра<select id="reviewSpeed"><option value="1">1×</option><option value="1.25">1,25×</option><option value="1.5">1,5×</option><option value="1.75">1,75×</option><option value="2">2×</option></select></label>
 <div class="mediaButtons"><button id="voice">Послушать речь</button><button id="translate">Перевести на русский</button></div><div id="translation" hidden></div>
 <label>Сценарий<textarea id="script" readonly rows="3"></textarea></label>
 <label id="recognizedLabel">Распознано в речи<textarea id="recognized" rows="3"></textarea></label>
@@ -65,6 +67,8 @@
 <section id="exportPanel" hidden><h2>Сохранить готовое видео</h2><p id="exportScope"></p><p id="exportChecks" class="hint"></p>
 <div id="finishedPanel" class="surface" hidden><label>Готовые видео этого проекта<select id="resultChoice"></select></label><p id="resultMeta" class="hint"></p>
 <video id="resultVideo" controls playsinline preload="metadata" hidden></video><button id="watchResult" class="primary wide">Посмотреть полное видео</button>
+<label>Скорость просмотра<select id="resultSpeed"><option value="1">1×</option><option value="1.25">1,25×</option><option value="1.5">1,5×</option><option value="1.75">1,75×</option><option value="2">2×</option></select></label>
+<button id="copyDriveLink" hidden>Скопировать ссылку на Диск</button><label id="copyDriveFallback" hidden>Ссылка для копирования<input id="copyDriveValue" readonly></label>
 <p id="uploadMessage"></p><progress id="uploadProgress" max="100" hidden></progress><button id="pauseUpload" hidden>Приостановить отправку</button><a id="driveLink" target="_blank" rel="noopener noreferrer" hidden>Открыть видео на Google Диске ↗</a></div>
 <div class="surface"><h3>Google Диск</h3><p id="driveAccount" class="hint"></p>
 <label>Папка назначения<select id="driveChoice"><option value="ru_long">РУ · лонг</option><option value="ru_shorts">РУ · Shorts</option><option value="uz_long">УЗ · лонг</option><option value="uz_shorts">УЗ · Shorts</option><option value="custom">Другая папка</option></select></label>
@@ -86,5 +90,6 @@
 <nav id="navigation" aria-label="Разделы"><button id="inputTab"><span>＋</span>Выпуск</button><button id="processTab"><span>01</span>Процесс</button><button id="reviewTab"><span id="reviewBadge">02</span>Проверка</button><button id="exportTab"><span>03</span>Результат</button></nav>
 <script defer src="/input.js"></script>
 </body></html>
+
 
 

@@ -57,6 +57,41 @@ class Inputs:
         try:target.mkdir()
         except FileExistsError:raise RemoteError('Такая папка уже существует. Выберите её или задайте другое название.') from None
         return dict(path=str(target))
+
+    def server_files(self,data):
+        from .mini_export import folder
+        from .folder_import import presenter_folder,root_files
+        from .profiles import PROFILES
+        profile=data.get('profile')
+        if profile not in {p for rows in PROFILES.values() for p,_ in rows}:raise RemoteError('Выберите шаблон.')
+        root=folder(data.get('folder',''));hosts,scripts=root_files(presenter_folder(root,profile))
+        return dict(hosts=[str(p) for p in hosts],scripts=[str(p) for p in scripts])
+
+    def server_import(self,data):
+        from .mini_export import folder
+        from .folder_import import presenter_folder,build_import
+        from .model import Project
+        from .profiles import apply_profile
+        from .script_input import read_script
+        self.server_files(data)  # Validate profile and selected root before writes.
+        root=folder(data['folder']);target=presenter_folder(root,data['profile'])
+        with self.lock:
+            previous=next((r for r in self.catalog() if Path(r['folder'])==target and r['profile']==data['profile']),None)
+            if previous:return dict(id=previous['id'])
+            if (target/'mobile-draft.json').exists():raise RemoteError('В папке уже есть черновик другого выпуска. Выберите его в списке или используйте другую папку.')
+            project=Project();apply_profile(project,data['profile'])
+            project,_,notes=build_import(project,root,data.get('host',''),data.get('script',''))
+            d=dict(id=secrets.token_hex(16),name=target.name,folder=str(target),profile=project.profile,preset=str(data.get('preset','')),asset_folder='',script=read_script(data['script']),intro=asdict(project.intro),blocks=[asdict(b) for b in project.blocks],outro=asdict(project.outro),files=[],created=time.time(),project='',import_notes=notes)
+            def ready(path,role,block='',home='',away='',fighter=''):
+                p=Path(path);row=self.new_file(d,dict(role=role,block=block,name=p.name,home=home,away=away,fighter=fighter))
+                row.update(path=str(p),size=p.stat().st_size,received=p.stat().st_size,status='ready',source='local',message='Файл на сервере')
+            ready(project.host,'host')
+            for b in project.blocks:
+                for m in project.matches:
+                    if m.id in b.match_ids:ready(m.path,'match',b.uid,m.home,m.away,m.fighter)
+            (target/'Результат').mkdir(exist_ok=True)
+            self.save(d);rows=self.catalog();rows.append({k:d[k] for k in ('id','name','folder','profile','created')});storage.write(self.index,rows)
+            return dict(id=d['id'])
     def create(self,data):
         from .profiles import PROFILES
         profile=data.get('profile')
@@ -81,7 +116,7 @@ class Inputs:
             intro,blocks,outro=parse_episode(text,d['profile'])
             if not blocks:raise RemoteError('Разборы не найдены. Проверьте сценарий и выбранный шаблон.')
             d.update(script=text,intro=asdict(intro),blocks=[asdict(b) for b in blocks],outro=asdict(outro))
-            self.save(d);(Path(d['folder'])/'Сценарий'/'text.txt').write_text(text,encoding='utf-8')
+            self.save(d);target=Path(d['folder'])/'Сценарий'/'text.txt';target.parent.mkdir(exist_ok=True);target.write_text(text,encoding='utf-8')
             return dict(ok=True)
     def settings(self,data):
         with self.lock:
@@ -113,7 +148,7 @@ class Inputs:
         section={'host':'Ведущий','match':'Матчи','script':'Сценарий'}[item['role']]
         root=Path(d['folder'])/section
         if item['role']=='match':root=root/item.get('subfolder',item['block'])
-        root.mkdir(exist_ok=True)
+        root.mkdir(parents=True,exist_ok=True)
         ext=Path(item['name']).suffix.lower()
         if ext not in ('.mp4','.mov','.mkv','.webm','.m4v','.txt','.docx'):ext='.mp4'
         return root/(('.partial-' if partial else '')+item['id']+ext)
@@ -234,7 +269,7 @@ class Inputs:
             if r['status']=='ready' and (not r['path'] or not Path(r['path']).is_file()):problems.append('Файл недоступен: '+r['name'])
             if r['role']=='match' and (not r['fighter'] if d['profile']=='uz_combat' else not r['home'] or not r['away']):problems.append('Укажите участников записи: '+r['name'])
         counts={b['uid']:sum(r['role']=='match' and r['block']==b['uid'] and r['status']=='ready' for r in files) for b in d['blocks']}
-        notes=[b['title']+': записей нет, останется ведущий.' for b in d['blocks'] if not counts[b['uid']]]
+        notes=d.get('import_notes',[])+[b['title']+': записей нет, останется ведущий.' for b in d['blocks'] if not counts[b['uid']]]
         return dict(problems=problems,notes=notes,hosts=[r['name'] for r in hosts],counts=counts,can_create=not problems)
     def activate(self,data):
         from .model import Project,Block,MatchSource
@@ -274,3 +309,4 @@ class Inputs:
             bridge.history=None;bridge.process.job=None;bridge.process.auto_scope=None;bridge.export.job=None
             bridge.export.last_folder=str(Path(d['folder'])/'Результат')
             return dict(ok=True,project=str(target))
+

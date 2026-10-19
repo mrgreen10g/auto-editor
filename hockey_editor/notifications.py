@@ -91,7 +91,7 @@ def api(token,method,payload):
 
 def send(config,text):
     validate(config)
-    payload={'chat_id':config['chat_id'],'text':text[:4000]}
+    payload={'chat_id':config['chat_id'],'text':text[:4000],'disable_notification':False}
     if config.get('mini_enabled') and config.get('mini_url'):
         page=config.get('_mini_page','review')
         if page not in ('review','process','export','clips','cards'):page='review'
@@ -102,14 +102,14 @@ def send(config,text):
 class Notifier:
     def __init__(self,report=lambda _:None):
         self.config=load();self.report=report;self.queue=queue.Queue(maxsize=64);self.seen=set();self.lock=threading.Lock();self.worker=None
-    def emit(self,job,event,text):
+    def emit(self,job,event,text,scope=None):
         config=dict(self.config)
         config['_mini_page']={'started':'process','render':'export','error':'process','cancelled':'process','clips':'clips','cards':'cards'}.get(event,'review')
         if not config['enabled'] or event not in config['events']:return
         key=(job,event)
         with self.lock:
             if key in self.seen:return
-            try:self.queue.put_nowait((config,text,time.monotonic()))
+            try:self.queue.put_nowait((config,text,time.monotonic(),scope))
             except queue.Full:self.report('Очередь Telegram заполнена; монтаж продолжается.');return
             if len(self.seen)>2048:self.seen.clear()
             self.seen.add(key)
@@ -120,20 +120,41 @@ class Notifier:
             with self.lock:
                 try:item=self.queue.get_nowait()
                 except queue.Empty:self.worker=None;return
-            config,text,created=item
+            config,text,created,scope=item
             try:
                 for attempt in range(3):
                     if time.monotonic()-created>600:break
-                    try:send(config,text);break
+                    try:
+                        result=send(config,text)
+                        if scope and isinstance(result,dict) and isinstance(result.get('message_id'),int):self.replace_previous(config,scope,result['message_id'])
+                        break
                     except DeliveryError as error:
                         if not error.retry or attempt==2:self.report(str(error));break
                         time.sleep(error.delay*(attempt+1))
                     except ValueError:self.report('Telegram не настроен; монтаж продолжается.');break
             finally:self.queue.task_done()
 
+    def replace_previous(self,config,scope,message_id):
+        import hashlib
+        path=location().with_name('telegram-messages.json')
+        key=hashlib.sha256((config['token']+'|'+str(config['chat_id'])+'|'+scope).encode()).hexdigest()
+        try:
+            try:rows=json.loads(path.read_text(encoding='utf-8'))
+            except (OSError,ValueError):rows={}
+            old=rows.get(key,{})
+            rows[key]={'id':message_id,'time':time.time()}
+            rows=dict(sorted(rows.items(),key=lambda item:item[1]['time'])[-500:])
+            path.parent.mkdir(parents=True,exist_ok=True);temp=path.with_suffix('.tmp');temp.write_text(json.dumps(rows),encoding='utf-8');temp.replace(path)
+            if old.get('id') and old['id']!=message_id and time.time()-old.get('time',0)<47*3600:
+                try:api(config['token'],'deleteMessage',{'chat_id':config['chat_id'],'message_id':old['id']})
+                except DeliveryError:self.report('Новый статус отправлен, но Telegram не позволил удалить предыдущий.')
+        except (OSError,TypeError,KeyError):self.report('Статус отправлен; не удалось сохранить ID сообщения Telegram.')
+
 def begin(app,stage):
     app.notification_job=uuid.uuid4().hex
-    app.notification_title=(Path(app.project_path).stem if app.project_path else Path(app.project.host).stem or 'Выпуск')+' · '+app.project.profile
+    from .episode_identity import title,scope
+    app.notification_title=title(app.project)+' · '+app.project.profile
+    app.notification_scope=scope(app.project)
     app.notification_started=time.monotonic();app.auto_timing_ready=False
     if hasattr(app,'mini'):app.mini.process.begin(stage)
     emit(app,'started',{'goals':'Поиск фрагментов начат.','analyze':'Поиск таймингов и плашек начат.','render':'Подготовка и рендер начаты.'}.get(stage,stage))
@@ -142,7 +163,7 @@ def emit(app,event,text):
     notifier=getattr(app,'notifier',None)
     if notifier:
         elapsed=int(time.monotonic()-getattr(app,'notification_started',time.monotonic()))
-        notifier.emit(getattr(app,'notification_job','startup'),event,getattr(app,'notification_title','Auto Editor')+'\n'+text+f'\nПрошло: {elapsed//60} мин {elapsed%60} с.')
+        notifier.emit(getattr(app,'notification_job','startup'),event,getattr(app,'notification_title','Auto Editor')+'\n'+text+f'\nПрошло: {elapsed//60} мин {elapsed%60} с.',scope=getattr(app,'notification_scope',None))
 
 def clips_finished(app,errors):
     from .goals import unresolved
@@ -159,4 +180,5 @@ def continue_timing(app):
         app.auto_timing_ready=False;app.mini.process.maybe_auto();return
     ready=getattr(app,'auto_timing_ready',False);app.auto_timing_ready=False
     if ready and not app.cancel.is_set() and app.notifier.config.get('auto_timing',True):app.start(False)
+
 

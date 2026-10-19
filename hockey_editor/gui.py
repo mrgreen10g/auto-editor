@@ -280,6 +280,8 @@ class App(EpisodeMixin,MatchMixin):
         self.previewbutton.pack(side='left')
         self.folderbutton = ttk.Button(row, text='Показать в папке', command=self.result_folder, state='disabled')
         self.folderbutton.pack(side='left', padx=8)
+        from .drive_ui import show_upload
+        ttk.Button(result,text='Отправить на Google Диск…',command=lambda:show_upload(self)).pack(anchor='w',pady=(12,0))
         ttk.Label(page, text='Режим «Все разборы» соединяет блоки в один MP4 с переходами. Вступление и заключение добавим на следующем этапе.',
                   style='Muted.TLabel', wraplength=700).pack(anchor='w')
 
@@ -1203,6 +1205,7 @@ def launch():
     root = tk.Tk()
     App(root)
     root.mainloop()
+
 
 
 

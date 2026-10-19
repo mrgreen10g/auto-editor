@@ -19,6 +19,7 @@ class PreviewPlayer:
         self.started=None;self.base=0;self.index=0;self.pending=None
         self.audio_segment=None
         self.frame_transform=None;self.raw_frame=None
+        self.speed=1.;self.decode_cancel=threading.Event()
 
     def load(self,path,audio,duration,position=0):
         self.stop();self.path=Path(path);self.audio=Path(audio) if audio else None;self.duration=duration
@@ -27,6 +28,7 @@ class PreviewPlayer:
         self.seek(position)
 
     def stop(self):
+        self.decode_cancel.set()
         self.playing=False;self.generation+=1
         if os.name=='nt':
             import winsound
@@ -44,9 +46,17 @@ class PreviewPlayer:
         if self.playing:self.stop()
         elif self.path:self.seek(0 if self.position>=self.duration-.1 else self.position,True)
 
+    def set_speed(self,value):
+        speed=float(value)
+        if speed not in (1.,1.25,1.5,1.75,2.):raise ValueError('Недопустимая скорость просмотра.')
+        if speed==self.speed:return
+        playing=self.playing;self.speed=speed
+        if self.path:self.seek(self.position,playing)
+
     def seek(self,position,play=False):
         if not self.path or self.closed:return
         self.stop();self.position=max(0,min(float(position),max(0,self.duration-.04)))
+        self.decode_cancel=threading.Event();cancel=self.decode_cancel;speed=self.speed
         self.base=self.position;self.playing=play;self.started=None;self.index=0;self.pending=None
         fw,fh=getattr(self,'frame_size',(640,360))
         generation=self.generation;frames=queue.Queue(4);self.queue=frames
@@ -67,6 +77,11 @@ class PreviewPlayer:
                             if not chunk:break
                             if generation!=self.generation:return
                             dst.writeframesraw(chunk)
+                    if speed!=1:
+                        from .media import run
+                        accelerated=segment.with_name(segment.stem+'-speed.wav')
+                        run(['-y','-i',segment,'-af',f'atempo={speed}','-c:a','pcm_s16le',accelerated],cancel)
+                        segment=accelerated
                 if generation!=self.generation:return
                 flags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0
                 args=[ffmpeg(),'-hide_banner','-loglevel','error','-nostdin','-ss',str(position),'-i',str(path),
@@ -113,7 +128,7 @@ class PreviewPlayer:
             if self.playing and audio:
                 import winsound
                 winsound.PlaySound(str(audio),winsound.SND_FILENAME|winsound.SND_ASYNC|winsound.SND_NODEFAULT)
-        due=self.started+self.index/15
+        due=self.started+self.index/(15*self.speed)
         if self.playing and now<due:
             self.after=self.widget.after(max(1,int((due-now)*1000)),lambda:self.tick(generation));return
         self.position=min(self.duration,self.base+self.index/15)
@@ -133,4 +148,5 @@ class PreviewPlayer:
 
     def close(self):
         self.closed=True;self.stop()
+
 

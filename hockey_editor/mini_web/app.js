@@ -21,11 +21,11 @@ function showResult(){
  $('pauseUpload').hidden=!active;$('sendDrive').disabled=!row.available||!resultsState.drive.connected||resultsState.upload_busy;
  $('sendDrive').textContent=upload&&['error','paused'].includes(upload.status)?'Продолжить отправку на Диск':'Отправить готовое видео на Диск';
  const link=upload?.status==='completed'&&/^https:\/\/drive\.google\.com\/file\/d\/[A-Za-z0-9_-]+\/view$/.test(upload.url||'');
- $('driveLink').hidden=!link;if(link)$('driveLink').href=upload.url;
+ $('driveLink').hidden=!link;$('copyDriveLink').hidden=!link;$('copyDriveFallback').hidden=true;if(link)$('driveLink').href=upload.url;
 }
 async function refreshResults(){
  resultsState=await api('result-status');const old=$('resultChoice').value;
- $('resultChoice').replaceChildren();for(const row of resultsState.results)$('resultChoice').add(new Option(row.name+' · '+new Date(row.created*1000).toLocaleString(),row.id));
+ $('resultChoice').replaceChildren();for(const row of resultsState.results)$('resultChoice').add(new Option((row.title||row.name)+' · '+new Date(row.created*1000).toLocaleString(),row.id));
  if(resultsState.results.some(x=>x.id===old))$('resultChoice').value=old;
  $('driveAccount').textContent=resultsState.drive.connected?'Подключён: '+resultsState.drive.account:'Сначала подключите аккаунт в настройках Google Диска на сервере.';
  if(!driveInitialized){
@@ -109,7 +109,7 @@ async function prepare(mode){
  }
  throw new Error('Подготовка занимает больше времени. Обновите список и повторите позже.');
 }
-async function guard(fn){if(waiting)return;waiting=true;document.body.dataset.busy='true';buttons();try{await fn()}catch(error){notice(error.message||'Нет связи с сервером. Проверьте подключение.')}finally{waiting=false;document.body.dataset.busy='false';buttons()}}
+async function guard(fn,background=false){if(waiting&&background)return;while(waiting)await new Promise(r=>setTimeout(r,25));waiting=true;document.body.dataset.busy='true';buttons();try{await fn()}catch(error){notice(error.message||'Нет связи с сервером. Проверьте подключение.')}finally{waiting=false;document.body.dataset.busy='false';buttons()}}
 $('refresh').onclick=()=>guard(async()=>{back();await refreshPage();notice('Данные обновлены.')});$('back').onclick=()=>guard(async()=>{back();await refresh()});
 $('clips').onclick=()=>{kind='clip';renderList()};$('cards').onclick=()=>{kind='card';renderList()};$('all').onchange=renderList;$('choice').onchange=choice;
 $('blockFilter').onchange=renderList;$('typeFilter').onchange=renderList;
@@ -122,7 +122,16 @@ for(const [id,mode] of [['preview','clip'],['context','context'],['voice','voice
 $('undo').onclick=()=>guard(async()=>{await api('action',{revision:state.revision,decision:'undo'});back();await refresh();notice('Последнее решение отменено и сохранено.')});
 guard(async()=>{tg?.ready();tg?.expand();if(!tg?.initData)throw new Error('Откройте это приложение кнопкой в личном чате со своим Telegram-ботом.');session=(await api('auth',{initData:tg.initData})).session;const page=new URLSearchParams(location.search).get('view');if(page==='clips')kind='clip';if(page==='cards')kind='card';await refresh();await switchPage(['clips','cards','review'].includes(page)?'review':page==='export'?'export':'process');notice('');});
 async function refreshPage(){if(pageMode==='input')await refreshInputs();else if(pageMode==='process')await refreshProcess();else if(pageMode==='export')await refreshExport();else await refresh()}
-setInterval(()=>{if(session&&!waiting&&!current)guard(refreshPage)},3000);
+setInterval(()=>{if(session&&!waiting&&!current)guard(refreshPage,true)},3000);
+
+let playbackSpeed=1;
+try{const saved=Number(localStorage.getItem('playbackSpeed'));if([1,1.25,1.5,1.75,2].includes(saved))playbackSpeed=saved}catch{}
+for(const id of ['reviewSpeed','resultSpeed']){
+ $(id).value=String(playbackSpeed);
+ $(id).onchange=()=>{playbackSpeed=Number($(id).value);try{localStorage.setItem('playbackSpeed',playbackSpeed)}catch{};for(const other of ['reviewSpeed','resultSpeed'])$(other).value=String(playbackSpeed);for(const media of ['video','audio','resultVideo'])$(media).playbackRate=playbackSpeed;};
+}
+for(const id of ['video','audio','resultVideo'])$(id).addEventListener('loadedmetadata',()=>{$(id).playbackRate=playbackSpeed;$(id).preservesPitch=true});
+$('copyDriveLink').onclick=async()=>{const url=selectedResult()?.upload?.url;if(!/^https:\/\/drive\.google\.com\/file\/d\/[A-Za-z0-9_-]+\/view$/.test(url||''))return;try{await navigator.clipboard.writeText(url);notice('Ссылка скопирована.')}catch{$('copyDriveFallback').hidden=false;$('copyDriveValue').value=url;$('copyDriveValue').focus();$('copyDriveValue').select();notice('Выделите ссылку и нажмите «Скопировать».');}};
 
 
 async function refreshExport(){
@@ -206,6 +215,7 @@ $('primaryAction').onclick=()=>guard(async()=>{
  else if(route)await startProcess(route);
 });
 $('cancelProcess').onclick=()=>guard(async()=>{if(!confirm('Остановить текущий этап? Автоматическое продолжение будет отменено.'))return;await api('process-cancel',{job:processState.job.id});await refreshProcess()});
+
 
 
 

@@ -6,6 +6,10 @@ os.environ['HF_HUB_DISABLE_TELEMETRY']='1'
 os.environ['DO_NOT_TRACK']='1'
 import sys,json,tempfile,threading
 from pathlib import Path
+if getattr(sys,'frozen',False):
+    # Console-oriented download libraries also run inside a windowed EXE.
+    if sys.stdout is None:sys.stdout=open(os.devnull,'w',encoding='utf-8')
+    if sys.stderr is None:sys.stderr=open(os.devnull,'w',encoding='utf-8')
 
 def self_test(report):
     from hockey_editor.mobile_downloads import deno_path
@@ -32,7 +36,7 @@ def self_test(report):
     assert context.cert_store_stats()['x509_ca']>0
     from hockey_editor import mini_server
     mini_assets=Path(mini_server.__file__).with_name('mini_web')
-    assert all((mini_assets/name).is_file() for name in ('index.html','app.js','app.css'))
+    assert all((mini_assets/name).is_file() for name in ('index.html','app.js','app.css','input.js'))
     from hockey_editor.media import run,probe
     from hockey_editor.alignment import synthesize,features,subsequence_dtw,normalized
     import numpy as np
@@ -88,8 +92,9 @@ if __name__=='__main__':
         if '--self-test' in sys.argv:
             Path(sys.argv[sys.argv.index('--self-test')+1]).write_text(json.dumps({'status':'failed','error':repr(e)}),encoding='utf-8')
         if sys.stdout:print(repr(e))
-        else:
+        elif '--self-test' not in sys.argv and '--smoke-gui' not in sys.argv:
             import tkinter.messagebox
             tkinter.messagebox.showerror('Auto Editor',str(e))
         sys.exit(1)
+
 

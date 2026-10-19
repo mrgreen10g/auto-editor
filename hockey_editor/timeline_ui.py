@@ -51,6 +51,8 @@ class TimelineEditor:
         self.player.frame_transform=lambda image,t:self.overlays.compose(image,t,self.live_plan or self.plan)
         playbar=ttk.Frame(left);playbar.pack(fill='x')
         self.play_button=ttk.Button(playbar,text='▶ / ❚❚',command=self.toggle_preview);self.play_button.pack(side='left')
+        speed=ttk.Combobox(playbar,values=['1×','1.25×','1.5×','1.75×','2×'],width=6,state='readonly');speed.set('1×');speed.pack(side='left',padx=4)
+        speed.bind('<<ComboboxSelected>>',lambda _:self.player.set_speed(speed.get().rstrip('×')))
         self.seekvar=tk.DoubleVar()
         self.seekbar=ttk.Scale(playbar,from_=0,to=self.plan.duration,variable=self.seekvar)
         self.seekbar.pack(side='left',fill='x',expand=True,padx=8)
@@ -395,4 +397,5 @@ class TimelineEditor:
             if answer is None:return
             if answer:self.apply()
         self.closed=True;self.player.close();self.window.after_cancel(self.poll_id);self.window.grab_release();self.window.destroy()
+
 

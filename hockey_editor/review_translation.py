@@ -54,7 +54,7 @@ def ensure_model(folder, cancel, log):
 
 
 def cache_key(text):
-    return hashlib.sha256(json.dumps([REV, 'ru-sports-v2', text], ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps([REV, 'ru-sports-v3-sentence-quality', text], ensure_ascii=False).encode()).hexdigest()
 
 
 def translate(texts, cache, cancel, log):
@@ -84,23 +84,18 @@ def translate(texts, cache, cancel, log):
                     from tokenizers import Tokenizer
                     tokenizer = Tokenizer.from_file(str(folder/'tokenizer.json'))
                     model = ctranslate2.Translator(str(folder), device='cpu', compute_type='int8', inter_threads=1, intra_threads=min(4, max(1, (os.cpu_count() or 2)-1)))
-                tokens = tokenizer.encode(text, add_special_tokens=False).tokens
-                parts = []
-                # Explicit chunks prevent silently truncating long script excerpts.
-                prefix = tokenizer.encode('<2ru> ', add_special_tokens=False).tokens
-                for offset in range(0, len(tokens), 320):
-                    if cancel.is_set(): raise InterruptedError('Перевод отменён.')
-                    source = prefix+tokens[offset:offset+320]+['</s>']
-                    out = model.translate_batch([source], beam_size=2, max_decoding_length=512)[0].hypotheses[0]
-                    if len(out) >= 512:
-                        raise ValueError('Перевод достиг ограничения длины. Полный перевод не подтверждён.')
-                    ids = [tokenizer.token_to_id(t) for t in out]
-                    if any(i is None for i in ids): raise ValueError('Неизвестные токены модели перевода.')
-                    parts.append(tokenizer.decode(ids, skip_special_tokens=True))
+                from .translation_quality import chunks,translate_piece
+                parts=[];failed=False
+                for piece in chunks(text,tokenizer):
+                    value=exact_translation(piece) or translate_piece(piece,model,tokenizer,cancel)
+                    if value is None:
+                        failed=True;parts.append('Не удалось надёжно перевести этот фрагмент. Прослушайте речь; выдуманный перевод скрыт.\nИсходная фраза: '+piece)
+                    else:parts.append(value)
                 value = ' '.join(parts).strip()
                 if not value: raise ValueError('Модель вернула пустой перевод.')
                 if sensitive(text):
                     value='⚠ Непроверенный перевод спортивной формулировки: модель может ошибиться в отрицании или направлении ставки.\n\n'+value
+                if failed:results.append(value);continue
                 temp = saved.with_suffix('.tmp')
                 temp.write_text(json.dumps({'source':text, 'translation':value}, ensure_ascii=False), encoding='utf-8')
                 temp.replace(saved); results.append(value)
@@ -161,3 +156,4 @@ def show(parent, texts, cache):
     w.bind('<Destroy>', destroyed)
     threading.Thread(target=work, daemon=True).start(); poll()
     return w
+

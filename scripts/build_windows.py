@@ -4,12 +4,14 @@ root=Path(__file__).resolve().parents[1]
 os.chdir(root)
 sys.path.insert(0,str(root))
 from hockey_editor import __version__
+from hockey_editor.mobile_downloads import deno_path
 cmd=[sys.executable,'-m','PyInstaller','--noconfirm','--clean','--windowed','--onedir','--name','AutoEditor',
      '--collect-all','yt_dlp','--collect-all','yt_dlp_ejs','--collect-all','deno',
      '--collect-all','espeakng_loader','--collect-all','imageio_ffmpeg','--collect-all','num2words',
      '--collect-all','rapidocr_onnxruntime','--collect-all','onnxruntime','--collect-data','cv2',
      '--collect-all','faster_whisper','--collect-all','ctranslate2','--collect-all','av','--collect-all','tokenizers','--collect-data','certifi',
      '--add-data','hockey_editor/mini_web'+os.pathsep+'hockey_editor/mini_web',
+     '--add-binary',deno_path()+os.pathsep+'deno_bin',
      '--collect-submodules','scipy.signal','--hidden-import','scipy.special._special_ufuncs','main.py']
 subprocess.run(cmd,check=True)
 dest=root/'dist'/'AutoEditor';licenses=dest/'licenses';licenses.mkdir(exist_ok=True)
@@ -34,4 +36,5 @@ subprocess.run([str(dest/'AutoEditor.exe'),'--smoke-gui'],check=True,timeout=45)
 shutil.copy2(report,dest/'bundle-check.json')
 shutil.make_archive(str(root/'dist'/f'AutoEditor-{__version__}-Windows'),'zip',root/'dist','AutoEditor')
 print('Windows bundle built and checked.')
+
 

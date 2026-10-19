@@ -22,8 +22,10 @@ class Results:
             old=next((r for r in rows if r['path']==str(path) and r['identity']==identity),None)
             if old:return old
             app=self.bridge.app
+            from .episode_identity import title,scope
             row=dict(id=secrets.token_hex(16),path=str(path),name=path.name,identity=identity,created=time.time(),
                      profile=job.get('profile',app.project.profile) if job else app.project.profile,duration=app.plan.duration if app.plan else None,upload=None)
+            row.update(title=title(app.project),notification_scope=scope(app.project))
             rows.append(row);drive.write(journal,rows)
         if job and job.get('drive_folder'):
             try:self.start({'id':row['id'],'folder':job['drive_folder']},journal=journal)
@@ -52,7 +54,7 @@ class Results:
                     if upload['status']=='uploading' and (not self.worker or not self.worker.is_alive() or self.active!=(str(self.file()),row['id'])):
                         upload.update(status='paused',message='Отправка прервана. Можно продолжить.')
                 path=Path(row['path']);available=path.is_file() and [path.stat().st_size,path.stat().st_mtime_ns]==row['identity']
-                public.append({k:row.get(k) for k in ('id','name','duration','profile','created')}|dict(size=row['identity'][0],available=available,upload=upload))
+                public.append({k:row.get(k) for k in ('id','name','title','duration','profile','created')}|dict(size=row['identity'][0],available=available,upload=upload))
             return dict(results=public,drive=drive.public_config(),upload_busy=bool(self.worker and self.worker.is_alive()))
     def media(self,data):
         with self.lock:row=self.find(data.get('id'))
@@ -90,7 +92,7 @@ class Results:
                     if job.get('status')=='completed':
                         notifier=getattr(self.bridge.app,'notifier',None)
                         if notifier and hasattr(notifier,'emit'):
-                            notifier.emit(row['id']+'-drive-'+folder,'render',row['name']+'\nВидео загружено на Google Диск.\n'+job.get('url',''))
+                            notifier.emit(row['id']+'-drive-'+folder,'render',(row.get('title') or row['name'])+'\nВидео загружено на Google Диск.\n'+job.get('url',''),scope=row.get('notification_scope'))
             self.worker=threading.Thread(target=work,daemon=True);self.worker.start()
         return dict(ok=True)
     def pause(self,data):
@@ -98,3 +100,4 @@ class Results:
             if self.active!=(str(self.file()),data.get('id')):raise RemoteError('Эта отправка не выполняется.',409)
             self.cancel.set()
         return dict(ok=True)
+

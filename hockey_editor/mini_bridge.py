@@ -96,7 +96,8 @@ class Bridge:
                 owner=next((b.title for b in [app.project.intro,*app.project.blocks,app.project.outro] if b.uid==task.get('block_id')),None)
                 if not owner:owner=next((s.get('title','Разбор') for s in app.plan.sections if s.get('block_id')==task.get('block_id')),'Начало / завершение')
                 items.append(dict(id='card:'+task['id'],kind='card',title=title+' · '+where,text=card.text if card else task['script'],status=task['status'],block=task.get('block_id','framing'),block_title=owner,category=title))
-        return dict(revision=self.revision(),title=Path(app.project_path or app.project.host or 'Выпуск').stem,profile=app.project.profile,items=items,busy=app.busy,locked=self.locked(),stage=app.status.get(),undo=bool(self.history and self.history['after']==self.revision()),saved=bool(app.project_path),scope='Весь выпуск' if app.project.whole_episode else 'Плашки текущего разбора')
+        from .episode_identity import title
+        return dict(revision=self.revision(),title=title(app.project),profile=app.project.profile,items=items,busy=app.busy,locked=self.locked(),stage=app.status.get(),undo=bool(self.history and self.history['after']==self.revision()),saved=bool(app.project_path),scope='Весь выпуск' if app.project.whole_episode else 'Плашки текущего разбора')
     def options(self,block,event):
         from .goals import source_signature,scan_root
         result=[]
@@ -223,6 +224,7 @@ class Bridge:
     def handle(self,kind,data):
         if kind.startswith('input-'):
             actions={'status':self.inputs.status,'mkdir':self.inputs.mkdir,'create':self.inputs.create,
+                     'server-files':self.inputs.server_files,'server-import':self.inputs.server_import,
                      'script':self.inputs.script,'settings':self.inputs.settings,'upload':self.inputs.upload_init,
                      'finish':self.inputs.finish,'link':self.inputs.link,'retry':self.inputs.retry,
                      'edit':self.inputs.edit_file,'reuse':self.inputs.reuse,'activate':self.inputs.activate}
@@ -259,6 +261,7 @@ class Bridge:
                 return dict(file=job['file'])
             return {k:v for k,v in job.items() if k not in ('file','revision','created')}
         raise RemoteError('Неизвестный запрос.',404)
+
 
 
 

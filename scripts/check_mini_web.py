@@ -66,7 +66,8 @@ def check():
                 page.locator('#approve').wait_for(state='visible');page.set_viewport_size({'width':844,'height':390});box=page.locator('#approve').bounding_box();assert box['y']+box['height']<=390
                 page.set_viewport_size({'width':390,'height':844})
                 (ROOT/'build').mkdir(exist_ok=True);page.screenshot(path=str(ROOT/'build/gui-mini-card.jpg'),full_page=True)
-                click('#back');click('#clips');click('.item >> nth=0')
+                click('#back');click('#clips');expect(page.locator('#clips')).to_have_class('active');click('#items .item >> nth=0')
+                expect(page.locator('#clipFields')).to_be_visible()
                 click('#preview');page.locator('#video').wait_for(state='visible',timeout=60000)
                 page.screenshot(path=str(ROOT/'build/gui-mini-clip.jpg'),full_page=True)
                 click('#approve');page.locator('#list').wait_for(state='visible')
@@ -116,6 +117,7 @@ def check():
                     page.wait_for_timeout(100)
                 assert media['ready']>=1,media
                 duration=video.evaluate('(v) => v.duration');assert .8<duration<1.2
+                page.locator('#resultSpeed').select_option('1.5');assert video.evaluate('(v)=>v.playbackRate')==1.5
                 video.evaluate('(v) => {v.currentTime=0.5}')
                 expect(page.locator('#driveChoice')).to_have_value('ru_long')
                 assert len(bridge.results.records())==1
@@ -142,12 +144,21 @@ def check():
                 assert Path(app.project_path).name=='Выпуск.hockeyproj'
                 assert len(app.project.blocks)==2 and Path(app.project.host).is_file()
                 assert app.project.full_video and app.project.whole_episode
+                # The alternate path imports existing server files without uploading.
+                from test_folder_import import setup
+                existing=root/'existing';existing.mkdir();setup(existing)
+                click('#inputTab');page.locator('#draftChoice').select_option('');click('#inputSteps [data-step="setup"]')
+                click('#serverImportPanel summary');page.locator('#serverFolder').evaluate('(e,p)=>{e.value=p}',str(existing))
+                click('#scanServerFolder');click('#importServerFolder')
+                expect(page.locator('#inputSummary')).to_contain_text('АМУР')
+                expect(page.locator('#activateInput')).to_be_enabled()
                 assert not errors,errors
                 browser.close()
         finally:stop.set();gateway.close()
     print('Mobile review, clip preview, audio, card image, persistence and undo: OK')
 
 if __name__=='__main__':check()
+
 
 
 
