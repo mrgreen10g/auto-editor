@@ -92,7 +92,7 @@ if __name__=='__main__':
         if '--self-test' in sys.argv:
             Path(sys.argv[sys.argv.index('--self-test')+1]).write_text(json.dumps({'status':'failed','error':repr(e)}),encoding='utf-8')
         if sys.stdout:print(repr(e))
-        elif '--self-test' not in sys.argv and '--smoke-gui' not in sys.argv:
+        if getattr(sys,'frozen',False) and '--self-test' not in sys.argv and '--smoke-gui' not in sys.argv:
             import tkinter.messagebox
             tkinter.messagebox.showerror('Auto Editor',str(e))
         sys.exit(1)

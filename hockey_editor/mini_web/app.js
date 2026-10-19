@@ -21,7 +21,9 @@ function showResult(){
  $('pauseUpload').hidden=!active;$('sendDrive').disabled=!row.available||!resultsState.drive.connected||resultsState.upload_busy;
  $('sendDrive').textContent=upload&&['error','paused'].includes(upload.status)?'Продолжить отправку на Диск':'Отправить готовое видео на Диск';
  const link=upload?.status==='completed'&&/^https:\/\/drive\.google\.com\/file\/d\/[A-Za-z0-9_-]+\/view$/.test(upload.url||'');
- $('driveLink').hidden=!link;$('copyDriveLink').hidden=!link;$('copyDriveFallback').hidden=true;if(link)$('driveLink').href=upload.url;
+ $('driveLink').hidden=!link;$('copyDriveLink').hidden=!link;
+ if(!link||$('copyDriveValue').value!==upload.url)$('copyDriveFallback').hidden=true;
+ if(link)$('driveLink').href=upload.url;
 }
 async function refreshResults(){
  resultsState=await api('result-status');const old=$('resultChoice').value;
