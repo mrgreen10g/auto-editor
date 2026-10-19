@@ -51,10 +51,14 @@ def fixture(line, sport):
 
 
 def spoken_fixture(line, sport):
+    # Editorial ordinal labels sometimes mix Cyrillic and Latin lookalikes.
+    parts=line.split(maxsplit=1)
+    if len(parts)==2 and re.search('[A-Za-z]',parts[0]):
+        line=parts[0].translate(str.maketrans({'К':'K','к':'k','И':'I','С':'C','с':'c','О':'O','о':'o','Т':'T','А':'A','а':'a'}))+' '+parts[1]
     match = re.match(r"(?:birinchi|ikkinchi|uchinchi|to'rtinchi|beshinchi)\s+(?:uchrashuv|o'yin|jang)\s*[—–:-]?\s+(.+)", line, re.I)
     if not match:
         return None
-    return fixture(re.sub(r'\s+va\s+', ' — ', match[1].rstrip('.!'), count=1), sport)
+    return fixture(re.sub(r'\s+va\s+', ' — ', match[1].rstrip('.!'), count=1, flags=re.I), sport)
 
 
 def rows(text):
@@ -116,9 +120,16 @@ def parse(text, sport):
             current.source_hint = [current.source_hint[0], interval[1]] if current.source_hint else interval
             continue
         title = fixture(line, sport)
-        oral_title = spoken_fixture(line, sport) if not explicit_pairs else None
-        if not title and oral_title:
-            title = oral_title
+        spoken=spoken_fixture(line, sport)
+        # Prefer names from the initial fixture list to ordinal labels such as
+        # 'IKKINCHI UCHRASHUV — TEAM VA TEAM'. These labels are not team names.
+        declared=next((p for p in index if p and spoken and key(p)==key(spoken)),None)
+        oral_title = declared or (spoken if not explicit_pairs else None)
+        if oral_title:
+            if current.kind=='analysis' and key(current.title)==key(oral_title):
+                if line.isupper():continue
+                title=None;oral_title=None  # Keep the actual spoken introduction.
+            else:title=oral_title
         if single and not blocks and current is intro and line.isupper() and line.endswith('?'):
             current = Block(title=single, language='uz', sport=sport)
             blocks.append(current)

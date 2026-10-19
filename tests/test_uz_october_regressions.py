@@ -25,6 +25,12 @@ class UzOctoberTests(unittest.TestCase):
         _,blocks,_=parse('ARSENAL — CHELSEA\nBirinchi qism muhim.','football')
         self.assertIn('Birinchi qism muhim.',blocks[0].script)
 
+    def test_declared_pairs_override_mixed_alphabet_ordinal_heading(self):
+        a,blocks,z=parse('ARSENAL — CHELSEA\nROMA — MILAN\nSalom.\nARSENAL — CHELSEA\nBirinchi uchrashuv — Arsenal va Chelsea.\nTahlil.\nIKКINCHI UCHRASHUV — ROMA VA MILAN\nRoma — Milan.\nIkkinchi tahlil.\nYAKUN\nXayr.','football')
+        self.assertEqual([b.title.casefold() for b in blocks],['arsenal — chelsea','roma — milan'])
+        self.assertIn('Birinchi uchrashuv',blocks[0].script)
+        self.assertEqual(a.script,'Salom.')
+
     def test_animation_rounding_and_saved_recovery(self):
         card=Card(45.366666666666674,50.36666666666667,'ТЕЛЕГРАМ','Telegram',asset='promo.mov')
         cards,_=exclusive([card])
