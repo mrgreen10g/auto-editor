@@ -21,6 +21,10 @@ class UzOctoberTests(unittest.TestCase):
         _,blocks,_=parse('Salom.\nARSENAL — CHELSEA\nBIRINCHI QISM — TAKTIKA\nArsenal kuchli.\nROMA — MILAN\nIKKINCHI QISM — TAKTIKA\nRoma kuchli.','football')
         self.assertEqual(len(blocks),2)
 
+    def test_spoken_sentence_about_section_is_preserved(self):
+        _,blocks,_=parse('ARSENAL — CHELSEA\nBirinchi qism muhim.','football')
+        self.assertIn('Birinchi qism muhim.',blocks[0].script)
+
     def test_animation_rounding_and_saved_recovery(self):
         card=Card(45.366666666666674,50.36666666666667,'ТЕЛЕГРАМ','Telegram',asset='promo.mov')
         cards,_=exclusive([card])

@@ -17,6 +17,7 @@ TIME = re.compile(r'^(\d{1,2}):(\d{2})\s*[—–-]\s*(\d{1,2}):(\d{2})$')
 
 
 def narrative_heading(line):
+    if len(line)>160 or line.rstrip().endswith(('.', '!', '?')):return False
     return bool(re.match(r"^(?:(?:birinchi|ikkinchi|uchinchi|to'rtinchi|beshinchi|oltinchi|yettinchi|sakkizinchi|to'qqizinchi|o'ninchi|\d+)\s+)?(?:qism|bo'lim)\b", key(line)))
 
 
