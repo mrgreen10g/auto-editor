@@ -18,6 +18,7 @@ async function refreshInputs(){
  for(const p of inputState.presets)if(![...$('inputPreset').options].some(o=>o.value===p))$('inputPreset').add(new Option(p,p));
  if(!d){$('draftFolder').textContent='';inputStepTo('setup');return}
  $('draftFolder').textContent=d.folder;
+ const reuse=$('reuseChoice').value;$('reuseChoice').replaceChildren();for(const r of inputState.reusable)$('reuseChoice').add(new Option(r.label,r.draft+':'+r.file));if([...$('reuseChoice').options].some(x=>x.value===reuse))$('reuseChoice').value=reuse;
  if(draftLoaded!==d.id){
   draftLoaded=d.id;$('inputScript').value=d.script;$('inputAssets').value=d.asset_folder||inputState.kits[d.profile]||'';
   for(const id of ['inputPreset','draftPreset']){$(id).replaceChildren(new Option('Стандартные',''));for(const p of inputState.presets)$(id).add(new Option(p,p));} $('draftPreset').value=d.preset;
@@ -73,6 +74,7 @@ $('hostMethod').onchange=()=>{$('hostDrive').hidden=$('hostMethod').value!=='dri
 $('addHostLink').onclick=()=>guard(async()=>{await api('input-link',{id:draftId,role:'host',url:$('hostUrl').value});await refreshInputs()});
 function matchData(){return {block:$('inputBlock').value,home:$('matchHome').value,away:$('matchAway').value,fighter:$('matchHome').value}}
 $('addMatchLink').onclick=()=>guard(async()=>{await api('input-link',{id:draftId,role:'match',url:$('matchUrl').value,...matchData()});await refreshInputs()});
+$('reuseInput').onclick=()=>guard(async()=>{const [from_draft,file]=$('reuseChoice').value.split(':');if(!file)throw Error('Нет ранее добавленных записей.');await api('input-reuse',{id:draftId,from_draft,file,block:$('inputBlock').value});await refreshInputs()});
 $('pauseInput').onclick=()=>guard(async()=>{await api('input-pause');notice('Скачивание остановится после текущего запроса.')});
 $('saveInputSettings').onclick=()=>guard(async()=>{await api('input-settings',{id:draftId,preset:$('draftPreset').value,asset_folder:$('inputAssets').value});await refreshInputs();notice('Настройки сохранены.')});
 $('activateInput').onclick=()=>guard(async()=>{if(!confirm('Сохранить текущий проект редактора и открыть этот выпуск?'))return;await refresh();await api('input-activate',{id:draftId,revision:state.revision});await switchPage('process')});

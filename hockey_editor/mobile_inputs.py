@@ -42,7 +42,14 @@ class Inputs:
                     if item['status'] in ('downloading','checking') and self.active!=(draft['id'],item['id']):item.update(status='paused',message='Прервано. Продолжите загрузку.')
                     item.pop('remote',None)
                 draft['summary']=self.summary(self.load(draft['id']))
-            return dict(draft=draft,drafts=self.catalog(),profiles=PROFILES,presets=list(presets('ru_hockey')),
+            reusable=[]
+            for entry in self.catalog():
+                try:previous=self.load(entry['id'])
+                except RemoteError:continue
+                for row in previous['files']:
+                    if row['role']=='match' and row['status']=='ready' and row.get('path') and Path(row['path']).is_file():
+                        reusable.append(dict(draft=previous['id'],file=row['id'],label=previous['name']+' · '+(row.get('fighter') or row.get('home','')+' — '+row.get('away',''))))
+            return dict(draft=draft,drafts=self.catalog(),profiles=PROFILES,presets=list(presets('ru_hockey')),reusable=reusable,
                         kits={p:load_kit(kit_path(p))[0] for rows in PROFILES.values() for p,_ in rows},busy=bool(self.worker and self.worker.is_alive()))
     def mkdir(self,data):
         from .mini_export import folder
@@ -94,6 +101,9 @@ class Inputs:
         if role=='match' and block not in {b['uid'] for b in d['blocks']}:raise RemoteError('Сначала определите разборы и выберите нужный.')
         if len(d['files'])>=200:raise RemoteError('В черновике слишком много файлов.')
         item=dict(id=secrets.token_hex(16),role=role,block=block,name=str(data.get('name','Видео'))[:100],home=str(data.get('home',''))[:120],away=str(data.get('away',''))[:120],fighter=str(data.get('fighter',''))[:120],status='waiting',message='',received=0,size=0,path='',source='',fingerprint='')
+        if role=='match':
+            title=next(b['title'] for b in d['blocks'] if b['uid']==block)
+            item['subfolder']=re.sub(r'[<>:"/\\|?*\x00-\x1f]','_',title)[:70].rstrip('. ')+' · '+block[:6]
         d['files'].append(item);return item
     def item(self,d,ident):
         row=next((r for r in d['files'] if r['id']==ident and r['status']!='removed'),None)
@@ -102,7 +112,7 @@ class Inputs:
     def path(self,d,item,partial=False):
         section={'host':'Ведущий','match':'Матчи','script':'Сценарий'}[item['role']]
         root=Path(d['folder'])/section
-        if item['role']=='match':root=root/item['block']
+        if item['role']=='match':root=root/item.get('subfolder',item['block'])
         root.mkdir(exist_ok=True)
         ext=Path(item['name']).suffix.lower()
         if ext not in ('.mp4','.mov','.mkv','.webm','.m4v','.txt','.docx'):ext='.mp4'
@@ -144,7 +154,10 @@ class Inputs:
         def work():
             try:
                 partial=self.path(d,item,True)
-                if download:
+                final=self.path(d,item)
+                recovered=not partial.exists() and final.is_file()
+                if recovered:partial=final
+                if download and not recovered:
                     from .mobile_downloads import download as fetch
                     fetch(item,partial,update,self.cancel)
                 if self.cancel.is_set():raise InterruptedError()
@@ -152,13 +165,15 @@ class Inputs:
                     from .script_input import read_script
                     # The parser dispatches on extension, so validate a named final file.
                     text=read_script(partial);self.script({'id':d['id'],'text':text})
-                    final=self.path(d,item);partial.replace(final)
+                    final=self.path(d,item)
+                    if partial!=final:partial.replace(final)
                 else:
                     from .media import probe
                     info=probe(partial)
                     if not info.get('video') or info.get('duration',0)<=0:raise ValueError('В файле не найдено видео.')
                     if item['role']=='host' and not info.get('audio'):raise ValueError('В записи ведущего нет звуковой дорожки.')
-                    final=self.path(d,item);partial.replace(final)
+                    final=self.path(d,item)
+                    if partial!=final:partial.replace(final)
                 update(status='ready',message='Готово',path=str(final),received=final.stat().st_size,size=final.stat().st_size)
             except InterruptedError:update(status='paused',message='Остановлено. Можно продолжить.')
             except Exception as e:update(status='error',message=str(e) if isinstance(e,(ValueError,RemoteError)) else 'Не удалось получить файл. Проверьте ссылку, доступ и свободное место; повторите загрузку.')
@@ -170,7 +185,9 @@ class Inputs:
             d=self.load(data['id']);item=self.item(d,data['file'])
             if item['status']=='ready':return dict(ok=True)
             if self.active==(d['id'],item['id']):return dict(ok=True)
-            if self.path(d,item,True).stat().st_size!=item['size']:raise RemoteError('Файл ещё не загружен полностью.')
+            path=self.path(d,item,True)
+            if not path.exists():path=self.path(d,item)
+            if not path.exists() or path.stat().st_size!=item['size']:raise RemoteError('Файл ещё не загружен полностью.')
             return self.launch(d,item)
     def link(self,data):
         from .mobile_downloads import canonical
@@ -193,6 +210,15 @@ class Inputs:
                 item['status']='removed' # Keep the actual file; never delete user media.
             else:
                 for key in ('home','away','fighter'):item[key]=str(data.get(key,item[key]))[:120]
+            self.save(d);return dict(ok=True)
+    def reuse(self,data):
+        with self.lock:
+            d=self.load(data['id']);self.mutable(d)
+            other=self.load(data['from_draft']);original=self.item(other,data['file'])
+            if original['role']!='match' or original['status']!='ready' or not Path(original['path']).is_file():raise RemoteError('Исходная запись недоступна.')
+            if any(r['role']=='match' and r['block']==data.get('block') and r.get('path')==original['path'] and r['status']!='removed' for r in d['files']):return dict(ok=True)
+            row=self.new_file(d,dict(role='match',block=data.get('block'),name=original['name'],home=original['home'],away=original['away'],fighter=original['fighter']))
+            row.update(path=original['path'],size=Path(original['path']).stat().st_size,received=Path(original['path']).stat().st_size,status='ready',source='reuse',message='Используется запись из выпуска «'+other['name']+'». Сохраните его папку.')
             self.save(d);return dict(ok=True)
     def retry(self,data):
         with self.lock:

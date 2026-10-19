@@ -76,6 +76,13 @@ class InputTests(unittest.TestCase):
         self.assertEqual(canonical('https://drive.google.com/file/d/abcdefghijkl/view?usp=sharing')[0],'drive')
         for url in ('http://youtube.com/watch?v=abcdefghijk','https://evil.test/file','https://youtube.com.evil.test/watch?v=abcdefghijk','https://youtube.com/playlist?list=test','https://user@youtube.com/watch?v=abcdefghijk','file:///etc/passwd','https://127.0.0.1/'):
             with self.assertRaises(ValueError):canonical(url)
+    def test_reuse_keeps_original_path_for_analysis_cache(self):
+        self.parse();d=self.inputs.load(self.ident);path=self.root/'archived.mp4';path.write_bytes(b'archive')
+        d['files'].append(dict(id='oldmatch',role='match',block=d['blocks'][0]['uid'],name='Archive.mp4',status='ready',path=str(path),home='Амур',away='ЦСКА',fighter=''));self.inputs.save(d)
+        old=self.ident;self.ident=self.inputs.create(dict(parent=str(self.root),name='Shorts',profile='ru_hockey',request='shorts-123'))['id'];self.parse()
+        block=self.inputs.load(self.ident)['blocks'][0]['uid'];payload=dict(id=self.ident,from_draft=old,file='oldmatch',block=block)
+        self.inputs.reuse(payload);self.inputs.reuse(payload)
+        files=self.inputs.load(self.ident)['files'];self.assertEqual(len(files),1);self.assertEqual(files[0]['path'],str(path));self.assertEqual(files[0]['home'],'Амур')
     def test_drive_range_resume_and_checksum(self):
         content=b'abcdef';path=self.root/'download.mp4';path.write_bytes(b'abc');calls=[]
         class Response:

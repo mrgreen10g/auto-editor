@@ -225,7 +225,7 @@ class Bridge:
             actions={'status':self.inputs.status,'mkdir':self.inputs.mkdir,'create':self.inputs.create,
                      'script':self.inputs.script,'settings':self.inputs.settings,'upload':self.inputs.upload_init,
                      'finish':self.inputs.finish,'link':self.inputs.link,'retry':self.inputs.retry,
-                     'edit':self.inputs.edit_file,'activate':self.inputs.activate}
+                     'edit':self.inputs.edit_file,'reuse':self.inputs.reuse,'activate':self.inputs.activate}
             if kind=='input-pause':self.inputs.cancel.set();return dict(ok=True)
             action=actions.get(kind[6:])
             if not action:raise RemoteError('Неизвестное действие.',404)
