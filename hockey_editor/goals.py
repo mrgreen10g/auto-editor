@@ -283,7 +283,8 @@ def propose(requests, scans, sources=(), allow_other=False):
         return candidate
     for event in requests:
         if event.skipped:continue
-        if event.selection and event.selection.accepted and event.selection.source_signature==scans.get(event.source_id,{}).get('signature'):
+        source=source_map.get(event.source_id)
+        if event.kind=='play' and source and source.sport=='football' and event.selection and event.selection.accepted and event.selection.source_signature==scans.get(event.source_id,{}).get('signature'):
             continue
         if (source_map.get(event.source_id) and source_map[event.source_id].sport=='combat') or (sources and all(m.sport=='combat' for m in sources)):
             from .combat import propose_event
