@@ -44,9 +44,9 @@ def check():
                     page.locator(selector).click()
                     page.locator('body[data-busy="false"]').wait_for(timeout=60000)
                 errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-                script='window.Telegram={WebApp:{initData:'+json.dumps(signed())+',ready(){},expand(){}}};'
+                script='window.Telegram={WebApp:{initData:'+json.dumps(signed())+',ready(){},expand(){},isVersionAtLeast(){return true},disableVerticalSwipes(){window.swipesDisabled=true},requestFullscreen(){window.fullscreenRequested=true},onEvent(){}}};'
                 page.route('https://telegram.org/js/telegram-web-app.js',lambda r:r.fulfill(content_type='text/javascript',body=script))
-                page.goto(base+'?view=cards');page.locator('.item').first.wait_for()
+                page.goto(base+'?view=cards');page.locator('.item').first.wait_for();assert page.evaluate('swipesDisabled && fullscreenRequested')
                 page.locator('#blockFilter').select_option(block.uid)
                 page.locator('#typeFilter').select_option(label='Статистика')
                 assert page.locator('#items .item').count()==1
@@ -162,6 +162,7 @@ def check():
                 page.wait_for_function("document.getElementById('editVideo').readyState>=2")
                 page.evaluate('seekTimeline(4)');click('#frameForward');click('#markEnd');expect(page.locator('#rangeEnd')).to_have_value('00:04.03')
                 expect(page.locator('#editKind')).to_have_count(0)
+                page.locator('#rangeStart').fill('x');page.locator('#rangeStart').fill('00:02.50')
                 page.locator('#elementList').evaluate('(e)=>e.open=false')
                 page.locator('#timelineZoom').fill('8');page.locator('#timelineZoom').dispatch_event('input')
                 assert page.evaluate('timelineWidth')>390
