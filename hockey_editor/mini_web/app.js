@@ -130,7 +130,7 @@ for(const [id,step] of [['previousItem',-1],['nextItem',1]])$(id).onclick=()=>gu
 for(const [id,decision] of [['approve','confirmed'],['remove','deleted'],['pending','pending']])$(id).onclick=()=>guard(()=>decide(decision));
 for(const [id,mode] of [['preview','clip'],['context','context'],['voice','voice'],['art','art'],['translate','translation']])$(id).onclick=()=>guard(()=>prepare(mode));
 $('undo').onclick=()=>guard(async()=>{await api('action',{revision:state.revision,decision:'undo'});back();await refresh();notice('Последнее решение отменено и сохранено.')});
-guard(async()=>{tg?.ready();tg?.expand();if(!tg?.initData)throw new Error('Откройте это приложение кнопкой в личном чате со своим Telegram-ботом.');session=(await api('auth',{initData:tg.initData})).session;const page=new URLSearchParams(location.search).get('view');if(page==='clips')kind='clip';if(page==='cards')kind='card';await refresh();await switchPage(['clips','cards','review'].includes(page)?'review':page==='export'?'export':'process');notice('');});
+guard(async()=>{tg?.ready();tg?.expand();setupPhoneViewport();if(!tg?.initData)throw new Error('Откройте это приложение кнопкой в личном чате со своим Telegram-ботом.');session=(await api('auth',{initData:tg.initData})).session;const page=new URLSearchParams(location.search).get('view');if(page==='clips')kind='clip';if(page==='cards')kind='card';await refresh();await switchPage(['clips','cards','review'].includes(page)?'review':page==='export'?'export':'process');notice('');});
 async function refreshPage(){if(pageMode==='edit')await refreshEditor();else if(pageMode==='input')await refreshInputs();else if(pageMode==='process')await refreshProcess();else if(pageMode==='export')await refreshExport();else await refresh()}
 setInterval(()=>{if(session&&!waiting&&!current&&pageMode!=='edit')guard(refreshPage,true)},3000);
 
@@ -234,3 +234,10 @@ $('cancelProcess').onclick=()=>guard(async()=>{if(!confirm('Остановить
 
 $('cardType').onchange=()=>{$('ownerLabel').hidden=$('cardType').value!=='ПРОГНОЗ'};
 $('openMontage').onclick=()=>guard(()=>switchPage('edit'));
+
+function setupPhoneViewport(){
+ if(tg?.isVersionAtLeast?.('7.7'))tg.disableVerticalSwipes();
+ if(tg?.isVersionAtLeast?.('8.0')){try{tg.requestFullscreen()}catch(_){}}
+ const safe=()=>{document.documentElement.style.setProperty('--tg-content-safe-top',((tg?.contentSafeAreaInset?.top||0)+(tg?.safeAreaInset?.top||0))+'px');document.documentElement.style.setProperty('--tg-content-safe-bottom',Math.max(tg?.contentSafeAreaInset?.bottom||0,tg?.safeAreaInset?.bottom||0)+'px')};safe();tg?.onEvent?.('safeAreaChanged',safe);tg?.onEvent?.('contentSafeAreaChanged',safe);
+}
+document.addEventListener('pointerup',e=>{const active=document.activeElement;if(active?.matches('input,textarea,[contenteditable="true"]')&&!e.target.closest('input,textarea,select,button,a,label,summary,video,canvas,[contenteditable="true"]'))active.blur()});

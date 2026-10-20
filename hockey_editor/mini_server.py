@@ -144,9 +144,9 @@ class Gateway:
                     gateway.authorize(self.headers.get('Authorization',''))
                     if path in {'/api/input-'+k for k in ('status','mkdir','create','script','settings','upload','finish','link','retry','edit','reuse','activate','pause','server-files','server-import','script-open','script-save','doc-start','doc-status')}:
                         return self.response(200,gateway.bridge.request(path.removeprefix('/api/'),data))
-                    if path not in ('/api/editor-files','/api/editor-state','/api/editor-action','/api/result-status','/api/result-stream','/api/drive-config','/api/drive-start','/api/drive-pause','/api/process-status','/api/process-start','/api/process-cancel','/api/process-config','/api/export-status','/api/folders','/api/export-start','/api/export-cancel','/api/state','/api/item','/api/action','/api/prepare','/api/job','/api/media'):raise RemoteError('Не найдено.',404)
+                    if path not in ('/api/preview-stream','/api/editor-files','/api/editor-state','/api/editor-action','/api/result-status','/api/result-stream','/api/drive-config','/api/drive-start','/api/drive-pause','/api/process-status','/api/process-start','/api/process-cancel','/api/process-config','/api/export-status','/api/folders','/api/export-start','/api/export-cancel','/api/state','/api/item','/api/action','/api/prepare','/api/job','/api/media'):raise RemoteError('Не найдено.',404)
                     result=gateway.bridge.request(path.removeprefix('/api/'),data)
-                    if path=='/api/result-stream':
+                    if path in ('/api/result-stream','/api/preview-stream'):
                         with gateway.lock:
                             now=time.time();gateway.streams={k:v for k,v in gateway.streams.items() if v['expires']>now}
                             while len(gateway.streams)>=32:gateway.streams.pop(next(iter(gateway.streams)))
@@ -166,9 +166,3 @@ class Gateway:
             do_HEAD=handle_request
             do_POST=handle_request
         return Handler
-
-
-
-
-
-

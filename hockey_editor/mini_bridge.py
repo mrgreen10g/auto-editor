@@ -206,9 +206,9 @@ class Bridge:
             from .mini_preview import snapshot
             from .timeline import Card,parse_time
             if not app.plan:raise RemoteError('Сначала определите тайминги.')
-            a=parse_time(data.get('start',0));b=min(app.plan.duration,a+20,parse_time(data.get('end',a+20)))
+            a=parse_time(data.get('start',0));b=parse_time(data.get('end',app.plan.duration))
             marker=Card(a,b,'','Предпросмотр',review_id='__mobile_preview__')
-            spec=snapshot(app.project,app.plan,app.index,dict(id=marker.review_id),marker,dict(start=a,end=b))
+            spec=snapshot(app.project,app.plan,app.index,dict(id=marker.review_id),marker,dict(start=a,end=b,timeline=True))
             spec['plan'].cards=[c for c in spec['plan'].cards if c.review_id!=marker.review_id]
         elif mode=='clip' and data['id'].startswith('clip:'):
             source,selection=self.selection(first,second,data);spec=dict(mode=mode,path=source.path,start=selection.source_start,end=selection.source_end)
@@ -235,9 +235,13 @@ class Bridge:
         else:raise RemoteError('Этот предпросмотр недоступен.')
         cache=Path(app.cache_path())/'mobile-previews';cache.mkdir(parents=True,exist_ok=True)
         with self.media_lock:
+            key=json.dumps([data['revision'],mode,data.get('start'),data.get('end')]) if mode=='timeline' else ''
+            for job_id,job in self.jobs.items():
+                if key and job.get('key')==key and job['status'] in ('working','ready') and time.time()-job['created']<1700:
+                    if job['status']=='working' or Path(job.get('file','')).is_file():return dict(job=job_id)
             if self.media_busy:raise RemoteError('Уже готовится предпросмотр. Подождите.',429)
             while len(self.jobs)>=32:self.jobs.pop(next(iter(self.jobs)))
-            self.media_busy=True;ident=secrets.token_hex(16);self.jobs[ident]=dict(status='working',revision=data['revision'],created=time.time())
+            self.media_busy=True;ident=secrets.token_hex(16);self.jobs[ident]=dict(status='working',revision=data['revision'],created=time.time(),key=key)
         def work():
             from .mini_media import generate
             try:
@@ -253,7 +257,8 @@ class Bridge:
         if kind=='editor-files':
             from .mini_export import folder
             root=folder(data.get('path',''))
-            return dict(files=[dict(name=p.name,path=str(p)) for p in sorted(root.iterdir()) if p.is_file() and p.suffix.lower() in ('.mp3','.wav','.m4a','.aac','.flac')][:300])
+            extensions=('.png','.jpg','.jpeg','.webp') if data.get('kind')=='logo' else ('.mp3','.wav','.m4a','.aac','.flac')
+            return dict(files=[dict(name=p.name,path=str(p)) for p in sorted(root.iterdir()) if p.is_file() and p.suffix.lower() in extensions][:300])
         if kind=='editor-state':return self.editor.state()
         if kind=='editor-action':return self.editor.apply(data)
         if kind.startswith('input-'):
@@ -291,19 +296,13 @@ class Bridge:
         if kind=='item':return self.item(data)
         if kind=='action':return self.action(data)
         if kind=='prepare':return self.prepare(data)
-        if kind in ('job','media'):
+        if kind in ('job','media','preview-stream'):
             with self.media_lock:job=copy.deepcopy(self.jobs.get(data.get('job')))
             if not job or time.time()-job['created']>1800:raise RemoteError('Предпросмотр устарел.',404)
             if job['revision']!=self.revision():raise RemoteError('Проект изменился. Подготовьте предпросмотр заново.',409)
-            if kind=='media':
+            if kind in ('media','preview-stream'):
                 if job['status']!='ready' or 'file' not in job:raise RemoteError('Предпросмотр ещё не готов.',409)
-                return dict(file=job['file'])
-            return {k:v for k,v in job.items() if k not in ('file','revision','created')}
+                file=Path(job['file']);stat=file.stat()
+                return dict(file=str(file),identity=[stat.st_size,stat.st_mtime_ns])
+            return {k:v for k,v in job.items() if k not in ('file','revision','created','key')}
         raise RemoteError('Неизвестный запрос.',404)
-
-
-
-
-
-
-

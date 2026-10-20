@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Auto Editor</title><link rel="stylesheet" href="/app.css"><script src="https://telegram.org/js/telegram-web-app.js"></script><script defer src="/app.js"></script></head>
 <body>
-<header><div class="heading"><div><small>AUTO EDITOR · 0.8.5</small><h1 id="pageTitle">Процесс</h1></div><button id="refresh" class="quiet" aria-label="Обновить данные">↻</button></div><p id="title">Подключение…</p></header>
+<header><div class="heading"><div><small>AUTO EDITOR · 0.8.6</small><h1 id="pageTitle">Процесс</h1></div><button id="refresh" class="quiet" aria-label="Обновить данные">↻</button></div><p id="title">Подключение…</p></header>
 <div id="notice" role="status" aria-live="polite"></div>
 <main>
 <section id="inputPanel" hidden>
@@ -86,10 +86,22 @@
 <div id="exportJob" class="surface"><h3 id="exportState"></h3><progress id="exportProgress" max="100"></progress><p id="exportMessage"></p><p id="exportElapsed"></p><p id="exportTarget"></p><p id="exportError"></p><button id="cancelExport" class="danger" hidden>Остановить рендер</button></div>
 </section>
 <section id="editorPanel" hidden>
-<div class="surface"><h2>Монтаж и история</h2><p class="hint">Правки сохраняются в проекте. После изменений готовое видео нужно отрендерить заново.</p><div class="mediaButtons"><button id="editUndo">Отменить</button><button id="editRedo">Вернуть</button></div><label>Разбор<select id="editSection"></select></label><label>Показывать<select id="editKind"><option value="">Все элементы</option><option value="card">Плашки</option><option value="insert">Видео-вставки</option></select></label><p id="editDuration"></p></div>
-<div class="surface"><div class="times"><label>От · ММ:СС.сс<input id="rangeStart" value="00:00.00"></label><label>До · ММ:СС.сс<input id="rangeEnd" value="00:10.00"></label></div><button id="rangePreview">Посмотреть этот участок</button><video id="editVideo" controls playsinline hidden></video><label>Скорость<select id="editSpeed"><option value="1">1×</option><option value="1.25">1,25×</option><option value="1.5">1,5×</option><option value="2">2×</option></select></label><p class="hint">Предпросмотр до 20 секунд. При вырезании речь, плашки и вставки сдвигаются вместе.</p><button id="cutRange" class="danger">Вырезать выбранный участок речи</button></div>
-<div id="editRows"></div><button id="newCard" class="wide">＋ Добавить плашку</button><details class="surface"><summary>Добавить видео-вставку</summary><label>Запись проекта<select id="newInsertSource"></select></label><label>Начало внутри записи<input id="newInsertIn" value="00:00.00"></label><p class="hint">Начало и конец на дорожке берутся из полей участка выше. Сначала просмотрите выбранный фрагмент.</p><button id="newInsert">Добавить на дорожку</button></details>
-<div id="editInspector" class="surface" hidden><h3 id="editHeading"></h3><label>Тип<select id="editType"></select></label><label>Разбор для ставки<select id="editOwner"></select></label><label>Текст / подпись<textarea id="editText" rows="4"></textarea></label><div class="times"><label>Начало<input id="editStart"></label><label>Конец<input id="editEnd"></label></div><label id="editSourceLabel">Начало внутри записи матча<input id="editSource"></label><p id="editBounds" class="hint"></p><div class="mediaButtons"><button id="saveEdit" class="primary">Сохранить</button><button id="previewEdit">Посмотреть</button><button id="deleteEdit" class="danger">Удалить</button></div></div>
+<div class="surface montage-player">
+<div class="mediaButtons"><button id="fullPreview" class="primary">Весь выпуск</button><button id="rangePreview">Выбранный участок</button></div>
+<p id="previewStatus" class="hint">Подготовьте предпросмотр, чтобы проверить монтаж до рендера.</p>
+<video id="editVideo" controls playsinline hidden></video>
+<div class="transport"><button id="frameBack" aria-label="Предыдущий кадр">− кадр</button><strong id="playheadTime">00:00.00</strong><button id="frameForward" aria-label="Следующий кадр">+ кадр</button></div>
+<input id="timelineSeek" type="range" min="0" max="1" step="0.0333333333" value="0" aria-label="Позиция в выпуске">
+<div class="transport"><label>Скорость<select id="editSpeed"><option value="1">1×</option><option value="1.25">1,25×</option><option value="1.5">1,5×</option><option value="2">2×</option></select></label><button id="editUndo">↶ Отмена</button><button id="editRedo">↷ Вернуть</button></div>
+<p id="editDuration" class="hint"></p></div>
+<div class="surface timeline-panel"><div class="transport"><strong>Таймлайн</strong><label>Масштаб<input id="timelineZoom" type="range" min="1" max="40" step="1" value="1"></label></div>
+<p class="hint">Нажмите на шкалу времени для перемотки, на элемент — для правки. У выбранного элемента можно потянуть края или середину.</p>
+<div id="timelineScroll"><canvas id="montageTimeline" aria-label="Таймлайн речи, видео и плашек"></canvas></div>
+<div class="times"><label>Начало вырезки<input id="rangeStart" value="00:00.00"><button id="markStart">Начало здесь</button></label><label>Конец вырезки<input id="rangeEnd" value="00:10.00"><button id="markEnd">Конец здесь</button></label></div>
+<p id="selectionDuration" class="hint"></p><button id="cutRange" class="danger wide">Вырезать выбранный участок речи</button></div>
+<details id="elementList" class="surface"><summary>Список элементов и добавление вручную</summary><label>Разбор<select id="editSection"></select></label><div id="editRows"></div><button id="newCard" class="wide">＋ Добавить плашку</button><details><summary>Добавить видео-вставку</summary><label>Запись проекта<select id="newInsertSource"></select></label><label>Начало внутри записи<input id="newInsertIn" value="00:00.00"></label><p class="hint">Положение на дорожке берётся из границ выбранного участка.</p><button id="newInsert">Добавить на дорожку</button></details></details>
+<div id="editInspector" class="surface" hidden><button id="backToTimeline" class="quiet">↑ К таймлайну</button><h3 id="editHeading"></h3><label>Тип<select id="editType"></select></label><label>Разбор для ставки<select id="editOwner"></select></label><label>Текст / подпись<textarea id="editText" rows="4"></textarea></label><div class="times"><label>Начало<input id="editStart"></label><label>Конец<input id="editEnd"></label></div><label id="editSourceLabel">Начало внутри записи матча<input id="editSource"></label><p id="editBounds" class="hint"></p><div class="mediaButtons"><button id="saveEdit" class="primary">Сохранить</button><button id="previewEdit">Посмотреть</button><button id="deleteEdit" class="danger">Удалить</button></div></div>
+<details id="logoEditor" class="surface"><summary>Логотипы команд · <span id="logoCount"></span></summary><p id="logoFolder" class="hint"></p><button id="chooseLogoFolder">Выбрать папку логотипов</button><div id="logoRows"></div><div id="logoBrowser" hidden><p id="logoBrowsePath" class="hint"></p><button id="useLogoFolder">Применить эту папку</button><div id="logoFiles"></div></div></details>
 <details id="projectEditor" class="surface"><summary>Сценарии, порядок разборов и настройки</summary><p class="hint">Правка сценария, порядка или структуры требует повторного поиска таймингов. История позволяет отменить изменение.</p><div id="projectBlocks"></div><label>Ручные таймкоды исходной записи<textarea id="projectTimes" rows="5"></textarea></label><details><summary>Изображение, звук и субтитры</summary><div id="projectSettings"></div><label>Путь к музыке на сервере<input id="projectMusic"></label><button id="chooseProjectMusic">Выбрать музыкальный файл</button><div id="musicFiles"></div><div id="scoreBoxes"></div></details><button id="saveProjectEdits" class="primary wide">Сохранить настройки выпуска</button></details>
 <details class="surface"><summary>История изменений</summary><div id="editHistory"></div></details>
 </section>
@@ -99,7 +111,3 @@
 <nav id="navigation" aria-label="Разделы"><button id="inputTab"><span>＋</span>Выпуск</button><button id="processTab"><span>01</span>Процесс</button><button id="reviewTab"><span id="reviewBadge">02</span>Проверка</button><button id="editTab"><span>03</span>Монтаж</button><button id="exportTab"><span>04</span>Результат</button></nav>
 <script defer src="/input.js"></script><script defer src="/editor.js"></script>
 </body></html>
-
-
-
-

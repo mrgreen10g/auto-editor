@@ -31,7 +31,8 @@ def snapshot(project,plan,index,task,card,data):
         for other in plan.cards:
             if other.forecast_id==owner:other.text=selected.text
     # Keep one second around the card; long cards get a clearly labelled excerpt.
-    lo=frame(max(0,start-1));hi=frame(min(plan.duration,end+1,lo+20))
+    lo=frame(start) if data.get('timeline') else frame(max(0,start-1))
+    hi=frame(end) if data.get('timeline') else frame(min(plan.duration,end+1,lo+20))
     media=plan.media or [dict(path=project.host,start=plan.source_start+a,end=plan.source_start+b,rotation=plan.rotation or 0,kind='host') for a,b in plan.keep]
     plan.media=slice_media(media,lo,hi)
     plan.duration=frame(sum(m['end']-m['start'] for m in plan.media))
@@ -75,5 +76,4 @@ def render(spec,cache,ident):
         output=root/'preview.mp4'
         Engine(project,spec['index'],root/'render',threading.Event()).render(plan,output,draft=True)
         output.replace(target)
-    return dict(file=str(target))
-
+    return dict(file=str(target),offset=spec.get("offset",0),duration=plan.duration)

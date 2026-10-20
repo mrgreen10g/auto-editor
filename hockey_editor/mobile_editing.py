@@ -107,7 +107,10 @@ class Editor:
                 for i,c in enumerate(items):
                     s=next((s for s in p.sections if s['start']<=c.start<s['end']),{})
                     rows.append(dict(id=f'{kind}:{i}',kind=kind,start=c.start,end=c.end,text=c.text if kind=='card' else c.label,title=c.title if kind=='card' else 'Видео-вставка',source_in=c.source_in,source_min=getattr(c,'source_min',0),source_max=getattr(c,'source_max',None),block=s.get('block_id',''),block_title=s.get('title',''),owner=getattr(c,'forecast_id',''),asset=bool(getattr(c,'asset','')),review_id=getattr(c,'review_id','')))
-        return dict(revision=revision,locked=b.locked(),duration=p.duration if p else 0,items=sorted(rows,key=lambda r:(r['start'],r['kind'])),sections=p.sections if p else [],types=CARD_TYPES,blocks=[dict(uid=x.uid,title=x.title,script=x.script,kind=x.kind) for x in [app.project.intro,*app.project.blocks,app.project.outro]],settings=asdict(app.project.settings),music=app.project.music,recording_times=app.project.recording_times,matches=[dict(id=m.id,title=m.title,score_box=m.score_box) for m in app.project.matches],history=[dict(label=x['label'],time=x['time']) for x in reversed(h['undo'])],undo=bool(h['undo'] and h['undo'][-1]['fingerprint']==stamp),redo=bool(h['redo'] and h['redo'][-1]['fingerprint']==stamp))
+        from .graphics import block_teams
+        teams=list(dict.fromkeys(n for block in app.project.blocks for n in block_teams(block.title) if n))
+        logos=[dict(team=n,path=app.project.team_logos.get(n,''),available=bool(app.project.team_logos.get(n) and Path(app.project.team_logos[n]).is_file())) for n in teams]
+        return dict(logo_folder=app.project.logo_folder,logos=logos,revision=revision,locked=b.locked(),duration=p.duration if p else 0,items=sorted(rows,key=lambda r:(r['start'],r['kind'])),sections=p.sections if p else [],types=CARD_TYPES,blocks=[dict(uid=x.uid,title=x.title,script=x.script,kind=x.kind) for x in [app.project.intro,*app.project.blocks,app.project.outro]],settings=asdict(app.project.settings),music=app.project.music,recording_times=app.project.recording_times,matches=[dict(id=m.id,title=m.title,score_box=m.score_box) for m in app.project.matches],history=[dict(label=x['label'],time=x['time']) for x in reversed(h['undo'])],undo=bool(h['undo'] and h['undo'][-1]['fingerprint']==stamp),redo=bool(h['redo'] and h['redo'][-1]['fingerprint']==stamp))
     def apply(self,data):
         b=self.bridge;app=self.app;b.check_revision(data)
         if b.locked() or b.media_busy:raise RemoteError('Дождитесь завершения обработки/предпросмотра и закройте окно правок на ПК.',409)
@@ -126,7 +129,27 @@ class Editor:
                 # Earlier entries become valid again after an exact rollback.
                 if h[op]:h[op][-1]['fingerprint']=self.fingerprint()
                 storage.write(self.root()/'index.json',h);return dict(ok=True)
-            if op=='project':
+            if op=='logos':
+                from .mini_export import folder
+                from .logos import assign
+                from .graphics import block_teams
+                teams={n for block in app.project.blocks for n in block_teams(block.title) if n}
+                if 'folder' in data:
+                    app.project.logo_folder=str(folder(data['folder']));app.project.team_logos={};assign(app.project)
+                if 'team' in data:
+                    name=str(data['team']);path=str(data.get('path',''))
+                    if name not in teams:raise RemoteError('Команда не найдена в выпуске.')
+                    if path:
+                        source=Path(path)
+                        folder(str(source.parent))
+                        if not source.is_file() or source.suffix.lower() not in ('.png','.jpg','.jpeg','.webp'):raise RemoteError('Выберите изображение логотипа на сервере.')
+                        from PIL import Image
+                        with Image.open(source) as image:image.verify()
+                    app.project.team_logos[name]=path
+                label='Логотипы команд'
+                if app.plan:store_plan(app.project,app.index,app.plan)
+                app.refresh()
+            elif op=='project':
                 self.project_changes(data);label='Сценарий / настройки выпуска'
             else:
                 if not app.plan:raise RemoteError('Сначала определите тайминги.')

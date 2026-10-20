@@ -149,12 +149,23 @@ def check():
                 from hockey_editor.timeline import Plan,Card,Line
                 app.plan=Plan(0,8,[(0,8)],[Line('Тестовая речь',0,8)],[],[Card(1,4,'СТАТИСТИКА','Три гола')],[],8)
                 click('#editTab');expect(page.locator('#editRows .item')).to_have_count(1)
-                click('#editRows .item');page.locator('#editType').select_option('ВОПРОС ЗРИТЕЛЮ');page.locator('#editText').fill('Кто победит?');page.locator('#editStart').fill('00:01.50');click('#saveEdit')
+                click('#elementList summary');click('#editRows .item');page.locator('#editType').select_option('ВОПРОС ЗРИТЕЛЮ');page.locator('#editText').fill('Кто победит?');page.locator('#editStart').fill('00:01.50');click('#saveEdit')
                 assert app.plan.cards[0].title=='ВОПРОС ЗРИТЕЛЮ' and app.plan.cards[0].start==1.5
                 click('#editUndo');assert app.plan.cards[0].title=='СТАТИСТИКА'
                 click('#editRedo');assert app.plan.cards[0].title=='ВОПРОС ЗРИТЕЛЮ'
                 page.locator('#rangeStart').fill('00:02.00');page.locator('#rangeEnd').fill('00:03.00');click('#cutRange');assert app.plan.duration==7
                 click('#rangePreview');page.locator('#editVideo').wait_for(state='visible',timeout=60000)
+                page.wait_for_function("document.getElementById('editVideo').readyState>=2")
+                assert page.evaluate('previewOffset')==2
+                page.evaluate('seekTimeline(2.5)');click('#markStart');expect(page.locator('#rangeStart')).to_have_value('00:02.50')
+                click('#fullPreview');page.wait_for_function("previewOffset===0 && previewEnd===7 && !previewPreparing",timeout=90000)
+                page.wait_for_function("document.getElementById('editVideo').readyState>=2")
+                page.evaluate('seekTimeline(4)');click('#frameForward');click('#markEnd');expect(page.locator('#rangeEnd')).to_have_value('00:04.03')
+                expect(page.locator('#editKind')).to_have_count(0)
+                page.locator('#elementList').evaluate('(e)=>e.open=false')
+                page.locator('#timelineZoom').fill('8');page.locator('#timelineZoom').dispatch_event('input')
+                assert page.evaluate('timelineWidth')>390
+                page.locator('#rangeStart').focus();page.locator('#editDuration').click();assert page.evaluate("document.activeElement.id")!='rangeStart'
                 page.screenshot(path=str(ROOT/'build/gui-mini-editor.jpg'),full_page=True)
                 # Errors stay in view even when the page is scrolled down.
                 page.locator('#rangeEnd').fill('99:00.00');click('#cutRange');expect(page.locator('#errorDialog')).to_be_visible();click('#closeError')
@@ -172,9 +183,3 @@ def check():
     print('Mobile review, clip preview, audio, card image, persistence and undo: OK')
 
 if __name__=='__main__':check()
-
-
-
-
-
-

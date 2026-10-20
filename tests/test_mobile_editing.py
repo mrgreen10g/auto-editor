@@ -85,3 +85,31 @@ class MobileEditingTests(unittest.TestCase):
   self.act(op='project',blocks=rows);self.bridge=Bridge(self.app)
   self.assertEqual(self.bridge.editor.root(),old);self.assertTrue(self.bridge.editor.state()['undo']);self.act(op='undo')
   self.assertEqual(self.app.project.blocks[0].title,'СКА — Лада')
+
+ def test_logos_folder_manual_removal_missing_and_undo(self):
+  from PIL import Image
+  folder=self.root/'logos';folder.mkdir()
+  Image.new('RGB',(32,32),'red').save(folder/'СКА.png')
+  self.act(op='logos',folder=str(folder))
+  rows={r['team']:r for r in self.bridge.editor.state()['logos']}
+  self.assertTrue(rows['СКА']['available']);self.assertFalse(rows['Лада']['available'])
+  self.act(op='logos',team='СКА',path='');self.assertFalse(self.bridge.editor.state()['logos'][0]['available'])
+  self.act(op='undo');self.assertTrue(self.bridge.editor.state()['logos'][0]['available'])
+  (folder/'СКА.png').unlink();self.assertFalse(self.bridge.editor.state()['logos'][0]['available'])
+  with self.assertRaises(RemoteError):self.act(op='logos',team='Лада',path=str(folder/'bad.exe'))
+
+ def test_timeline_preview_exact_global_range_and_full_duration(self):
+  from hockey_editor.mini_preview import snapshot
+  p=Plan(0,90,[(0,90)],[Line('Речь',0,90)],[],[Card(31,35,'СТАТИСТИКА','Числа')],[],90)
+  marker=Card(0,90,'','Preview',review_id='preview')
+  spec=snapshot(self.app.project,p,0,dict(id='preview'),marker,dict(start=0,end=90,timeline=True))
+  self.assertEqual(spec['plan'].duration,90);self.assertEqual(spec['offset'],0)
+  spec=snapshot(self.app.project,p,0,dict(id='preview'),marker,dict(start=30,end=65,timeline=True))
+  self.assertEqual(spec['plan'].duration,35);self.assertEqual(spec['offset'],30)
+  self.assertEqual(spec['plan'].cards[0].start,1);self.assertEqual(spec['plan'].media[0]['start'],30)
+  self.assertEqual(p.cards[0].start,31)
+
+ def test_frame_cut_preserves_exact_boundaries(self):
+  p=cut_range(self.app.plan,31/30,47/30)
+  self.assertAlmostEqual(p.keep[0][1],31/30);self.assertAlmostEqual(p.keep[1][0],47/30)
+  self.assertAlmostEqual(p.duration,8-16/30)
