@@ -1,9 +1,10 @@
 'use strict';
 let inputState=null,draftId='',draftLoaded='',inputStep='setup',inputBrowser=null,inputFolderTarget='inputParent',deviceBusy=false,uploadStop=false;
-let createRequest=crypto.randomUUID();
+let createRequest=crypto.randomUUID(),serverScriptVersion='';
 function inputStepTo(step){
- if(step!=='setup'&&!draftId){notice('Сначала создайте папку выпуска или выберите сохранённый черновик.');return}
- inputStep=step;for(const s of ['setup','script','files','summary'])$('input_'+s).hidden=s!==step;
+ if(step!=='setup'&&!draftId){errorNotice('Сначала выберите папку выпуска или сохранённый черновик.');return}
+ if(step==='files'&&inputState?.draft&&!inputState.draft.blocks.length){errorNotice('Сначала сохраните сценарий и определите разборы.');return}
+ inputStep=step;$('inputCommon').hidden=step!=='setup';for(const s of ['setup','script','files','summary'])$('input_'+s).hidden=s!==step;
  $('serverImportPanel').hidden=step!=='setup';
  for(const b of $('inputSteps').querySelectorAll('button'))b.classList.toggle('active',b.dataset.step===step);
 }
@@ -21,7 +22,7 @@ async function refreshInputs(){
  $('draftFolder').textContent=d.folder;
  const reuse=$('reuseChoice').value;$('reuseChoice').replaceChildren();for(const r of inputState.reusable)$('reuseChoice').add(new Option(r.label,r.draft+':'+r.file));if([...$('reuseChoice').options].some(x=>x.value===reuse))$('reuseChoice').value=reuse;
  if(draftLoaded!==d.id){
-  draftLoaded=d.id;$('inputScript').value=d.script;$('inputAssets').value=d.asset_folder||inputState.kits[d.profile]||'';
+  draftLoaded=d.id;$('inputSpeaker').value=d.profile.startsWith('uz_')?'uz':'ru';inputProfiles();$('inputProfile').value=d.profile;$('inputScript').value=d.script;$('inputAssets').value=d.asset_folder||inputState.kits[d.profile]||'';
   for(const id of ['inputPreset','draftPreset']){$(id).replaceChildren(new Option('Стандартные',''));for(const p of inputState.presets)$(id).add(new Option(p,p));} $('draftPreset').value=d.preset;
   renderInputBlocks(d);inputStepTo(d.project?'summary':d.blocks.length?'files':'script');
  }
@@ -40,6 +41,8 @@ async function refreshInputs(){
   if(['paused','error'].includes(r.status))fileAction(card,'Продолжить',async()=>{if(r.source==='device'&&r.received<r.size){notice('Выберите тот же файл ещё раз в поле загрузки с устройства.');return}await api('input-retry',{id:d.id,file:r.id});await refreshInputs()});
   if(!d.project&&!['downloading','checking'].includes(r.status))fileAction(card,'Убрать из выпуска',async()=>{if(!confirm('Убрать материал из выпуска? Скачанный файл останется на сервере.'))return;await api('input-edit',{id:d.id,file:r.id,remove:true});await refreshInputs()});
  }
+ const statusFor=role=>d.files.filter(r=>r.role===role&&r.status!=='removed'&&(role==='host'||r.block===$('inputBlock').value)).map(r=>r.name+' · '+(r.message||r.status)+(r.size?' · '+Math.min(100,Math.round(r.received/r.size*100))+'%':'')).join('\n');
+ $('hostStatus').textContent=statusFor('host')||'Ведущий ещё не добавлен.';$('matchStatus').textContent=statusFor('match')||'Для этого разбора запись ещё не добавлена.';
  $('pauseInput').hidden=!inputState.busy;
  $('inputSummary').replaceChildren();const summary=d.summary;
  line($('inputSummary'),d.name,'h3');line($('inputSummary'),'Шаблон: '+d.profile);line($('inputSummary'),'Ведущий: '+(summary.hosts.join(', ')||'не добавлен'));
@@ -72,7 +75,7 @@ $('chooseInputAssets').onclick=()=>guard(async()=>{inputFolderTarget='inputAsset
 $('inputRoots').onclick=()=>guard(()=>inputBrowse());$('inputUp').onclick=()=>guard(()=>inputBrowse(inputBrowser.parent));$('inputMore').onclick=()=>guard(()=>inputBrowse(inputBrowser.path,inputBrowser.next));
 $('inputUseFolder').onclick=()=>{$(inputFolderTarget).value=inputBrowser.path;$('inputBrowser').hidden=true};$('inputCloseBrowser').onclick=()=>{$('inputBrowser').hidden=true};
 $('inputMkdir').onclick=()=>guard(async()=>{const r=await api('input-mkdir',{parent:inputBrowser.path,name:$('inputNewFolder').value});$('inputNewFolder').value='';await inputBrowse(r.path)});
-$('createDraft').onclick=()=>guard(async()=>{const r=await api('input-create',{request:createRequest,parent:$('inputParent').value,name:$('inputName').value,profile:$('inputProfile').value,preset:$('inputPreset').value});createRequest=crypto.randomUUID();draftId=r.id;draftLoaded='';await refreshInputs()});
+$('createDraft').onclick=()=>guard(async()=>{const r=await api('input-create',{request:createRequest,folder:$('inputParent').value,profile:$('inputProfile').value,preset:$('inputPreset').value});createRequest=crypto.randomUUID();draftId=r.id;draftLoaded='';await refreshInputs()});
 $('parseInput').onclick=()=>guard(async()=>{await api('input-script',{id:draftId,text:$('inputScript').value});await refreshInputs();renderInputBlocks(inputState.draft);notice('Разборы определены. Проверьте названия и переходите к материалам.')});
 $('saveTitles').onclick=()=>guard(async()=>{await api('input-settings',{id:draftId,titles:[...$('inputBlocks').querySelectorAll('input')].map(e=>e.value)});await refreshInputs();renderInputBlocks(inputState.draft);inputStepTo('files')});
 $('hostMethod').onchange=()=>{$('hostDrive').hidden=$('hostMethod').value!=='drive';$('hostDevice').hidden=$('hostMethod').value!=='device'};
@@ -92,7 +95,7 @@ async function uploadDevice(file,role,extra={}){
  while(offset<file.size){
   const response=await fetch('/api/input-chunk',{method:'POST',headers:{Authorization:'Bearer '+session,'Content-Type':'application/octet-stream','X-Draft':id,'X-File':r.file,'X-Offset':String(offset)},body:file.slice(offset,offset+2*1024*1024)});
   const result=await response.json();if(!response.ok)throw Error(result.error||'Передача прервана. Выберите файл повторно.');offset=result.offset;
-  $('deviceProgress').textContent=file.name+' · '+Math.round(offset/file.size*100)+'%';
+  $('deviceProgress').textContent=file.name+' · '+Math.round(offset/file.size*100)+'%';$(role==='host'?'hostStatus':'matchStatus').textContent=$('deviceProgress').textContent;
  }
  await api('input-finish',{id,file:r.file});
  // Complete validation before starting the next part of the presenter.
@@ -103,7 +106,14 @@ async function uploadDevice(file,role,extra={}){
 async function filesSelected(element,role){
  if(deviceBusy){notice('Дождитесь передачи выбранного файла.');return}deviceBusy=true;
  try{for(const file of element.files)await uploadDevice(file,role,role==='match'?matchData():{});await refreshInputs();notice('Файлы сохранены на сервере.');}
- catch(error){notice(error.message);}finally{deviceBusy=false;element.value='';}
+ catch(error){errorNotice(error.message);}finally{deviceBusy=false;element.value='';}
 }
-$('hostFile').onchange=()=>filesSelected($('hostFile'),'host');$('scriptFile').onchange=()=>filesSelected($('scriptFile'),'script');$('matchFile').onchange=()=>filesSelected($('matchFile'),'match');
+$('hostFile').onchange=()=>filesSelected($('hostFile'),'host');$('matchFile').onchange=()=>filesSelected($('matchFile'),'match');
 
+
+
+$('openServerScript').onclick=()=>guard(async()=>{const r=await api('input-script-open',{...serverPayload(),script:$('serverScript').value});serverScriptVersion=r.version;$('serverScriptText').value=r.text;$('serverScriptEditor').hidden=false;$('serverScriptText').scrollIntoView({block:'center'});});
+$('saveServerScript').onclick=()=>guard(async()=>{const r=await api('input-script-save',{...serverPayload(),script:$('serverScript').value,version:serverScriptVersion,text:$('serverScriptText').value});serverScriptVersion=r.version;if(![...$('serverScript').options].some(o=>o.value===r.script))$('serverScript').add(new Option(r.script.split(/[\\/]/).pop(),r.script));$('serverScript').value=r.script;notice('Сценарий сохранён. Можно импортировать выпуск.');});
+$('serverScript').onchange=()=>{$('serverScriptEditor').hidden=true;serverScriptVersion=''};
+$('inputBlock').onchange=()=>guard(refreshInputs);
+$('loadScriptDoc').onclick=()=>guard(async()=>{const r=await api('input-doc-start',{url:$('scriptDocUrl').value});notice('Загружаю текст Google Документа…');for(let i=0;i<90;i++){await new Promise(r=>setTimeout(r,1000));const job=await api('input-doc-status',{job:r.job});if(job.status==='error')throw Error(job.error);if(job.status==='ready'){$('inputScript').value=job.text;notice('Текст загружен. Проверьте его и нажмите «Сохранить и определить разборы».');return}}throw Error('Загрузка документа занимает слишком много времени. Повторите позже.');});

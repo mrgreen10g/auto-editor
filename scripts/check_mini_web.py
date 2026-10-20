@@ -129,9 +129,9 @@ def check():
                 original_host=app.project.host
                 click('#inputTab');click('#chooseInputParent')
                 # Navigate via the authenticated picker to the fixture's parent.
-                page.locator('#inputParent').evaluate('(e,p)=>{e.value=p}',str(root))
+                mobile_folder=root/'Телефон выпуск';mobile_folder.mkdir();page.locator('#inputParent').evaluate('(e,p)=>{e.value=p}',str(mobile_folder))
                 click('#inputCloseBrowser');click('#chooseInputParent');click('#inputUseFolder')
-                page.locator('#inputName').fill('Телефон выпуск');click('#createDraft')
+                click('#createDraft')
                 from test_folder_import import SCRIPT
                 page.locator('#inputScript').fill(SCRIPT);click('#parseInput')
                 assert page.locator('#inputBlocks input').count()==2
@@ -144,12 +144,26 @@ def check():
                 assert Path(app.project_path).name=='Выпуск.hockeyproj'
                 assert len(app.project.blocks)==2 and Path(app.project.host).is_file()
                 assert app.project.full_video and app.project.whole_episode
+                # Mobile montage: readable times, edit type, persisted undo/redo.
+                app.plan=copy.deepcopy(bridge.editor.app.plan) if bridge.editor.app.plan else None
+                from hockey_editor.timeline import Plan,Card,Line
+                app.plan=Plan(0,8,[(0,8)],[Line('Тестовая речь',0,8)],[],[Card(1,4,'СТАТИСТИКА','Три гола')],[],8)
+                click('#editTab');expect(page.locator('#editRows .item')).to_have_count(1)
+                click('#editRows .item');page.locator('#editType').select_option('ВОПРОС ЗРИТЕЛЮ');page.locator('#editText').fill('Кто победит?');page.locator('#editStart').fill('00:01.50');click('#saveEdit')
+                assert app.plan.cards[0].title=='ВОПРОС ЗРИТЕЛЮ' and app.plan.cards[0].start==1.5
+                click('#editUndo');assert app.plan.cards[0].title=='СТАТИСТИКА'
+                click('#editRedo');assert app.plan.cards[0].title=='ВОПРОС ЗРИТЕЛЮ'
+                page.locator('#rangeStart').fill('00:02.00');page.locator('#rangeEnd').fill('00:03.00');click('#cutRange');assert app.plan.duration==7
+                click('#rangePreview');page.locator('#editVideo').wait_for(state='visible',timeout=60000)
+                page.screenshot(path=str(ROOT/'build/gui-mini-editor.jpg'),full_page=True)
+                # Errors stay in view even when the page is scrolled down.
+                page.locator('#rangeEnd').fill('99:00.00');click('#cutRange');expect(page.locator('#errorDialog')).to_be_visible();click('#closeError')
                 # The alternate path imports existing server files without uploading.
                 from test_folder_import import setup
                 existing=root/'existing';existing.mkdir();setup(existing)
                 click('#inputTab');page.locator('#draftChoice').select_option('');click('#inputSteps [data-step="setup"]')
                 click('#serverImportPanel summary');page.locator('#serverFolder').evaluate('(e,p)=>{e.value=p}',str(existing))
-                click('#scanServerFolder');click('#importServerFolder')
+                click('#scanServerFolder');click('#openServerScript');expect(page.locator('#serverScriptText')).to_have_value(SCRIPT);click('#saveServerScript');click('#importServerFolder')
                 expect(page.locator('#inputSummary')).to_contain_text('АМУР')
                 expect(page.locator('#activateInput')).to_be_enabled()
                 assert not errors,errors
@@ -158,6 +172,7 @@ def check():
     print('Mobile review, clip preview, audio, card image, persistence and undo: OK')
 
 if __name__=='__main__':check()
+
 
 
 

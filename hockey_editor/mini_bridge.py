@@ -17,6 +17,8 @@ class Bridge:
         self.process=Process(self)
         from .mobile_inputs import Inputs
         self.inputs=Inputs(self)
+        from .mobile_editing import Editor
+        self.editor=Editor(self)
     def configure(self):
         if self.gateway:self.gateway.close();self.gateway=None
         config=self.app.notifier.config
@@ -44,6 +46,7 @@ class Bridge:
                 if time.monotonic()>command['deadline']:raise RemoteError('Запрос устарел. Обновите список.',409)
                 command['result']=self.handle(command['kind'],command['data'])
             except RemoteError as error:command['error']=error
+            except ValueError as error:command['error']=RemoteError(str(error))
             except Exception as error:
                 self.app.log_lines.append('Mini App · '+command['kind']+': '+type(error).__name__)
                 command['error']=RemoteError('Не удалось выполнить действие. Проверьте материалы и журнал на сервере.',400)
@@ -127,7 +130,10 @@ class Bridge:
         task,card=first,second
         from .review import describe_card,source_time
         title,where=describe_card(card,task,app.project,app.plan)
-        return dict(kind='card',title=title,where=where,script=task['script'],recognized=task.get('recognized',''),text=card.text if card else '',reason=task['reason'],start=card.start if card else task['start'],end=card.end if card else task['end'],source_start=source_time(app.plan,task['start']),source_end=source_time(app.plan,task['end']),owner=card.forecast_id if card else '',forecast=bool(card and card.title=='ПРОГНОЗ'),owners=[dict(id=b.uid,title=b.title) for b in app.project.blocks],language='uz' if app.project.profile.startswith('uz_') else 'ru',voice=True)
+        from .mobile_editing import CARD_TYPES
+        nearby=sorted([dict(start=c.start,end=c.end,title=c.title,text=c.text,review_id=c.review_id) for c in app.plan.cards],key=lambda c:c['start'])
+        pivot=next((i for i,c in enumerate(nearby) if c['review_id']==task['id']),0)
+        return dict(kind='card',card_type=card.title if card else '',types=CARD_TYPES,can_change_type=bool(card and not card.asset and card.title not in ('СМЕНА МАТЧА','ИТОГИ ВЫПУСКА')),neighbors=nearby[max(0,pivot-3):pivot+4],title=title,where=where,script=task['script'],recognized=task.get('recognized',''),text=card.text if card else '',reason=task['reason'],start=card.start if card else task['start'],end=card.end if card else task['end'],source_start=source_time(app.plan,task['start']),source_end=source_time(app.plan,task['end']),owner=card.forecast_id if card else '',forecast=bool(card and card.title=='ПРОГНОЗ'),owners=[dict(id=b.uid,title=b.title) for b in app.project.blocks],language='uz' if app.project.profile.startswith('uz_') else 'ru',voice=True)
     def selection(self,block,event,data):
         from .model import EventSelection
         from .media import probe
@@ -146,7 +152,7 @@ class Bridge:
     def action(self,data):
         app=self.app;self.check_revision(data)
         if self.locked():raise RemoteError('Сейчас идёт обработка или открыто окно правок на ПК. Дождитесь окончания или закройте окно.',409)
-        before=(copy.deepcopy(app.project),copy.deepcopy(app.plan));old_result=app.result;auto_candidate=False
+        before=(copy.deepcopy(app.project),copy.deepcopy(app.plan));history_snapshot=self.editor.snapshot(plan=app.plan);old_result=app.result;auto_candidate=False
         try:
             if data.get('decision')=='undo':
                 if not self.history or self.history['after']!=self.revision():raise RemoteError('Отмена недоступна: проект изменился.',409)
@@ -160,7 +166,13 @@ class Bridge:
                     from .review import resolve
                     owner=str(data.get('owner',second.forecast_id if second else ''))
                     if owner and owner not in {b.uid for b in app.project.blocks}:raise RemoteError('Матч для ставки не найден.')
-                    plan=resolve(app.plan,first['id'],decision,text=str(data.get('text',second.text if second else ''))[:4000],start=float(data.get('start',first['start'])),end=float(data.get('end',first['end'])),owner=owner)
+                    base=copy.deepcopy(app.plan)
+                    card=next((c for c in base.cards if c.review_id==first['id']),None)
+                    if card and data.get('card_type'):
+                        from .mobile_editing import card_type
+                        card_type(card,str(data['card_type']),owner,app.project)
+                        if card.title!='ПРОГНОЗ':owner=''
+                    plan=resolve(base,first['id'],decision,text=str(data.get('text',second.text if second else ''))[:4000],start=float(data.get('start',first['start'])),end=float(data.get('end',first['end'])),owner=owner)
                     next(t for t in plan.review_items if t['id']==first['id'])['recognized']=str(data.get('recognized',first.get('recognized','')))[:8000]
                     app.display_plan(plan)
                 else:
@@ -175,6 +187,7 @@ class Bridge:
                     app.invalidate();app.refresh_events();app.update_summary()
             app.result=None
             saved=self.checkpoint()
+            self.editor.record(history_snapshot,'Решение по плашке / видео')
             self.history=None if data.get('decision')=='undo' else dict(before=before,after=self.revision())
             if auto_candidate and data.get('decision') in ('confirmed','deleted'):
                 self.process.approved('clip')
@@ -186,8 +199,18 @@ class Bridge:
     def prepare(self,data):
         self.check_revision(data)
         if self.app.busy:raise RemoteError('Дождитесь окончания обработки.',409)
-        mode=data.get('mode');first,second=self.find(data['id']);spec={};app=self.app
-        if mode=='clip' and data['id'].startswith('clip:'):
+        mode=data.get('mode');spec={};app=self.app
+        if mode=='timeline':first=second=None
+        else:first,second=self.find(data['id'])
+        if mode=='timeline':
+            from .mini_preview import snapshot
+            from .timeline import Card,parse_time
+            if not app.plan:raise RemoteError('Сначала определите тайминги.')
+            a=parse_time(data.get('start',0));b=min(app.plan.duration,a+20,parse_time(data.get('end',a+20)))
+            marker=Card(a,b,'','Предпросмотр',review_id='__mobile_preview__')
+            spec=snapshot(app.project,app.plan,app.index,dict(id=marker.review_id),marker,dict(start=a,end=b))
+            spec['plan'].cards=[c for c in spec['plan'].cards if c.review_id!=marker.review_id]
+        elif mode=='clip' and data['id'].startswith('clip:'):
             source,selection=self.selection(first,second,data);spec=dict(mode=mode,path=source.path,start=selection.source_start,end=selection.source_end)
         elif mode=='voice' and data['id'].startswith('card:'):
             from .host_media import slice_media
@@ -196,7 +219,12 @@ class Bridge:
             media=plan.media or [dict(path=app.project.host,start=plan.source_start+x,end=plan.source_start+y) for x,y in plan.keep]
             spec=dict(mode=mode,spans=slice_media(media,a,b))
         elif mode=='art' and data['id'].startswith('card:') and second:
-            spec=dict(mode=mode,card=copy.deepcopy(second),profile=app.project.profile,logos=copy.deepcopy(app.project.team_logos))
+            card=copy.deepcopy(second)
+            if data.get('card_type'):
+                from .mobile_editing import card_type
+                card_type(card,str(data['card_type']),str(data.get('owner','')),app.project)
+            card.text=str(data.get('text',card.text))
+            spec=dict(mode=mode,card=card,profile=app.project.profile,logos=copy.deepcopy(app.project.team_logos))
         elif mode=='context' and data['id'].startswith('card:') and second:
             from .mini_preview import snapshot
             spec=snapshot(app.project,app.plan,app.index,first,second,data)
@@ -222,7 +250,18 @@ class Bridge:
         threading.Thread(target=work,daemon=True).start()
         return dict(job=ident)
     def handle(self,kind,data):
+        if kind=='editor-files':
+            from .mini_export import folder
+            root=folder(data.get('path',''))
+            return dict(files=[dict(name=p.name,path=str(p)) for p in sorted(root.iterdir()) if p.is_file() and p.suffix.lower() in ('.mp3','.wav','.m4a','.aac','.flac')][:300])
+        if kind=='editor-state':return self.editor.state()
+        if kind=='editor-action':return self.editor.apply(data)
         if kind.startswith('input-'):
+            from .mobile_scripts import start_document,document_status,local_script
+            if kind=='input-doc-start':return start_document(self.inputs,data)
+            if kind=='input-doc-status':return document_status(self.inputs,data)
+            if kind=='input-script-open':return local_script(self.inputs,data)
+            if kind=='input-script-save':return local_script(self.inputs,data,True)
             actions={'status':self.inputs.status,'mkdir':self.inputs.mkdir,'create':self.inputs.create,
                      'server-files':self.inputs.server_files,'server-import':self.inputs.server_import,
                      'script':self.inputs.script,'settings':self.inputs.settings,'upload':self.inputs.upload_init,
@@ -261,6 +300,7 @@ class Bridge:
                 return dict(file=job['file'])
             return {k:v for k,v in job.items() if k not in ('file','revision','created')}
         raise RemoteError('Неизвестный запрос.',404)
+
 
 
 

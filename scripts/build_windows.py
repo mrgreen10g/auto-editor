@@ -27,7 +27,7 @@ shutil.copy2(root/'THIRD_PARTY.md',dest/'THIRD_PARTY.txt')
 shutil.copy2(root/'docs'/'GOOGLE_DRIVE_RU.md',dest/'GOOGLE_DRIVE_RU.txt')
 shutil.copy2(root/'docs'/'MOBILE_ROADMAP_RU.md',dest/'MOBILE_ROADMAP_RU.txt')
 shutil.copy2(root/'docs'/'MOBILE_CREATE_RU.md',dest/'MOBILE_CREATE_RU.txt')
-shutil.copy2(root/'docs'/'VERSION_0_8_4_RU.md',dest/'VERSION_0_8_4_RU.txt')
+shutil.copy2(root/'docs'/'VERSION_0_8_5_RU.md',dest/'VERSION_0_8_5_RU.txt')
 # Verify a frozen EXE, not merely its Python source.
 report=root/'build'/'bundle-check.json'
 subprocess.run([str(dest/'AutoEditor.exe'),'--self-test',str(report)],check=True,timeout=120)
@@ -37,5 +37,6 @@ subprocess.run([str(dest/'AutoEditor.exe'),'--smoke-gui'],check=True,timeout=45)
 shutil.copy2(report,dest/'bundle-check.json')
 shutil.make_archive(str(root/'dist'/f'AutoEditor-{__version__}-Windows'),'zip',root/'dist','AutoEditor')
 print('Windows bundle built and checked.')
+
 
 

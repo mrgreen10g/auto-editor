@@ -36,7 +36,7 @@ def self_test(report):
     assert context.cert_store_stats()['x509_ca']>0
     from hockey_editor import mini_server
     mini_assets=Path(mini_server.__file__).with_name('mini_web')
-    assert all((mini_assets/name).is_file() for name in ('index.html','app.js','app.css','input.js'))
+    assert all((mini_assets/name).is_file() for name in ('index.html','app.js','app.css','input.js','editor.js'))
     from hockey_editor.media import run,probe
     from hockey_editor.alignment import synthesize,features,subsequence_dtw,normalized
     import numpy as np
@@ -96,5 +96,6 @@ if __name__=='__main__':
             import tkinter.messagebox
             tkinter.messagebox.showerror('Auto Editor',str(e))
         sys.exit(1)
+
 
 

@@ -5,3 +5,6 @@
 #inputSteps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}#inputSteps button{font-size:12px;padding:10px 3px;min-width:0}.input-file{padding:14px 0;border-bottom:1px solid var(--line)}.input-file small{display:block;color:var(--muted);overflow-wrap:anywhere}.input-file button{font-size:13px;margin:6px 6px 0 0}#inputFolders{max-height:260px;overflow:auto;display:grid;gap:6px}#draftFolder,#inputBrowserPath{overflow-wrap:anywhere;font-size:13px}#deviceProgress{overflow-wrap:anywhere}
 
 
+
+
+.inline-status{white-space:pre-wrap;border-left:3px solid var(--accent);padding:10px;font-size:14px;background:#203e3b}.neighbor-row{border-bottom:1px solid var(--line);padding:10px 0;font-size:13px}.neighbor-row strong{color:var(--accent)}dialog{color:var(--text);background:var(--panel);border:1px solid #ed968f;border-radius:16px;width:calc(100% - 32px);max-width:480px;max-height:75dvh;padding:22px}dialog::backdrop{background:#000a}#errorText{white-space:pre-wrap;max-height:45dvh;overflow:auto}.block-editor{border-bottom:1px solid var(--line);padding-bottom:12px}#editRows{max-height:55dvh;overflow:auto}#editInspector{scroll-margin-top:12px}#navigation button{font-size:11px}#editVideo{max-height:50dvh}#musicFiles{max-height:240px;overflow:auto}

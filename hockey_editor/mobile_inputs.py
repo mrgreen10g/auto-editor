@@ -101,9 +101,17 @@ class Inputs:
             if not re.fullmatch(r'[a-zA-Z0-9_-]{8,100}',request):raise RemoteError('Обновите страницу создания выпуска.')
             old=next((r for r in self.catalog() if r.get('request')==request),None)
             if old:return dict(id=old['id'])
-            target=Path(self.mkdir(data)['path'])
+            if data.get('folder'):
+                from .mini_export import folder
+                target=folder(data['folder'])
+                existing=next((r for r in self.catalog() if Path(r['folder']).resolve()==target),None)
+                if existing:
+                    if existing['profile']!=profile:raise RemoteError('В этой папке уже есть выпуск с другим шаблоном. Выберите другую папку.')
+                    return dict(id=existing['id'])
+                if (target/'mobile-draft.json').exists() or (target/'Выпуск.hockeyproj').exists():raise RemoteError('В папке уже есть проект. Откройте его из истории выпусков.')
+            else:target=Path(self.mkdir(data)['path'])
             draft=dict(id=secrets.token_hex(16),name=target.name,folder=str(target),profile=profile,preset=str(data.get('preset','')),asset_folder='',script='',blocks=[],files=[],created=time.time(),project='')
-            for p in ('Ведущий','Матчи','Сценарий','Результат'): (target/p).mkdir()
+            for p in ('Ведущий','Матчи','Сценарий','Результат'): (target/p).mkdir(exist_ok=True)
             self.save(draft);rows=self.catalog();rows.append({k:draft[k] for k in ('id','name','folder','profile','created')}|{'request':request});storage.write(self.index,rows)
             return dict(id=draft['id'])
     def script(self,data):
@@ -234,6 +242,8 @@ class Inputs:
             if old:
                 if old['status']=='ready':return dict(ok=True)
                 return self.launch(d,old,True)
+            ready=next((r for r in d['files'] if r.get('url')==url and r['role']=='match' and r['status']=='ready'),None)
+            if ready and data.get('role')=='match':return self.reuse(dict(id=d['id'],from_draft=d['id'],file=ready['id'],block=data.get('block')))
             if self.worker and self.worker.is_alive():raise RemoteError('Дождитесь скачивания предыдущего файла.',409)
             item=self.new_file(d,data);item.update(source=source,url=url,profile=d['profile'],name=('Ведущий' if item['role']=='host' else 'Запись')+'.mp4')
             return self.launch(d,item,True)
@@ -312,4 +322,5 @@ class Inputs:
             bridge.history=None;bridge.process.job=None;bridge.process.auto_scope=None;bridge.export.job=None
             bridge.export.last_folder=str(Path(d['folder'])/'Результат')
             return dict(ok=True,project=str(target))
+
 

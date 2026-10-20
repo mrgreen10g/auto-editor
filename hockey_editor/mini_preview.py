@@ -22,6 +22,10 @@ def snapshot(project,plan,index,task,card,data):
     if not selected.text or len(selected.text)>4000:raise RemoteError('Введите текст плашки (до 4000 символов).')
     owner=str(data.get('owner',selected.forecast_id))
     if owner and owner not in {b.uid for b in project.blocks}:raise RemoteError('Матч для ставки не найден.')
+    if data.get('card_type'):
+        from .mobile_editing import card_type
+        card_type(selected,str(data['card_type']),owner,project)
+        if selected.title!='ПРОГНОЗ':owner=''
     selected.forecast_id=owner
     if owner:
         for other in plan.cards:
@@ -72,3 +76,4 @@ def render(spec,cache,ident):
         Engine(project,spec['index'],root/'render',threading.Event()).render(plan,output,draft=True)
         output.replace(target)
     return dict(file=str(target))
+

@@ -38,6 +38,10 @@ async function refreshResults(){
  destinationLabel();showResult();
 }
 function notice(text){$('notice').textContent=text}
+function errorNotice(text){notice(text);$('errorText').textContent=text;if(!$('errorDialog').open)$('errorDialog').showModal();tg?.HapticFeedback?.notificationOccurred('error')}
+$('closeError').onclick=()=>$('errorDialog').close();
+function timeText(value){const n=Math.round(Number(value)*100);return String(Math.floor(n/6000)).padStart(2,'0')+':'+String(Math.floor(n/100)%60).padStart(2,'0')+'.'+String(n%100).padStart(2,'0')}
+function readTime(value){const parts=String(value).trim().replace(',','.').split(':').map(Number);if(!parts.length||parts.length>3||parts.some((n,i)=>!Number.isFinite(n)||n<0||(i>0&&n>=60)))throw Error('Время: ММ:СС.сс, например 01:23.50');return parts.reduce((a,n)=>a*60+n,0)}
 async function api(route,data={},raw=false){
  const response=await fetch('/api/'+route,{method:'POST',headers:{'Content-Type':'application/json',...(session?{Authorization:'Bearer '+session}:{})},body:JSON.stringify(data),cache:'no-store'});
  if(!response.ok){const result=await response.json();const error=new Error(result.error||'Ошибка сервера');error.status=response.status;throw error}
@@ -76,8 +80,8 @@ function renderList(){
 }
 function clearMedia(){for(const id of ['video','audio']){$(id).pause();$(id).removeAttribute('src');$(id).hidden=true}$('image').hidden=true;$('image').removeAttribute('src');if(blob)URL.revokeObjectURL(blob);blob=null;$('translation').hidden=true;}
 function back(){clearMedia();current=null;document.body.classList.remove('reviewing');$('detail').hidden=true;$('actions').hidden=true;$('list').hidden=pageMode!=='review';buttons();}
-function payload(){return {id:current,revision:state.revision,text:$('text').value,recognized:$('recognized').value,owner:$('owner').value,choice:$('choice').value,start:Number($('start').value),end:Number($('end').value),time:Number($('eventTime').value)}}
-function choice(){const c=detail.options.find(x=>x.key===$('choice').value);if(c){$('start').value=c.start;$('end').value=c.end;$('eventTime').value=c.time}}
+function payload(){return {id:current,revision:state.revision,text:$('text').value,recognized:$('recognized').value,owner:$('owner').value,choice:$('choice').value,card_type:$('cardType').value,start:readTime($('start').value),end:readTime($('end').value),time:Number($('eventTime').value)}}
+function choice(){const c=detail.options.find(x=>x.key===$('choice').value);if(c){$('start').value=timeText(c.start);$('end').value=timeText(c.end);$('eventTime').value=c.time}}
 async function open(id){
  const result=await api('item',{id,revision:state.revision});clearMedia();detail=result;current=id;
  document.body.classList.add('reviewing');
@@ -86,12 +90,16 @@ async function open(id){
  $('previousItem').disabled=position<=0;$('nextItem').disabled=position<0||position>=rows.length-1;
  $('list').hidden=true;$('detail').hidden=false;$('actions').hidden=false;$('itemTitle').textContent=result.title;$('where').textContent=result.where||'';$('reason').textContent=result.reason||'';
  for(const field of ['script','recognized','text'])$(field).value=result[field]||'';
- const clip=result.kind==='clip';$('clipFields').hidden=!clip;$('preview').hidden=!clip;$('voice').hidden=!result.voice;$('art').hidden=clip;$('textLabel').hidden=clip;$('ownerLabel').hidden=!result.forecast;
+ const clip=result.kind==='clip';
+ $('visibleTiming').textContent=clip?'Границы ниже относятся к исходной записи матча.':timeText(result.start)+' → '+timeText(result.end)+' · '+(result.end-result.start).toFixed(2)+' с на дорожке выпуска';
+ $('timeMeaning').textContent=clip?'Время в исходной записи матча.':'Время в смонтированном выпуске, не в исходной речи.';
+ $('cardTypeLabel').hidden=clip||!result.can_change_type;$('cardType').replaceChildren();for(const t of result.types||[])$('cardType').add(new Option(t,t));if(result.card_type&&!result.types.includes(result.card_type))$('cardType').add(new Option(result.card_type,result.card_type));$('cardType').value=result.card_type||'';
+ $('neighborCards').replaceChildren();for(const c of result.neighbors||[]){const row=document.createElement('p');row.className='neighbor-row';row.textContent=timeText(c.start)+' → '+timeText(c.end)+' · '+c.title+'\n'+c.text;if(c.review_id===current?.slice(5))row.style.color='var(--accent)';$('neighborCards').append(row)}$('clipFields').hidden=!clip;$('preview').hidden=!clip;$('voice').hidden=!result.voice;$('art').hidden=clip;$('textLabel').hidden=clip;$('ownerLabel').hidden=!result.forecast;
  $('context').hidden=clip;$('contextHint').hidden=clip;$('recognizedLabel').hidden=clip;$('timingDetails').open=clip;
  $('translate').hidden=result.language!=='uz';$('remove').textContent=clip?'Оставить ведущего':'Удалить плашку';
  $('owner').replaceChildren();for(const owner of result.owners||[]){const o=new Option(owner.title,owner.id);$('owner').add(o)}$('owner').value=result.owner||'';
  $('choice').replaceChildren();for(const option of result.options||[])$('choice').add(new Option(option.title,option.key));if(result.choice)$('choice').value=result.choice.key;
- if(clip)choice();else{$('start').value=result.start;$('end').value=result.end}
+ if(clip)choice();else{$('start').value=timeText(result.start);$('end').value=timeText(result.end)}
  $('sourceTime').textContent=clip?'Границы в исходной записи матча.':'В исходной речи: '+result.source_start.toFixed(2)+'–'+result.source_end.toFixed(2)+' с.';
  notice('Решение применяется к открытому проекту и сохраняется на сервере.');buttons();window.scrollTo(0,0);
 }
@@ -111,7 +119,7 @@ async function prepare(mode){
  }
  throw new Error('Подготовка занимает больше времени. Обновите список и повторите позже.');
 }
-async function guard(fn,background=false){if(waiting&&background)return;while(waiting)await new Promise(r=>setTimeout(r,25));waiting=true;document.body.dataset.busy='true';buttons();try{await fn()}catch(error){notice(error.message||'Нет связи с сервером. Проверьте подключение.')}finally{waiting=false;document.body.dataset.busy='false';buttons()}}
+async function guard(fn,background=false){if(waiting&&background)return;while(waiting)await new Promise(r=>setTimeout(r,25));waiting=true;document.body.dataset.busy='true';buttons();try{await fn()}catch(error){errorNotice(error.message||'Нет связи с сервером. Проверьте подключение.')}finally{waiting=false;document.body.dataset.busy='false';buttons()}}
 $('refresh').onclick=()=>guard(async()=>{back();await refreshPage();notice('Данные обновлены.')});$('back').onclick=()=>guard(async()=>{back();await refresh()});
 $('clips').onclick=()=>{kind='clip';renderList()};$('cards').onclick=()=>{kind='card';renderList()};$('all').onchange=renderList;$('choice').onchange=choice;
 $('blockFilter').onchange=renderList;$('typeFilter').onchange=renderList;
@@ -123,8 +131,8 @@ for(const [id,decision] of [['approve','confirmed'],['remove','deleted'],['pendi
 for(const [id,mode] of [['preview','clip'],['context','context'],['voice','voice'],['art','art'],['translate','translation']])$(id).onclick=()=>guard(()=>prepare(mode));
 $('undo').onclick=()=>guard(async()=>{await api('action',{revision:state.revision,decision:'undo'});back();await refresh();notice('Последнее решение отменено и сохранено.')});
 guard(async()=>{tg?.ready();tg?.expand();if(!tg?.initData)throw new Error('Откройте это приложение кнопкой в личном чате со своим Telegram-ботом.');session=(await api('auth',{initData:tg.initData})).session;const page=new URLSearchParams(location.search).get('view');if(page==='clips')kind='clip';if(page==='cards')kind='card';await refresh();await switchPage(['clips','cards','review'].includes(page)?'review':page==='export'?'export':'process');notice('');});
-async function refreshPage(){if(pageMode==='input')await refreshInputs();else if(pageMode==='process')await refreshProcess();else if(pageMode==='export')await refreshExport();else await refresh()}
-setInterval(()=>{if(session&&!waiting&&!current)guard(refreshPage,true)},3000);
+async function refreshPage(){if(pageMode==='edit')await refreshEditor();else if(pageMode==='input')await refreshInputs();else if(pageMode==='process')await refreshProcess();else if(pageMode==='export')await refreshExport();else await refresh()}
+setInterval(()=>{if(session&&!waiting&&!current&&pageMode!=='edit')guard(refreshPage,true)},3000);
 
 let playbackSpeed=1;
 try{const saved=Number(localStorage.getItem('playbackSpeed'));if([1,1.25,1.5,1.75,2].includes(saved))playbackSpeed=saved}catch{}
@@ -153,7 +161,7 @@ async function refreshExport(){
  }
  await refreshResults();
 }
-async function switchPage(mode){pageMode=mode;if(mode!=='export')$('resultVideo').pause();back();notice('');$('pageTitle').textContent=({input:'Создание выпуска',review:'Проверка',export:'Результат',process:'Процесс'})[mode];$('inputPanel').hidden=mode!=='input';$('list').hidden=mode!=='review';$('exportPanel').hidden=mode!=='export';$('processPanel').hidden=mode!=='process';for(const name of ['input','review','export','process']){$(name+'Tab').classList.toggle('active',mode===name);$(name+'Tab').setAttribute('aria-current',mode===name?'page':'false')}await refreshPage();window.scrollTo(0,0)}
+async function switchPage(mode){pageMode=mode;if(mode!=='export')$('resultVideo').pause();back();notice('');$('pageTitle').textContent=({edit:'Монтаж',input:'Создание выпуска',review:'Проверка',export:'Результат',process:'Процесс'})[mode];$('editorPanel').hidden=mode!=='edit';if(mode!=='edit')$('editVideo').pause();$('inputPanel').hidden=mode!=='input';$('list').hidden=mode!=='review';$('exportPanel').hidden=mode!=='export';$('processPanel').hidden=mode!=='process';for(const name of ['input','review','export','process','edit']){$(name+'Tab').classList.toggle('active',mode===name);$(name+'Tab').setAttribute('aria-current',mode===name?'page':'false')}await refreshPage();window.scrollTo(0,0)}
 async function browse(path='',offset=0){
  const data=await api('folders',{path,offset});folderState=data;$('folderBrowser').hidden=false;$('folderPath').textContent=data.path||'Диски сервера';if(!offset)$('folders').replaceChildren();
  for(const item of data.folders){const b=document.createElement('button');b.className='item';b.textContent='📁 '+item.name;b.onclick=()=>guard(()=>browse(item.path));$('folders').append(b)}
@@ -222,3 +230,7 @@ $('cancelProcess').onclick=()=>guard(async()=>{if(!confirm('Остановить
 
 
 
+
+
+$('cardType').onchange=()=>{$('ownerLabel').hidden=$('cardType').value!=='ПРОГНОЗ'};
+$('openMontage').onclick=()=>guard(()=>switchPage('edit'));
