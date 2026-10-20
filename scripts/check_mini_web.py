@@ -164,7 +164,7 @@ def check():
                 expect(page.locator('#editKind')).to_have_count(0)
                 page.locator('#rangeStart').fill('x');page.locator('#rangeStart').fill('00:02.50')
                 page.locator('#elementList').evaluate('(e)=>e.open=false')
-                page.locator('#timelineZoom').fill('8');page.locator('#timelineZoom').dispatch_event('input')
+                page.locator('#timelineZoom').evaluate('(e)=>e.value=8');page.locator('#timelineZoom').dispatch_event('input')
                 assert page.evaluate('timelineWidth')>390
                 page.evaluate("selectEdit(editorState.items[0]);document.getElementById('timelineScroll').scrollLeft=timelineHits[0].x-40")
                 click('#backToTimeline')
