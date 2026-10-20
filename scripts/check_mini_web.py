@@ -155,11 +155,11 @@ def check():
                 click('#editRedo');assert app.plan.cards[0].title=='ВОПРОС ЗРИТЕЛЮ'
                 page.locator('#rangeStart').fill('00:02.00');page.locator('#rangeEnd').fill('00:03.00');click('#cutRange');assert app.plan.duration==7
                 click('#rangePreview');page.locator('#editVideo').wait_for(state='visible',timeout=60000)
-                page.wait_for_function("document.getElementById('editVideo').readyState>=2")
+                page.wait_for_function("() => document.getElementById('editVideo').readyState>=2")
                 assert page.evaluate('previewOffset')==2
                 page.evaluate('seekTimeline(2.5)');click('#markStart');expect(page.locator('#rangeStart')).to_have_value('00:02.50')
-                click('#fullPreview');page.wait_for_function("previewOffset===0 && previewEnd===7 && !previewPreparing",timeout=90000)
-                page.wait_for_function("document.getElementById('editVideo').readyState>=2")
+                click('#fullPreview');page.wait_for_function("() => previewOffset===0 && previewEnd===7 && !previewPreparing",timeout=90000)
+                page.wait_for_function("() => document.getElementById('editVideo').readyState>=2")
                 page.evaluate('seekTimeline(4)');click('#frameForward');click('#markEnd');expect(page.locator('#rangeEnd')).to_have_value('00:04.03')
                 expect(page.locator('#editKind')).to_have_count(0)
                 page.locator('#rangeStart').fill('x');page.locator('#rangeStart').fill('00:02.50')
@@ -171,7 +171,11 @@ def check():
                 point=page.evaluate("(()=>{const h=timelineHits[0],r=timelineCanvas.getBoundingClientRect();return {x:r.left+h.x+2,y:r.top+h.y+15,dx:timelineScale/5}})()")
                 before=app.plan.cards[0].start
                 page.mouse.move(point['x'],point['y']);page.mouse.down();page.mouse.move(point['x']+point['dx'],point['y'],steps=5);page.mouse.up()
-                page.wait_for_function('editingItem===null')
+                try:page.wait_for_function('() => editingItem===null')
+                except Exception:
+                    print('Timeline state:',page.evaluate("({point:playhead,selected:editingItem,drag:timelineDrag,preview:dragPreview,error:document.getElementById('errorText').textContent})"))
+                    page.screenshot(path=str(ROOT/'build/gui-mini-editor.jpg'),full_page=True)
+                    raise
                 assert abs(app.plan.cards[0].start-before-.2)<.034
                 click('#editUndo')
                 page.locator('#rangeStart').focus();page.locator('#editDuration').click();assert page.evaluate("document.activeElement.id")!='rangeStart'
