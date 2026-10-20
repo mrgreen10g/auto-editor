@@ -240,4 +240,4 @@ function setupPhoneViewport(){
  if(tg?.isVersionAtLeast?.('8.0')){try{tg.requestFullscreen()}catch(_){}}
  const safe=()=>{document.documentElement.style.setProperty('--tg-content-safe-top',((tg?.contentSafeAreaInset?.top||0)+(tg?.safeAreaInset?.top||0))+'px');document.documentElement.style.setProperty('--tg-content-safe-bottom',Math.max(tg?.contentSafeAreaInset?.bottom||0,tg?.safeAreaInset?.bottom||0)+'px')};safe();tg?.onEvent?.('safeAreaChanged',safe);tg?.onEvent?.('contentSafeAreaChanged',safe);
 }
-document.addEventListener('pointerup',e=>{const active=document.activeElement;if(active?.matches('input,textarea,[contenteditable="true"]')&&!e.target.closest('input,textarea,select,button,a,label,summary,video,canvas,[contenteditable="true"]'))active.blur()});
+document.addEventListener('pointerup',e=>{const active=document.activeElement;if(active?.matches('input,textarea,[contenteditable="true"]')&&!e.target.closest('input,textarea,select,button,a,label,summary,video,canvas,[contenteditable="true"]')){active.blur();if(tg?.isVersionAtLeast?.('9.1'))tg.hideKeyboard?.()}});
