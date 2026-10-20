@@ -149,7 +149,7 @@ def check():
                 from hockey_editor.timeline import Plan,Card,Line
                 app.plan=Plan(0,8,[(0,8)],[Line('Тестовая речь',0,8)],[],[Card(1,4,'СТАТИСТИКА','Три гола')],[],8)
                 click('#editTab');expect(page.locator('#editRows .item')).to_have_count(1)
-                click('#elementList summary');click('#editRows .item');page.locator('#editType').select_option('ВОПРОС ЗРИТЕЛЮ');page.locator('#editText').fill('Кто победит?');page.locator('#editStart').fill('00:01.50');click('#saveEdit')
+                click('#elementList > summary');click('#editRows .item');page.locator('#editType').select_option('ВОПРОС ЗРИТЕЛЮ');page.locator('#editText').fill('Кто победит?');page.locator('#editStart').fill('00:01.50');click('#saveEdit')
                 assert app.plan.cards[0].title=='ВОПРОС ЗРИТЕЛЮ' and app.plan.cards[0].start==1.5
                 click('#editUndo');assert app.plan.cards[0].title=='СТАТИСТИКА'
                 click('#editRedo');assert app.plan.cards[0].title=='ВОПРОС ЗРИТЕЛЮ'
@@ -166,6 +166,14 @@ def check():
                 page.locator('#elementList').evaluate('(e)=>e.open=false')
                 page.locator('#timelineZoom').fill('8');page.locator('#timelineZoom').dispatch_event('input')
                 assert page.evaluate('timelineWidth')>390
+                page.evaluate("selectEdit(editorState.items[0]);document.getElementById('timelineScroll').scrollLeft=timelineHits[0].x-40")
+                click('#backToTimeline')
+                point=page.evaluate("(()=>{const h=timelineHits[0],r=timelineCanvas.getBoundingClientRect();return {x:r.left+h.x+2,y:r.top+h.y+15,dx:timelineScale/5}})()")
+                before=app.plan.cards[0].start
+                page.mouse.move(point['x'],point['y']);page.mouse.down();page.mouse.move(point['x']+point['dx'],point['y'],steps=5);page.mouse.up()
+                page.wait_for_function('editingItem===null')
+                assert abs(app.plan.cards[0].start-before-.2)<.034
+                click('#editUndo')
                 page.locator('#rangeStart').focus();page.locator('#editDuration').click();assert page.evaluate("document.activeElement.id")!='rangeStart'
                 page.screenshot(path=str(ROOT/'build/gui-mini-editor.jpg'),full_page=True)
                 # Errors stay in view even when the page is scrolled down.
