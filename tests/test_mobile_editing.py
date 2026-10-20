@@ -43,7 +43,7 @@ class MobileEditingTests(unittest.TestCase):
  def test_create_uses_selected_folder_without_nested_name(self):
   folder=self.root/'Выбранная';folder.mkdir();inputs=Inputs(self.bridge,self.root/'catalog.json')
   result=inputs.create(dict(folder=str(folder),profile='ru_hockey',request='request-0001'))
-  self.assertEqual(inputs.load(result['id'])['folder'],str(folder));self.assertTrue((folder/'Ведущий').is_dir())
+  self.assertEqual(inputs.load(result['id'])['folder'],str(folder.resolve()));self.assertTrue((folder/'Ведущий').is_dir())
   self.assertEqual(inputs.create(dict(folder=str(folder),profile='ru_hockey',request='request-0002')),result)
  def test_server_script_repair_before_parse_and_conflict(self):
   folder=self.root/'materials';folder.mkdir();host,script=setup(folder);script.write_text('Ошибка определения пары',encoding='utf8');inputs=Inputs(self.bridge,self.root/'catalog.json')
@@ -70,3 +70,18 @@ class MobileEditingTests(unittest.TestCase):
   self.act(op='project',blocks=rows)
   self.assertIsNone(self.app.plan);self.assertEqual(self.app.project.blocks[0].script,'Исправленный текст сценария.')
   self.act(op='undo');self.assertIsNotNone(self.app.plan)
+
+ def test_whole_episode_cut_across_sections_survives_save_reload(self):
+  from hockey_editor.model import Project,Block
+  from hockey_editor.episode import combine,store_episode,saved_episode
+  p=Project(host=self.app.project.host,blocks=[Block(title='A',script='One'),Block(title='B',script='Two')],whole_episode=True)
+  a=Plan(0,5,[(0,5)],[Line('one',0,5)],[],[Card(1,4,'СТАТИСТИКА','one')],[],5)
+  b=Plan(5,10,[(0,5)],[Line('two',0,5)],[],[Card(1,4,'СТАТИСТИКА','two')],[],5)
+  store_episode(p,cut_range(combine(p,[a,b]),4,6));path=self.root/'episode.hockeyproj';p.save(path);q=Project.load(path)
+  self.assertEqual(saved_episode(q).duration,8);self.assertEqual([x.edit_plan['duration'] for x in q.blocks],[4,4])
+ def test_history_root_survives_pair_rename_and_changing_cache(self):
+  self.app.cache_path=lambda:self.root/self.app.project.blocks[0].title
+  old=self.bridge.editor.root();rows=self.bridge.editor.state()['blocks'];rows[1]['title']='Другая пара'
+  self.act(op='project',blocks=rows);self.bridge=Bridge(self.app)
+  self.assertEqual(self.bridge.editor.root(),old);self.assertTrue(self.bridge.editor.state()['undo']);self.act(op='undo')
+  self.assertEqual(self.app.project.blocks[0].title,'СКА — Лада')

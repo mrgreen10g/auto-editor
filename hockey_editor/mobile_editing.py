@@ -72,11 +72,22 @@ class Editor:
     def __init__(self,bridge):self.bridge=bridge
     @property
     def app(self):return self.bridge.app
-    def root(self):return Path(self.app.cache_path())/'mobile-history'
+    def root(self):
+        # A renamed block changes cache_path; history must stay with the project.
+        if self.app.project_path:return Path(self.app.project_path).with_suffix('.mobile-history')
+        key=hashlib.sha256(self.app.project.host.encode()).hexdigest()[:16]
+        return Path(self.app.cache_path()).parent/('mobile-history-'+key)
     def history(self):
         result=storage.read(self.root()/'index.json');return result if isinstance(result,dict) and 'undo' in result else dict(undo=[],redo=[])
     def fingerprint(self):
-        return hashlib.sha256(json.dumps([asdict(self.app.project),self.app.plan.to_dict() if self.app.plan else None,self.app.index],sort_keys=True,ensure_ascii=False).encode()).hexdigest()
+        def canonical(value,key=''):
+            if isinstance(value,dict):return {k:canonical(v,k) for k,v in value.items()}
+            if isinstance(value,list):return [canonical(v,'path' if key=='hosts' else '') for v in value]
+            if isinstance(value,str) and value and key in ('path','host','music','asset','origin_path','asset_folder','logo_folder'):return str(Path(value).resolve())
+            return value
+        project=asdict(self.app.project)
+        for field in ('assets','team_logos'):project[field]={k:str(Path(v).resolve()) if v else '' for k,v in project[field].items()}
+        return hashlib.sha256(json.dumps(canonical([project,self.app.plan.to_dict() if self.app.plan else None,self.app.index]),sort_keys=True,ensure_ascii=False).encode()).hexdigest()
     def snapshot(self,project=None,plan=None,index=None):
         root=self.root();root.mkdir(parents=True,exist_ok=True);key=secrets.token_hex(16)
         (project or self.app.project).save(root/(key+'.hockeyproj'))
