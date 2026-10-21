@@ -101,7 +101,7 @@ async function logoBrowse(path='',offset=0){const r=await api('folders',{path,of
  for(const f of r.folders)fileAction($('logoFiles'),'📁 '+f.name,()=>logoBrowse(f.path));if(r.next!=null)fileAction($('logoFiles'),'Ещё папки',()=>logoBrowse(r.path,r.next));
  if(!offset)await searchLogoFiles();$('logoBrowser').scrollIntoView({block:'nearest'});
 }
-$('logoSearch').oninput=()=>{clearTimeout(logoSearchTimer);logoSearchTimer=setTimeout(()=>guard(searchLogoFiles),250)};
+$('logoSearch').oninput=()=>{clearTimeout(logoSearchTimer);logoSearchTimer=setTimeout(()=>searchLogoFiles().catch(errorNotice),250)};
 $('chooseLogoFolder').onclick=()=>guard(()=>{logoTeam=null;logoUploadChoosing=false;return logoBrowse()});
 $('chooseUploadLogoFolder').onclick=()=>guard(()=>{logoTeam=null;logoUploadChoosing=true;return logoBrowse($('logoUploadFolder').value||'')});
 $('useLogoFolder').onclick=()=>guard(async()=>{if(logoUploadChoosing)$('logoUploadFolder').value=logoPath;else await editAction({op:'logos',folder:logoPath});$('logoBrowser').hidden=true});
