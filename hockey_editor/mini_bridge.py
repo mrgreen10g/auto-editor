@@ -258,9 +258,12 @@ class Bridge:
             from .mini_export import folder
             root=folder(data.get('path',''))
             extensions=('.png','.jpg','.jpeg','.webp') if data.get('kind')=='logo' else ('.mp3','.wav','.m4a','.aac','.flac')
-            return dict(files=[dict(name=p.name,path=str(p)) for p in sorted(root.iterdir()) if p.is_file() and p.suffix.lower() in extensions][:300])
+            query=str(data.get('query','')).strip().casefold()[:120]
+            files=[dict(name=p.name,path=str(p)) for p in sorted(root.iterdir()) if p.is_file() and p.suffix.lower() in extensions and query in p.name.casefold()]
+            return dict(files=files[:300],total=len(files))
         if kind=='editor-state':return self.editor.state()
         if kind=='editor-action':return self.editor.apply(data)
+        if kind=='editor-logo-upload':return self.editor.apply({**data,'op':'logos'})
         if kind.startswith('input-'):
             from .mobile_scripts import start_document,document_status,local_script
             if kind=='input-doc-start':return start_document(self.inputs,data)

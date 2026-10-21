@@ -113,3 +113,22 @@ class MobileEditingTests(unittest.TestCase):
   p=cut_range(self.app.plan,31/30,47/30)
   self.assertAlmostEqual(p.keep[0][1],31/30);self.assertAlmostEqual(p.keep[1][0],47/30)
   self.assertAlmostEqual(p.duration,8-16/30)
+
+ def test_logo_upload_named_file_manual_team_undo_and_collision(self):
+  import base64,io
+  from PIL import Image
+  folder=self.root/'logos';folder.mkdir();data=io.BytesIO();Image.new('RGB',(40,20),'blue').save(data,format='JPEG')
+  payload=dict(op='logos',team='Лада',upload_folder=str(folder),file_name='Несовпадающее название.jpg',image=base64.b64encode(data.getvalue()).decode())
+  self.act(**payload);target=(folder/'Несовпадающее название.png').resolve();self.assertTrue(target.is_file())
+  self.assertEqual(Path(self.app.project.team_logos['Лада']),target)
+  with Image.open(target) as image:self.assertEqual(image.format,'PNG')
+  before=target.read_bytes()
+  with self.assertRaises(RemoteError):self.act(**payload)
+  self.assertEqual(target.read_bytes(),before)
+  self.act(op='undo');self.assertNotIn('Лада',self.app.project.team_logos);self.assertTrue(target.is_file())
+  self.act(op='redo');self.assertEqual(Path(self.app.project.team_logos['Лада']),target)
+  results=self.bridge.handle('editor-files',dict(path=str(folder),kind='logo',query='НЕСОВПАДАЮЩЕЕ'))
+  self.assertEqual(results['total'],1);self.assertEqual(Path(results['files'][0]['path']),target)
+  for name,image in [('../outside','AAAA'),('CON',payload['image']),('bad',base64.b64encode(b'not an image').decode())]:
+   with self.assertRaises(RemoteError):self.act(**{**payload,'file_name':name,'image':image})
+  self.assertEqual(len(list(folder.iterdir())),1)

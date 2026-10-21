@@ -114,7 +114,7 @@ class Editor:
     def apply(self,data):
         b=self.bridge;app=self.app;b.check_revision(data)
         if b.locked() or b.media_busy:raise RemoteError('Дождитесь завершения обработки/предпросмотра и закройте окно правок на ПК.',409)
-        before=(copy.deepcopy(app.project),copy.deepcopy(app.plan),app.index,app.result);snapshot=self.snapshot(plan=app.plan);op=data.get('op');label='Правка монтажа'
+        before=(copy.deepcopy(app.project),copy.deepcopy(app.plan),app.index,app.result);snapshot=self.snapshot(plan=app.plan);op=data.get('op');label='Правка монтажа';uploaded=None
         try:
             if op in ('undo','redo'):
                 h=self.history();stack=h[op]
@@ -134,7 +134,12 @@ class Editor:
                 from .logos import assign
                 from .graphics import block_teams
                 teams={n for block in app.project.blocks for n in block_teams(block.title) if n}
-                if 'folder' in data:
+                if 'image' in data:
+                    if str(data.get('team','')) not in teams:raise RemoteError('Выберите команду выпуска для нового логотипа.')
+                    from .mobile_logos import save_upload
+                    uploaded=save_upload(data);data={**data,'path':str(uploaded)}
+                    if not app.project.logo_folder:app.project.logo_folder=str(uploaded.parent)
+                elif 'folder' in data:
                     app.project.logo_folder=str(folder(data['folder']));app.project.team_logos={};assign(app.project)
                 if 'team' in data:
                     name=str(data['team']);path=str(data.get('path',''))
@@ -192,6 +197,7 @@ class Editor:
                 update_task_times(p);validate_plan(p);store_plan(app.project,app.index,p);app.display_plan(p)
             app.result=None;b.checkpoint();self.record(snapshot,label);b.history=None;return dict(ok=True)
         except Exception:
+            if uploaded:uploaded.unlink(missing_ok=True)
             app.project,app.plan,app.index,app.result=before;app.refresh()
             if app.plan:app.display_plan(app.plan)
             raise

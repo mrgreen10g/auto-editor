@@ -180,6 +180,17 @@ def check():
                 click('#editUndo')
                 page.locator('#rangeStart').focus();page.locator('#editDuration').click();assert page.evaluate("document.activeElement.id")!='rangeStart'
                 page.screenshot(path=str(ROOT/'build/gui-mini-editor.jpg'),full_page=True)
+                # Device logo upload, named storage and manual lookup despite alias mismatch.
+                from PIL import Image
+                logo_folder=root/'logos';logo_folder.mkdir();logo_input=root/'upload-logo.jpg';Image.new('RGB',(40,40),'blue').save(logo_input)
+                click('#logoEditor > summary');click('#logoUploadPanel > summary');click('#chooseUploadLogoFolder')
+                page.evaluate('(p)=>logoBrowse(p)',str(logo_folder));click('#useLogoFolder')
+                page.locator('#logoUploadName').fill('Для ручного выбора');page.locator('#logoUploadFile').set_input_files(str(logo_input));click('#uploadLogo')
+                assert (logo_folder/'Для ручного выбора.png').is_file()
+                expect(page.locator('#logoUploadStatus')).to_contain_text('применено')
+                click('#logoRows > div:nth-child(2) button:first-of-type')
+                page.locator('#logoSearch').fill('ручного');expect(page.locator('#logoSearchResults button')).to_have_count(1)
+                click('#logoSearchResults button');assert sum(Path(v).resolve()==(logo_folder/'Для ручного выбора.png').resolve() for v in app.project.team_logos.values() if v)==2
                 # Errors stay in view even when the page is scrolled down.
                 page.locator('#rangeEnd').fill('99:00.00');click('#cutRange');expect(page.locator('#errorDialog')).to_be_visible();click('#closeError')
                 # The alternate path imports existing server files without uploading.

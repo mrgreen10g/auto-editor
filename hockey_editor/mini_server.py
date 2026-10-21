@@ -137,14 +137,14 @@ class Gateway:
                         return self.response(200,gateway.bridge.inputs.chunk(dict(id=self.headers.get('X-Draft'),file=self.headers.get('X-File'),offset=self.headers.get('X-Offset')),content))
                     if self.headers.get('Transfer-Encoding') or 'application/json' not in self.headers.get('Content-Type',''):raise RemoteError('Нужен JSON.',415)
                     size=int(self.headers.get('Content-Length','0'))
-                    if not 0<size<=(1048576 if path in ('/api/input-script','/api/input-script-save','/api/editor-action') else 65536):raise RemoteError('Некорректный размер запроса.',413)
+                    if not 0<size<=(12*1024*1024 if path=='/api/editor-logo-upload' else 1048576 if path in ('/api/input-script','/api/input-script-save','/api/editor-action') else 65536):raise RemoteError('Некорректный размер запроса.',413)
                     data=json.loads(self.rfile.read(size))
                     if not isinstance(data,dict):raise RemoteError('Нужен объект JSON.')
                     if path=='/api/auth':return self.response(200,{'session':gateway.login(data.get('initData'))})
                     gateway.authorize(self.headers.get('Authorization',''))
                     if path in {'/api/input-'+k for k in ('status','mkdir','create','script','settings','upload','finish','link','retry','edit','reuse','activate','pause','server-files','server-import','script-open','script-save','doc-start','doc-status')}:
                         return self.response(200,gateway.bridge.request(path.removeprefix('/api/'),data))
-                    if path not in ('/api/preview-stream','/api/editor-files','/api/editor-state','/api/editor-action','/api/result-status','/api/result-stream','/api/drive-config','/api/drive-start','/api/drive-pause','/api/process-status','/api/process-start','/api/process-cancel','/api/process-config','/api/export-status','/api/folders','/api/export-start','/api/export-cancel','/api/state','/api/item','/api/action','/api/prepare','/api/job','/api/media'):raise RemoteError('Не найдено.',404)
+                    if path not in ('/api/editor-logo-upload','/api/preview-stream','/api/editor-files','/api/editor-state','/api/editor-action','/api/result-status','/api/result-stream','/api/drive-config','/api/drive-start','/api/drive-pause','/api/process-status','/api/process-start','/api/process-cancel','/api/process-config','/api/export-status','/api/folders','/api/export-start','/api/export-cancel','/api/state','/api/item','/api/action','/api/prepare','/api/job','/api/media'):raise RemoteError('Не найдено.',404)
                     result=gateway.bridge.request(path.removeprefix('/api/'),data)
                     if path in ('/api/result-stream','/api/preview-stream'):
                         with gateway.lock:
