@@ -81,6 +81,12 @@ class TimelineEditor:
             var=tk.StringVar();entry=ttk.Entry(inspector,textvariable=var);entry.pack(fill='x');self.fields.append((var,entry))
         ttk.Label(inspector,text='Текст плашки / подпись в редакторе').pack(anchor='w',pady=(8,2))
         self.text=tk.Text(inspector,height=4,wrap='word',font=('Segoe UI',10));self.text.pack(fill='x')
+        self.geometry_fields={}
+        for name,label,default in [('offset_x','Сдвиг плашки по X',0),('offset_y','Сдвиг плашки по Y',0),('scale','Размер плашки (0,25–2)',1)]:
+            ttk.Label(inspector,text=label).pack(anchor='w',pady=(6,2))
+            var=tk.StringVar(value=str(default));entry=ttk.Entry(inspector,textvariable=var);entry.pack(fill='x')
+            entry.bind('<KeyRelease>',self.preview_card_edit);self.geometry_fields[name]=(var,entry)
+        self.text.bind('<KeyRelease>',self.preview_card_edit)
         self.apply_button=ttk.Button(inspector_actions,text='Применить правку',command=self.edit);self.apply_button.pack(fill='x',pady=(0,4));self.buttons.append(self.apply_button)
         self.replace_button=ttk.Button(inspector_actions,text='Заменить игровой момент',command=self.pick_clip)
         self.replace_button.pack(fill='x');self.buttons.append(self.replace_button)
@@ -158,11 +164,13 @@ class TimelineEditor:
         return items[i] if i<len(items) else None
 
     def select(self,selected):
-        self.selected=selected;item=self.item()
+        self.live_plan=None;self.selected=selected;item=self.item()
         self.text.delete('1.0','end')
         if item:
             self.kind.set(('Игра · '+Path(item.path).name) if selected[0]=='insert' else item.title)
             for (var,_),value in zip(self.fields,(item.start,item.end,getattr(item,'source_in',0))):var.set(format_time(value))
+            for name,(var,entry) in self.geometry_fields.items():
+                var.set(str(getattr(item,name,1 if name=='scale' else 0)));entry.configure(state='normal' if selected[0]=='card' and not item.asset else 'disabled')
             self.text.insert('1.0',item.label if selected[0]=='insert' else item.text)
             self.fields[2][1].configure(state='normal' if selected[0]=='insert' else 'disabled')
             if getattr(item,'context_label',''):self.status.set(item.context_label+' · только в редакторе, не в видео')
@@ -247,6 +255,22 @@ class TimelineEditor:
         self.dirty=True;self.update_preview_state()
         self.select(self.selected);return True
 
+    def preview_card_edit(self,event=None):
+        if self.busy or not self.preview_current or not self.selected or self.selected[0]!='card' or self.item().asset:return
+        if getattr(self,'card_edit_after',None):self.window.after_cancel(self.card_edit_after)
+        def show():
+            self.card_edit_after=None
+            if self.closed or not self.selected or self.selected[0]!='card' or self.item().asset:return
+            plan=copy.deepcopy(self.plan);item=self.item(plan)
+            try:
+                for name,(var,_) in self.geometry_fields.items():setattr(item,name,float(var.get().replace(',','.')))
+                item.text=self.text.get('1.0','end').strip()
+                from .editing import validate_plan
+                validate_plan(plan,check_files=False)
+            except ValueError:return
+            self.live_plan=plan;self.player.redraw()
+        self.card_edit_after=self.window.after(250,show)
+
     def edit(self):
         if self.busy or self.item() is None:return
         plan=copy.deepcopy(self.plan);item=self.item(plan)
@@ -257,8 +281,10 @@ class TimelineEditor:
             if self.selected[0]=='insert':item.source_in=frame(source);item.label=text
             else:
                 item.text=text
+                if not item.asset:
+                    for name,(var,_) in self.geometry_fields.items():setattr(item,name,float(var.get().replace(',','.')))
                 if item.title=='ТЕЛЕГРАМ':item.line=-1
-            self.change(plan)
+            self.live_plan=None;self.change(plan)
         except ValueError as error:self.status.set('Проверьте числа и текст: '+str(error))
 
     def delete(self):

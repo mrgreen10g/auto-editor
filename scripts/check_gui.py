@@ -198,6 +198,11 @@ def check():
         assert editor.player.image is not None and editor.player.position>=1.5
         editor.player.stop()
         editor.select(('card',1));editor.text.delete('1.0','end');editor.text.insert('1.0','Лада +2 · обновлено');editor.edit()
+        editor.geometry_fields['offset_x'][0].set('35');editor.geometry_fields['scale'][0].set('0.8')
+        editor.preview_card_edit();deadline=time.monotonic()+.4
+        while time.monotonic()<deadline:root.update();time.sleep(.02)
+        assert editor.live_plan.cards[1].offset_x==35 and editor.plan.cards[1].offset_x==0
+        editor.edit();assert editor.plan.cards[1].scale==.8
         assert editor.preview_current  # text updates over the existing video
         before=editor.player.path
         editor.seek(7);editor.toggle_preview();root.update()
