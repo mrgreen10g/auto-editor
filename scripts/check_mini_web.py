@@ -168,6 +168,7 @@ def check():
                 assert page.evaluate('timelineWidth')>390
                 page.evaluate("selectEdit(editorState.items[0]);document.getElementById('timelineScroll').scrollLeft=timelineHits[0].x-40")
                 click('#backToTimeline')
+                page.evaluate("timelineChoose(editorState.items[0])");click('#timelineResize');click('#timelineLeft')
                 point=page.evaluate("(()=>{const h=timelineHits[0],r=timelineCanvas.getBoundingClientRect();return {x:r.left+h.x+2,y:r.top+h.y+15,dx:timelineScale/5}})()")
                 before=app.plan.cards[0].start
                 page.mouse.move(point['x'],point['y']);page.mouse.down();page.mouse.move(point['x']+point['dx'],point['y'],steps=5);page.mouse.up()
@@ -180,6 +181,19 @@ def check():
                 click('#editUndo')
                 page.locator('#rangeStart').focus();page.locator('#editDuration').click();assert page.evaluate("document.activeElement.id")!='rangeStart'
                 page.screenshot(path=str(ROOT/'build/gui-mini-editor.jpg'),full_page=True)
+                # A tiny card moves as a whole even when grabbed near its edge.
+                page.evaluate("editAction({op:'add',start:5,end:5.2,text:'Короткая плашка'})")
+                page.locator('#timelineZoom').evaluate('(e)=>e.value=1');page.locator('#timelineZoom').dispatch_event('input')
+                click('#backToTimeline') if page.locator('#backToTimeline').is_visible() else page.locator('#timelineScroll').scroll_into_view_if_needed()
+                point=page.evaluate("(()=>{const h=timelineHits.find(h=>h.row.text==='Короткая плашка'),r=timelineCanvas.getBoundingClientRect();return {x:r.left+h.x+1,y:r.top+h.y+15,dx:timelineScale*.3}})()")
+                scroll=page.evaluate('window.scrollY');page.mouse.click(point['x'],point['y'])
+                assert abs(page.evaluate('window.scrollY')-scroll)<2
+                expect(page.locator('#timelineMenu')).to_be_visible();click('#timelineMove')
+                page.mouse.move(point['x'],point['y']);page.mouse.down();page.mouse.move(point['x']+point['dx'],point['y'],steps=5);page.mouse.up()
+                page.wait_for_function('() => editingItem===null')
+                short=next(c for c in app.plan.cards if c.text=='Короткая плашка')
+                assert abs(short.start-5.3)<.034 and abs(short.end-short.start-.2)<.034
+                click('#editUndo');click('#editUndo')
                 # Device logo upload, named storage and manual lookup despite alias mismatch.
                 from PIL import Image
                 logo_folder=root/'logos';logo_folder.mkdir();logo_input=root/'upload-logo.jpg';Image.new('RGB',(40,40),'blue').save(logo_input)
@@ -215,9 +229,14 @@ def check():
                 existing=root/'existing';existing.mkdir();setup(existing)
                 click('#inputTab');page.locator('#draftChoice').select_option('');click('#inputSteps [data-step="setup"]')
                 click('#serverImportPanel summary');page.locator('#serverFolder').evaluate('(e,p)=>{e.value=p}',str(existing))
-                click('#scanServerFolder');click('#openServerScript');expect(page.locator('#serverScriptText')).to_have_value(SCRIPT);click('#saveServerScript');click('#importServerFolder')
+                click('#scanServerFolder');click('#openServerScript');expect(page.locator('#serverScriptText')).to_have_value(SCRIPT);click('#saveServerScript')
                 expect(page.locator('#inputSummary')).to_contain_text('АМУР')
                 expect(page.locator('#activateInput')).to_be_enabled()
+                source=existing/'text.txt';source.write_text(SCRIPT.replace('Амур играет дома.','Амур играет дома. Свежая правка сценария.'),encoding='utf-8')
+                click('#inputSteps [data-step="script"]');click('#reloadServerScript')
+                expect(page.locator('#scriptRefreshStatus')).to_contain_text('разборов: 2')
+                assert 'Свежая правка сценария' in page.locator('#inputScript').input_value()
+                assert 'Свежая правка сценария' in bridge.inputs.load(page.evaluate('draftId'))['blocks'][0]['script']
                 assert not errors,errors
                 browser.close()
         finally:stop.set();gateway.close()

@@ -272,6 +272,9 @@ class Bridge:
         if kind=='editor-state':return self.editor.state()
         if kind=='editor-action':return self.editor.apply(data)
         if kind=='editor-logo-upload':return self.editor.apply({**data,'op':'logos'})
+        if kind=='input-script-reload':
+            from .mobile_reparse import refresh_script
+            return refresh_script(self.inputs,data,from_file=True)
         if kind.startswith('input-'):
             from .mobile_scripts import start_document,document_status,local_script
             if kind=='input-doc-start':return start_document(self.inputs,data)

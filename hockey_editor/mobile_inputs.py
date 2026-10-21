@@ -47,7 +47,7 @@ class Inputs:
                 try:previous=self.load(entry['id'])
                 except RemoteError:continue
                 for row in previous['files']:
-                    if row['role']=='match' and row['status']=='ready' and row.get('path') and Path(row['path']).is_file():
+                    if row['role']=='match' and (row['status']=='ready' or row.get('unassigned')) and row.get('path') and Path(row['path']).is_file():
                         reusable.append(dict(draft=previous['id'],file=row['id'],label=previous['name']+' · '+(row.get('fighter') or row.get('home','')+' — '+row.get('away',''))))
             return dict(draft=draft,drafts=self.catalog(),profiles=PROFILES,presets=list(presets('ru_hockey')),reusable=reusable,
                         kits={p:load_kit(kit_path(p))[0] for rows in PROFILES.values() for p,_ in rows},busy=bool(self.worker and self.worker.is_alive()))
@@ -77,12 +77,28 @@ class Inputs:
         root=folder(data['folder']);target=presenter_folder(root,data['profile'])
         with self.lock:
             previous=next((r for r in self.catalog() if Path(r['folder'])==target and r['profile']==data['profile']),None)
-            if previous:return dict(id=previous['id'])
-            if (target/'mobile-draft.json').exists():raise RemoteError('В папке уже есть черновик другого выпуска. Выберите его в списке или используйте другую папку.')
+            if previous and not data.get('refresh'):
+                saved=self.load(previous['id']);return dict(id=saved['id'],count=len(saved['blocks']),updated=saved.get('script_updated',0),refreshed=False)
+            old=self.load(previous['id']) if previous else None
+            if old and self.active and self.active[0]==old['id']:raise RemoteError('Дождитесь загрузки материалов.',409)
+            if not previous and (target/'mobile-draft.json').exists():raise RemoteError('В папке уже есть черновик другого выпуска. Выберите его в списке или используйте другую папку.')
             project=Project();apply_profile(project,data['profile'])
             project,_,notes=build_import(project,root,data.get('host',''),data.get('script',''))
+            if not project.blocks:raise RemoteError('Разборы не найдены. Проверьте сценарий и выбранный шаблон.')
             d=dict(id=secrets.token_hex(16),name=target.name,folder=str(target),profile=project.profile,preset=str(data.get('preset','')),asset_folder='',script=read_script(data['script']),intro=asdict(project.intro),blocks=[asdict(b) for b in project.blocks],outro=asdict(project.outro),files=[],created=time.time(),project='',import_notes=notes)
+            d['script_source']=str(Path(data['script']).resolve());d['script_updated']=time.time()
+            if old:
+                from .mobile_reparse import parse,reopen,reconcile_files
+                # Parse the newly read file, preserving IDs only for unique identical pairs.
+                refreshed=parse(old,d['script']);reopen(refreshed);reconcile_files(refreshed)
+                refreshed.update(script_source=d['script_source'],preset=d['preset'],import_notes=refreshed.get('import_notes',[])+notes)
+                d=refreshed
+                # The selected presenter replaces the old presenter reference; files stay on disk.
+                for row in d['files']:
+                    if row['role']=='host':row['status']='removed'
+                for b,saved in zip(project.blocks,d['blocks']):b.uid=saved['uid']
             def ready(path,role,block='',home='',away='',fighter=''):
+                if any(r['role']==role and r['block']==block and r['status']=='ready' and Path(r.get('path','')).resolve()==Path(path).resolve() for r in d['files']):return
                 p=Path(path);row=self.new_file(d,dict(role=role,block=block,name=p.name,home=home,away=away,fighter=fighter))
                 row.update(path=str(p),size=p.stat().st_size,received=p.stat().st_size,status='ready',source='local',message='Файл на сервере')
             ready(project.host,'host')
@@ -90,8 +106,10 @@ class Inputs:
                 for m in project.matches:
                     if m.id in b.match_ids:ready(m.path,'match',b.uid,m.home,m.away,m.fighter)
             (target/'Результат').mkdir(exist_ok=True)
-            self.save(d);rows=self.catalog();rows.append({k:d[k] for k in ('id','name','folder','profile','created')});storage.write(self.index,rows)
-            return dict(id=d['id'])
+            self.save(d)
+            if not previous:
+                rows=self.catalog();rows.append({k:d[k] for k in ('id','name','folder','profile','created')});storage.write(self.index,rows)
+            return dict(id=d['id'],count=len(d['blocks']),updated=d['script_updated'],refreshed=bool(previous))
     def create(self,data):
         from .profiles import PROFILES
         profile=data.get('profile')
@@ -115,17 +133,8 @@ class Inputs:
             self.save(draft);rows=self.catalog();rows.append({k:draft[k] for k in ('id','name','folder','profile','created')}|{'request':request});storage.write(self.index,rows)
             return dict(id=draft['id'])
     def script(self,data):
-        from .folder_import import parse_episode
-        with self.lock:
-            d=self.load(data['id']);self.mutable(d)
-            if any(x['role']=='match' and x['status']!='removed' for x in d['files']):raise RemoteError('Сценарий уже связан с записями матчей. Сначала уберите их из черновика.')
-            text=str(data.get('text',''))
-            if not text.strip() or len(text.encode())>500000:raise RemoteError('Сценарий пустой или слишком большой (максимум 500 КБ).')
-            intro,blocks,outro=parse_episode(text,d['profile'])
-            if not blocks:raise RemoteError('Разборы не найдены. Проверьте сценарий и выбранный шаблон.')
-            d.update(script=text,intro=asdict(intro),blocks=[asdict(b) for b in blocks],outro=asdict(outro))
-            self.save(d);target=Path(d['folder'])/'Сценарий'/'text.txt';target.parent.mkdir(exist_ok=True);target.write_text(text,encoding='utf-8')
-            return dict(ok=True)
+        from .mobile_reparse import refresh_script
+        return refresh_script(self,data)
     def settings(self,data):
         with self.lock:
             d=self.load(data['id']);self.mutable(d)
@@ -259,8 +268,9 @@ class Inputs:
     def reuse(self,data):
         with self.lock:
             d=self.load(data['id']);self.mutable(d)
-            other=self.load(data['from_draft']);original=self.item(other,data['file'])
-            if original['role']!='match' or original['status']!='ready' or not Path(original['path']).is_file():raise RemoteError('Исходная запись недоступна.')
+            other=self.load(data['from_draft']);original=next((r for r in other['files'] if r['id']==data['file'] and (r['status']!='removed' or r.get('unassigned'))),None)
+            if not original:raise RemoteError('Исходная запись недоступна.')
+            if original['role']!='match' or (original['status']!='ready' and not original.get('unassigned')) or not Path(original['path']).is_file():raise RemoteError('Исходная запись недоступна.')
             if any(r['role']=='match' and r['block']==data.get('block') and r.get('path')==original['path'] and r['status']!='removed' for r in d['files']):return dict(ok=True)
             row=self.new_file(d,dict(role='match',block=data.get('block'),name=original['name'],home=original['home'],away=original['away'],fighter=original['fighter']))
             row.update(path=original['path'],size=Path(original['path']).stat().st_size,received=Path(original['path']).stat().st_size,status='ready',source='reuse',message='Используется запись из выпуска «'+other['name']+'». Сохраните его папку.')
@@ -313,7 +323,7 @@ class Inputs:
                     if r['role']!='match':continue
                     m=MatchSource(r['path'],r['fighter'] if sport=='combat' else r['home'],r['away'],sport=sport,fighter=r['fighter']);project.matches.append(m)
                     next(b for b in project.blocks if b.uid==r['block']).match_ids.append(m.id)
-                assign(project);target=Path(d['folder'])/'Выпуск.hockeyproj'
+                assign(project);target=Path(d['folder'])/d.get('project_target','Выпуск.hockeyproj')
                 if target.exists():raise RemoteError('Файл проекта уже существует. Создайте новый черновик.')
                 project.save(target);d['project']=str(target);self.save(d)
             bridge.checkpoint()
