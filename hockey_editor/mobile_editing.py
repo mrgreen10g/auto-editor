@@ -106,7 +106,7 @@ class Editor:
             for kind,items in [('card',p.cards),('insert',p.inserts)]:
                 for i,c in enumerate(items):
                     s=next((s for s in p.sections if s['start']<=c.start<s['end']),{})
-                    rows.append(dict(id=f'{kind}:{i}',kind=kind,start=c.start,end=c.end,text=c.text if kind=='card' else c.label,title=c.title if kind=='card' else 'Видео-вставка',source_in=c.source_in,source_min=getattr(c,'source_min',0),source_max=getattr(c,'source_max',None),block=s.get('block_id',''),block_title=s.get('title',''),owner=getattr(c,'forecast_id',''),asset=bool(getattr(c,'asset','')),review_id=getattr(c,'review_id','')))
+                    rows.append(dict(id=f'{kind}:{i}',kind=kind,start=c.start,end=c.end,text=c.text if kind=='card' else c.label,title=c.title if kind=='card' else 'Видео-вставка',source_in=c.source_in,source_min=getattr(c,'source_min',0),source_max=getattr(c,'source_max',None),block=s.get('block_id',''),block_title=s.get('title',''),owner=getattr(c,'forecast_id',''),asset=bool(getattr(c,'asset','')),offset_x=getattr(c,'offset_x',0),offset_y=getattr(c,'offset_y',0),scale=getattr(c,'scale',1),review_id=getattr(c,'review_id','')))
         from .graphics import block_teams
         teams=list(dict.fromkeys(n for block in app.project.blocks for n in block_teams(block.title) if n))
         logos=[dict(team=n,path=app.project.team_logos.get(n,''),available=bool(app.project.team_logos.get(n) and Path(app.project.team_logos[n]).is_file())) for n in teams]
@@ -180,6 +180,11 @@ class Editor:
                         if kind=='card':
                             card_type(item,data.get('title',item.title),str(data.get('owner','')),app.project)
                             item.text=text;item.line=-1
+                            if not item.asset:
+                                for field,lo,hi in [('offset_x',-1280,1280),('offset_y',-1280,1280),('scale',.25,2)]:
+                                    value=float(data.get(field,getattr(item,field)))
+                                    if not math.isfinite(value) or not lo<=value<=hi:raise RemoteError('Недопустимое положение или размер плашки.')
+                                    setattr(item,field,value)
                             if item.title=='ПРОГНОЗ':
                                 owner=str(data.get('owner',''))
                                 if owner not in {x.uid for x in app.project.blocks}:raise RemoteError('Выберите разбор для ставки.')

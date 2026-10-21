@@ -131,6 +131,16 @@ def section_card(card,path,profile='ru_hockey'):
 
 
 def card_image(card, path, logos=None,profile='ru_hockey'):
+    x,y=_card_image(card,path,logos,profile)
+    scale=float(getattr(card,'scale',1))
+    if not .25<=scale<=2:raise ValueError('Размер плашки должен быть от 25 до 200%.')
+    if scale!=1:
+        with Image.open(path) as image:
+            image.resize((max(1,round(image.width*scale)),max(1,round(image.height*scale))),Image.Resampling.LANCZOS).save(path)
+    return x+float(getattr(card,'offset_x',0)),y+float(getattr(card,'offset_y',0))
+
+
+def _card_image(card, path, logos=None,profile='ru_hockey'):
     if profile.endswith('_shorts'):
         from .shorts_graphics import card_image as short_card
         return short_card(card,path,logos,language="uz" if profile.startswith("uz_") else "ru")

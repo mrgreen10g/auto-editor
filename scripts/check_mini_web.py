@@ -194,6 +194,22 @@ def check():
                 # Errors stay in view even when the page is scrolled down.
                 page.locator('#rangeEnd').fill('99:00.00');click('#cutRange');expect(page.locator('#errorDialog')).to_be_visible();click('#closeError')
                 # The alternate path imports existing server files without uploading.
+                # Live card edits reuse the exact video bed; final plan persists geometry.
+                click('#livePreview');page.wait_for_function("() => liveActive && !previewPreparing",timeout=90000)
+                page.evaluate("seekTimeline(2)")
+                page.wait_for_function("() => liveImages.size>0",timeout=15000)
+                bed_src=page.locator('#editVideo').get_attribute('src')
+                jobs_before=len(bridge.jobs)
+                page.evaluate("selectEdit(editorState.items.find(x=>x.kind==='card'&&!x.asset))")
+                page.locator('#editText').fill('Живой текст без пересборки');page.locator('#cardX').fill('60')
+                page.locator('#cardScale').evaluate('(e)=>e.value=0.8');page.locator('#cardScale').dispatch_event('input');click('#saveEdit')
+                page.wait_for_function("() => liveActive && previewRevision===editorState.revision")
+                assert page.locator('#editVideo').get_attribute('src')==bed_src and len(bridge.jobs)==jobs_before
+                assert app.plan.cards[0].offset_x==60 and app.plan.cards[0].scale==.8
+                page.evaluate("seekTimeline(2)");page.wait_for_function("() => liveImages.size>0",timeout=15000)
+                page.screenshot(path=str(ROOT/'build/gui-mini-live.jpg'),full_page=True)
+                click('#editUndo');assert app.plan.cards[0].offset_x==0
+                assert page.locator('#editVideo').get_attribute('src')==bed_src
                 from test_folder_import import setup
                 existing=root/'existing';existing.mkdir();setup(existing)
                 click('#inputTab');page.locator('#draftChoice').select_option('');click('#inputSteps [data-step="setup"]')

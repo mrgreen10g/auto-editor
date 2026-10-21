@@ -121,9 +121,9 @@ class Gateway:
                         return
                     if self.command=='GET' and path=='/input.js':
                         return self.response(200,Path(__file__).with_name('mini_web').joinpath('input.js').read_bytes(),'text/javascript; charset=utf-8')
-                    if self.command=='GET' and path in ('/','/app.js','/app.css','/input.js','/editor.js'):
-                        file=Path(__file__).with_name('mini_web')/({'/':'index.html','/app.js':'app.js','/app.css':'app.css','/input.js':'input.js','/editor.js':'editor.js'}[path])
-                        return self.response(200,file.read_bytes(),{'/':'text/html; charset=utf-8','/app.js':'text/javascript; charset=utf-8','/app.css':'text/css; charset=utf-8','/input.js':'text/javascript; charset=utf-8','/editor.js':'text/javascript; charset=utf-8'}[path])
+                    if self.command=='GET' and path in ('/','/app.js','/app.css','/input.js','/editor.js','/live.js'):
+                        file=Path(__file__).with_name('mini_web')/({'/':'index.html','/app.js':'app.js','/app.css':'app.css','/input.js':'input.js','/editor.js':'editor.js','/live.js':'live.js'}[path])
+                        return self.response(200,file.read_bytes(),{'/':'text/html; charset=utf-8','/app.js':'text/javascript; charset=utf-8','/app.css':'text/css; charset=utf-8','/input.js':'text/javascript; charset=utf-8','/editor.js':'text/javascript; charset=utf-8','/live.js':'text/javascript; charset=utf-8'}[path])
                     if self.command!='POST':raise RemoteError('Не найдено.',404)
                     origin=self.headers.get('Origin')
                     if origin and origin!=gateway.config['mini_url']:raise RemoteError('Недопустимый источник запроса.',403)
@@ -144,7 +144,7 @@ class Gateway:
                     gateway.authorize(self.headers.get('Authorization',''))
                     if path in {'/api/input-'+k for k in ('status','mkdir','create','script','settings','upload','finish','link','retry','edit','reuse','activate','pause','server-files','server-import','script-open','script-save','doc-start','doc-status')}:
                         return self.response(200,gateway.bridge.request(path.removeprefix('/api/'),data))
-                    if path not in ('/api/editor-logo-upload','/api/preview-stream','/api/editor-files','/api/editor-state','/api/editor-action','/api/result-status','/api/result-stream','/api/drive-config','/api/drive-start','/api/drive-pause','/api/process-status','/api/process-start','/api/process-cancel','/api/process-config','/api/export-status','/api/folders','/api/export-start','/api/export-cancel','/api/state','/api/item','/api/action','/api/prepare','/api/job','/api/media'):raise RemoteError('Не найдено.',404)
+                    if path not in ('/api/live-scene','/api/live-art','/api/editor-logo-upload','/api/preview-stream','/api/editor-files','/api/editor-state','/api/editor-action','/api/result-status','/api/result-stream','/api/drive-config','/api/drive-start','/api/drive-pause','/api/process-status','/api/process-start','/api/process-cancel','/api/process-config','/api/export-status','/api/folders','/api/export-start','/api/export-cancel','/api/state','/api/item','/api/action','/api/prepare','/api/job','/api/media'):raise RemoteError('Не найдено.',404)
                     result=gateway.bridge.request(path.removeprefix('/api/'),data)
                     if path in ('/api/result-stream','/api/preview-stream'):
                         with gateway.lock:

@@ -200,9 +200,12 @@ class Bridge:
         self.check_revision(data)
         if self.app.busy:raise RemoteError('Дождитесь окончания обработки.',409)
         mode=data.get('mode');spec={};app=self.app
-        if mode=='timeline':first=second=None
+        if mode in ('timeline','live'):first=second=None
         else:first,second=self.find(data['id'])
-        if mode=='timeline':
+        if mode=='live':
+            from .mini_live import prepare
+            spec,live_key=prepare(self,data)
+        elif mode=='timeline':
             from .mini_preview import snapshot
             from .timeline import Card,parse_time
             if not app.plan:raise RemoteError('Сначала определите тайминги.')
@@ -235,13 +238,15 @@ class Bridge:
         else:raise RemoteError('Этот предпросмотр недоступен.')
         cache=Path(app.cache_path())/'mobile-previews';cache.mkdir(parents=True,exist_ok=True)
         with self.media_lock:
-            key=json.dumps([data['revision'],mode,data.get('start'),data.get('end')]) if mode=='timeline' else ''
+            key=json.dumps([data['revision'],mode,data.get('start'),data.get('end')]) if mode=='timeline' else live_key if mode=='live' else ''
             for job_id,job in self.jobs.items():
                 if key and job.get('key')==key and job['status'] in ('working','ready') and time.time()-job['created']<1700:
-                    if job['status']=='working' or Path(job.get('file','')).is_file():return dict(job=job_id)
+                    if job['status']=='working' or Path(job.get('file','')).is_file():
+                        if mode=='live':job['revision']=data['revision']
+                        return dict(job=job_id)
             if self.media_busy:raise RemoteError('Уже готовится предпросмотр. Подождите.',429)
             while len(self.jobs)>=32:self.jobs.pop(next(iter(self.jobs)))
-            self.media_busy=True;ident=secrets.token_hex(16);self.jobs[ident]=dict(status='working',revision=data['revision'],created=time.time(),key=key)
+            self.media_busy=True;ident=secrets.token_hex(16);self.jobs[ident]=dict(status='working',revision=data['revision'],created=time.time(),key=key,live=mode=='live')
         def work():
             from .mini_media import generate
             try:
@@ -254,6 +259,9 @@ class Bridge:
         threading.Thread(target=work,daemon=True).start()
         return dict(job=ident)
     def handle(self,kind,data):
+        if kind in ('live-scene','live-art'):
+            from .mini_live import scene,artwork
+            return (scene if kind=='live-scene' else artwork)(self,data)
         if kind=='editor-files':
             from .mini_export import folder
             root=folder(data.get('path',''))
@@ -302,7 +310,11 @@ class Bridge:
         if kind in ('job','media','preview-stream'):
             with self.media_lock:job=copy.deepcopy(self.jobs.get(data.get('job')))
             if not job or time.time()-job['created']>1800:raise RemoteError('Предпросмотр устарел.',404)
-            if job['revision']!=self.revision():raise RemoteError('Проект изменился. Подготовьте предпросмотр заново.',409)
+            if job.get('live'):
+                from .mini_live import key
+                valid=bool(self.app.plan and job['key']==key(self.app.project,self.app.plan))
+            else:valid=job['revision']==self.revision()
+            if not valid:raise RemoteError('Проект изменился. Подготовьте предпросмотр заново.',409)
             if kind in ('media','preview-stream'):
                 if job['status']!='ready' or 'file' not in job:raise RemoteError('Предпросмотр ещё не готов.',409)
                 file=Path(job['file']);stat=file.stat()

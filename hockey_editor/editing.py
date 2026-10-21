@@ -61,6 +61,7 @@ def validate_plan(plan, check_files=True):
             raise ValueError('Вставка выходит за конец игрового фрагмента. Сократите её или выберите другой момент.')
         if check_files and not Path(c.path).is_file(): raise ValueError('Не найдена запись: '+c.path)
     for c in plan.cards:
+        if not all(math.isfinite(v) for v in (c.offset_x,c.offset_y,c.scale)) or not .25<=c.scale<=2 or abs(c.offset_x)>1280 or abs(c.offset_y)>1280:raise ValueError('Некорректное положение или размер плашки.')
         span(c.start,c.end,'Плашка «'+c.title+'»')
         if c.asset:
             if check_files and not Path(c.asset).is_file():raise ValueError('Не найдена анимация: '+c.asset)

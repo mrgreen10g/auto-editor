@@ -28,6 +28,8 @@ shutil.copy2(root/'docs'/'GOOGLE_DRIVE_RU.md',dest/'GOOGLE_DRIVE_RU.txt')
 shutil.copy2(root/'docs'/'MOBILE_ROADMAP_RU.md',dest/'MOBILE_ROADMAP_RU.txt')
 shutil.copy2(root/'docs'/'MOBILE_CREATE_RU.md',dest/'MOBILE_CREATE_RU.txt')
 shutil.copy2(root/'docs'/'VERSION_0_8_6_RU.md',dest/'VERSION_0_8_6_RU.txt')
+shutil.copy2(root/'docs'/'LIVE_EDITOR_PLAN_RU.md',dest/'LIVE_EDITOR_PLAN_RU.txt')
+shutil.copy2(root/'docs'/'VERSION_0_8_7_RU.md',dest/'VERSION_0_8_7_RU.txt')
 # Verify a frozen EXE, not merely its Python source.
 report=root/'build'/'bundle-check.json'
 subprocess.run([str(dest/'AutoEditor.exe'),'--self-test',str(report)],check=True,timeout=120)

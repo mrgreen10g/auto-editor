@@ -279,7 +279,7 @@ class Engine:
             xpos=str(x);ypos=str(y)
             if shorts and not card.asset and card.title!='РАЗБОР МАТЧА' and split_spans:
                 from PIL import Image
-                with Image.open(image) as artwork:lower=min(1130-artwork.height,int(y)+70)
+                with Image.open(image) as artwork:lower=min(1130-artwork.height,float(y)+70)
                 active=panel_motion(plan,s.transitions)
                 ypos=f'{y}+({lower}-{y})*({active})'
             if s.wobble and not divider and card.title!='ПОДПИСКА' and not (shorts and card.asset):

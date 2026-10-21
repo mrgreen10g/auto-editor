@@ -18,7 +18,7 @@ def base_key(plan,project=None):
     for key in ('review_items','edit_baseline','input_key','warnings','lines'):data.pop(key,None)
     for c in data['cards']:
         for key in ('review_id','review_reason','forecast_id','line'):c.pop(key,None)
-    if project and project.profile=='ru_hockey_shorts' and project.settings.subtitles:
+    if project and project.profile.startswith('ru_') and project.profile.endswith('_shorts') and project.settings.subtitles:
         data['subtitles']=[dict(text=l.text,recognized=l.recognized,start=l.start,end=l.end,words=l.words) for l in plan.lines]
     data['layout_version']='fullscreen-tg-v3'
     return json.dumps(data,sort_keys=True,ensure_ascii=False)
@@ -30,7 +30,7 @@ class LiveCards:
         self.images={}
 
     def artwork(self,card):
-        key=(card.title,card.text,card.fixture)
+        key=(card.title,card.text,card.fixture,card.offset_x,card.offset_y,card.scale,repr(self.project.team_logos))
         if key not in self.images:
             filename=self.cache/(hashlib.sha256(repr(key).encode()).hexdigest()+'.png')
             x,y=card_image(card,filename,self.project.team_logos,self.project.profile)

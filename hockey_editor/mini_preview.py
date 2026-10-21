@@ -62,7 +62,9 @@ def snapshot(project,plan,index,task,card,data):
 def render(spec,cache,ident):
     from .media import run
     from .engine import Engine
-    target=cache/(ident+'.mp4');plan=copy.deepcopy(spec['plan']);project=spec['project']
+    target=cache/((spec.get('live_key') or ident)+'.mp4')
+    if spec.get('live_key') and target.is_file():return dict(file=str(target),offset=0,duration=spec['plan'].duration)
+    plan=copy.deepcopy(spec['plan']);project=spec['project']
     with tempfile.TemporaryDirectory(prefix='context-',dir=cache) as temporary:
         root=Path(temporary)
         for i,span in enumerate(plan.media):

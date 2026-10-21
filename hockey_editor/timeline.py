@@ -38,6 +38,9 @@ class Card:
     fixture: str = ''
     review_id: str = ""
     review_reason: str = ""
+    offset_x: float = 0.
+    offset_y: float = 0.
+    scale: float = 1.
 
 @dataclass
 class Plan:
