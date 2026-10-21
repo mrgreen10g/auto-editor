@@ -195,7 +195,8 @@ def check():
                 page.locator('#rangeEnd').fill('99:00.00');click('#cutRange');expect(page.locator('#errorDialog')).to_be_visible();click('#closeError')
                 # The alternate path imports existing server files without uploading.
                 # Live card edits reuse the exact video bed; final plan persists geometry.
-                click('#livePreview');page.wait_for_function("() => liveActive && !previewPreparing",timeout=90000)
+                click('#livePreview');assert page.evaluate('liveActive'), (page.locator('#errorText').inner_text(),app.log_lines,errors)
+                page.wait_for_function("() => liveActive && !previewPreparing",timeout=90000)
                 page.evaluate("seekTimeline(2)")
                 page.wait_for_function("() => liveImages.size>0",timeout=15000)
                 bed_src=page.locator('#editVideo').get_attribute('src')
