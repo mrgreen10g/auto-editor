@@ -141,10 +141,13 @@ def card_image(card, path, logos=None,profile='ru_hockey'):
 
 
 def _card_image(card, path, logos=None,profile='ru_hockey'):
+    if profile=='uz_combat_shorts':
+        from .combat_graphics import portrait_card
+        return portrait_card(card,path)
     if profile.endswith('_shorts'):
         from .shorts_graphics import card_image as short_card
         return short_card(card,path,logos,language="uz" if profile.startswith("uz_") else "ru")
-    if profile=='uz_combat':
+    if profile.startswith('uz_combat'):
         from .combat_graphics import card_image as combat_card
         return combat_card(card,path)
     logos=logos or {}

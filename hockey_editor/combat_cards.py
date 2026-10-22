@@ -100,6 +100,13 @@ def confidence(card,line,block,project):
                     if len(owners)==1:claims.append(owners[0])
                 if claims and set(claims)==set(picked):return ''
             return 'Проверьте бойца и исход ставки по речи.'
+        if project.profile=='uz_combat_shorts' and re.search(r'total|raund',norm(card.text)):
+            def direction(value):
+                low=norm(value)
+                return set(re.findall(r"ko'p|kam",low))
+            if direction(card.text)!=direction(heard):return 'Направление тотала не подтверждено речью. Проверьте больше/меньше.'
+            if re.search(r'agar|tasdiqlansa|belgilangan',norm(card.text)) and not re.search(r'agar|tasdiqlansa|belgilangan',t):
+                return 'Условие ставки не подтверждено речью. Проверьте формат боя.'
         if coverage(card.text,heard)>=.8 and numbers(card.text)==numbers(heard):return ''
         return 'Условия ставки распознаны неуверенно. Проверьте их по речи.'
     if card.title=='СТАТИСТИКА':
@@ -177,7 +184,7 @@ def migrate_plan(value,project,block=None):
 
 
 def migrate_project(project):
-    if project.profile!='uz_combat':return
+    if not project.profile.startswith('uz_combat'):return
     from .episode import episode_key
     try:valid=bool(project.episode_plan and project.episode_key==episode_key(project))
     except OSError:valid=False  # Opening a moved project must not require its media.

@@ -28,11 +28,37 @@ def normalized(text):
 
 def clean_name(name):
     name=re.sub(r'[“"«][^”"»]+[”"»]',' ',name)
-    return ' '.join(re.sub(r'\s+(?:II|III|IV|2|3)\s*$','',name).split())
+    return ' '.join(re.sub(r'\s+(?:II|III|IV|2|3|Jr\.?|Sr\.?)\s*$','',name).split())
+
+def name_key(name):
+    return ' '.join(normalized(clean_name(name)).split())
+
+@lru_cache(maxsize=1)
+def name_index():
+    from .fighter_aliases import FIGHTER_NAMES
+    result={}
+    for english,uzbek,variants in FIGHTER_NAMES:
+        for spelling in (english,uzbek,*variants):
+            k=name_key(spelling)
+            if k in result and result[k][0]!=english:raise ValueError('Ambiguous fighter alias: '+spelling)
+            result[k]=(english,uzbek,variants)
+    return result
 
 @lru_cache(maxsize=8192)
 def identity(name):
-    return ' '.join(normalized(clean_name(name)).split())
+    row=name_index().get(name_key(name))
+    return name_key(row[0] if row else name)
+
+
+def canonical_name(name,language='en'):
+    row=name_index().get(name_key(name))
+    return row[1 if language=='uz' else 0] if row else clean_name(name)
+
+
+def name_spellings(name):
+    row=name_index().get(name_key(name))
+    return (row[0],row[1],*row[2]) if row else (name,)
+
 
 def same_fighter(a,b):
     # A shared surname alone does not make two named people identical.
@@ -55,6 +81,7 @@ def aliases(name):
     if not words:return []
     surname=words[-1]
     result=[surname,*VARIANTS.get(surname,[])]
+    result += [name_key(n).split()[-1] for n in name_spellings(name) if name_key(n)]
     result+=re.findall(r'[“"«]([^”"»]+)[”"»]',name)
     for known in roster_names(name):
         result.append(identity(known).split()[-1])
@@ -68,5 +95,5 @@ def position(name,text):
         for i in range(len(words)-count+1):
             w=' '.join(words[i:i+count]);variants=[w]+[w[:-len(s)] for s in ('ning','dan','ga','ni','da') if w.endswith(s)]
             score=max(SequenceMatcher(None,alias,v).ratio() for v in variants)
-            if score>=.80 and min(len(alias),len(w))>=4:hits.append((i,score))
+            if (score>=.80 and min(len(alias),len(w))>=4) or (len(alias)==3 and alias in variants):hits.append((i,score))
     return max(hits,key=lambda h:h[1])[0] if hits else None

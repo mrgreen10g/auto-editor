@@ -182,7 +182,9 @@ def placements(block,lines,clip_meta,duration,frequency='normal',shorts=False):
                 combat_owner=named[0] if len(named)==1 and re.search(r'misol|esa|rekord|statistik|tanish|bazasi',norm(tail)) else None
         if norm(l.text).rstrip('.')==norm(block.title):continue
         if block.language=='uz':
-            if block.sport=='combat':from .combat import classify
+            if block.sport=='combat':
+                if shorts:from .combat_shorts import classify
+                else:from .combat import classify
             elif block.sport=='hockey':from .uz_hockey import classify
             else:from .uzbek import classify
             title,body=classify(l.text)
@@ -193,7 +195,7 @@ def placements(block,lines,clip_meta,duration,frequency='normal',shorts=False):
                 if title=='ПРОГНОЗ':
                     from .combat import name_position
                     from .graphics import block_teams
-                    if not any(name_position(n,l.text) is not None for n in block_teams(block.title)):title=None
+                    if not any(name_position(n,l.text) is not None for n in block_teams(block.title)) and not (shorts and re.search(r'total|raund',norm(l.text))):title=None
                     elif block.forecast:body=block.forecast
                 if title=='ИНФОРМАЦИЯ':
                     from .combat_cards import polished_argument

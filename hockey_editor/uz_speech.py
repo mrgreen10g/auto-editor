@@ -48,8 +48,12 @@ def model_path(cancel,log):
 def recognition_prompt(project):
     # A short vocabulary prompt, never the narrative or its unspoken numbers.
     names='; '.join(b.title for b in project.blocks)
+    if project.profile.startswith('uz_combat'):
+        from .fighters import name_spellings
+        from .graphics import block_teams
+        names='; '.join(dict.fromkeys(n for b in project.blocks for name in block_teams(b.title) for n in name_spellings(name)))
     from .uz_facts import COMBAT_TERMS
-    terms=("TOP DOG, UFC, "+', '.join(COMBAT_TERMS)+", g‘alaba, mag‘lubiyat, durang, masofa, bosim, himoya, hujum") if project.profile=='uz_combat' else "futbol, gol, durang, g‘alaba, zarba, hujum, himoya"
+    terms=("TOP DOG, UFC, "+', '.join(COMBAT_TERMS)+", g‘alaba, mag‘lubiyat, durang, masofa, bosim, himoya, hujum") if project.profile.startswith('uz_combat') else "futbol, gol, durang, g‘alaba, zarba, hujum, himoya"
     if project.profile.startswith('uz_hockey'):
         from .uz_hockey import clean_script
         text=clean_script('\n'.join(b.script for b in project.blocks))
@@ -75,7 +79,7 @@ def transcribe(project,cache,cancel,log):
         from .uz_refine import refine
         with stage(folder,'Уточнение узбекской речи',log):
             result=refine(model,audio,result,project,cancel,log)
-        if project.profile=='uz_combat':
+        if project.profile.startswith('uz_combat'):
             from .combat import recover_gaps
             result=recover_gaps(model,audio,result,cancel,log)
         return result
@@ -377,7 +381,7 @@ def synchronize(project,cache,cancel,log):
     if project.profile.startswith('uz_hockey'):
         from .uz_hockey import synchronize as hockey_synchronize
         return hockey_synchronize(project,cache,cancel,log)
-    if project.profile=='uz_combat':
+    if project.profile.startswith('uz_combat'):
         from .combat import synchronize as combat_sync
         return combat_sync(project,cache,cancel,log)
     from .review import retain_legacy_edits

@@ -88,7 +88,7 @@ def active_blocks(project):return [b for b in [project.intro,*project.blocks,pro
 
 def speech_key(project):
     from .uz_speech import recording_key
-    return hashlib.sha256(json.dumps(['combat-speech-v6-body-anchors',recording_key(project),project.recording_times,[(b.uid,b.title,b.script,b.forecast,b.featured_pairs) for b in active_blocks(project)]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['combat-shorts-v1' if project.profile=='uz_combat_shorts' else 'combat-speech-v6-body-anchors',recording_key(project),project.recording_times,[(b.uid,b.title,b.script,b.forecast,b.featured_pairs) for b in active_blocks(project)]],ensure_ascii=False).encode()).hexdigest()
 
 
 def spoken_segments(segments):
@@ -150,13 +150,18 @@ def prepare(project,segments,duration):
         if not choices:reliable=False;break
         bounds.append(choices[0]);floor=choices[0]+10
     ranges=list(zip(bounds,bounds[1:]+[duration]))
-    if not project.recording_times.strip():
+    if project.profile=='uz_combat_shorts' and not project.recording_times.strip():
+        from .combat_shorts import spoken_ranges
+        short_ranges=spoken_ranges(project,segments,duration)
+        if short_ranges:ranges=short_ranges;bounds=[a for a,z in ranges];reliable=True
+        else:reliable=False
+    if not project.recording_times.strip() and project.profile!='uz_combat_shorts':
         from .uz_anchors import script_ranges
         grounded=script_ranges(blocks,segments,duration)
         if grounded:ranges=grounded;bounds=[a for a,z in ranges];reliable=True
     if project.recording_times.strip():
         from .recording_times import parse_times
-        rows=parse_times(project.recording_times,len(project.blocks),include_outro=bool(project.outro.script.strip()))
+        rows=parse_times(project.recording_times,len(project.blocks),include_outro=bool(project.outro.script.strip()),allow_promos=project.profile.endswith('_shorts'))
         ranges=[(a,z) for a,z,_ in rows]
         if len(ranges)==len(blocks)+1:ranges=ranges[:-2]+[(ranges[-2][0],ranges[-1][1])]
         if len(ranges)!=len(blocks) or ranges[-1][1]>duration+.1:raise ValueError('Проверьте число разделов и границы таймкодов записи.')

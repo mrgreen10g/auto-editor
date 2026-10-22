@@ -234,7 +234,7 @@ class Project:
             if not s: return ''
             return str((p.parent / s.replace('\\','/')).resolve())
         blocks = [Block(title=b['title'],script=b['script'],uid=b.get('uid') or uuid.uuid4().hex[:12],
-                  sport=b.get('sport','combat' if data.get('profile')=='uz_combat' else 'hockey' if str(data.get('profile','')).startswith('uz_hockey') else ''),forecast=b.get('forecast',''),featured_pairs=b.get('featured_pairs',[]),kind=b.get('kind','analysis'),language=b.get('language','uz' if data.get('profile','').startswith('uz_') else 'ru'),source_hint=b.get('source_hint',[]),asr_lines=b.get('asr_lines',[]),speech_key=b.get('speech_key',''),speech_cards=b.get('speech_cards',{}), clips=[Clip(**{**c,'path':resolve(c['path']),'origin_path':resolve(c.get('origin_path',''))}) for c in b.get('clips',[])],
+                  sport=b.get('sport','combat' if str(data.get('profile','')).startswith('uz_combat') else 'hockey' if str(data.get('profile','')).startswith('uz_hockey') else ''),forecast=b.get('forecast',''),featured_pairs=b.get('featured_pairs',[]),kind=b.get('kind','analysis'),language=b.get('language','uz' if data.get('profile','').startswith('uz_') else 'ru'),source_hint=b.get('source_hint',[]),asr_lines=b.get('asr_lines',[]),speech_key=b.get('speech_key',''),speech_cards=b.get('speech_cards',{}), clips=[Clip(**{**c,'path':resolve(c['path']),'origin_path':resolve(c.get('origin_path',''))}) for c in b.get('clips',[])],
                   card_overrides=b.get('card_overrides',{}), match_ids=b.get('match_ids', []),
                   archive_pool=b.get('archive_pool',[]),top5_rank=b.get('top5_rank',0),edit_plan=b.get('edit_plan'), edit_key=b.get('edit_key',''),event_search_key=b.get('event_search_key',''),
                   events=[EventRequest(**{**e, 'selection': EventSelection(**e['selection']) if e.get('selection') else None}) for e in b.get('events', [])]) for b in data['blocks']]
@@ -277,7 +277,7 @@ class Project:
                    blocks=blocks,settings=Settings(**settings),
                    matches=[MatchSource(**{**m, 'path': resolve(m['path'])}) for m in data.get('matches', [])],
                    team_logos={name: resolve(path) for name, path in data.get('team_logos', {}).items()})
-        if project.profile=='uz_combat':
+        if project.profile.startswith('uz_combat'):
             from .combat_cards import migrate_project
             migrate_project(project)
         from .review import migrate_project as migrate_review

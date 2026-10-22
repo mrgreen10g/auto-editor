@@ -22,10 +22,20 @@ def root_files(folder):
     return ([p for p in files if p.suffix.lower() in {'.mov','.mp4'}],
             [p for p in files if p.suffix.lower() in {'.txt','.docx'} and not p.name.startswith('~$')])
 
-def parse_episode(text,profile):
+def parse_episode(text,profile,pair_hints=()):
+    from .script_sections import parse
+    return parse(text,profile,pair_hints) or _parse_episode(text,profile)
+
+def _parse_episode(text,profile):
     if '_top5_' in profile:
         from .top5 import parse_script
         return parse_script(text,'football' if 'football' in profile else 'hockey')
+    if profile=='ru_football_shorts':
+        from .shorts import parse_ru_script
+        return parse_ru_script(text,sport='football')
+    if profile=='uz_combat_shorts':
+        from .combat_shorts import parse_script
+        return parse_script(text)
     if profile=='ru_football':
         from .ru_football import parse_script as parse
     elif profile=='ru_hockey_shorts':
@@ -38,7 +48,7 @@ def parse_episode(text,profile):
         from .uz_hockey import parse_script as parse
     elif profile=='uz_football':
         from .uzbek import parse_script as parse
-    elif profile=='uz_combat':
+    elif profile.startswith('uz_combat'):
         from .combat import parse_script as parse
     else:
         from .framing import split_full_script
@@ -50,7 +60,7 @@ def identity(name,profile):
     if 'football' in profile:
         from .team_names import football_identity
         return football_identity(name) or compact(name)
-    if profile=='uz_combat':
+    if profile.startswith('uz_combat'):
         from .fighters import identity as canonical
         return canonical(name)
     from .hockey_names import identity as hockey_identity
@@ -73,7 +83,7 @@ def media_files(folder):
 def source_names(path,profile):
     """Infer only from the recording filename, never the forecast folder."""
     text=Path(path).stem.replace('_',' ')
-    if profile=='uz_combat':return '',''
+    if profile.startswith('uz_combat'):return '',''
     if 'football' in profile:
         from .team_names import football_names
         found=football_names(text)
@@ -97,7 +107,8 @@ def build_import(project,folder,host,script,overrides=None):
     host=Path(host).resolve();script=Path(script).resolve()
     if host not in hosts or script not in scripts:raise ValueError('Выберите запись ведущего и сценарий из папки shorts.' if project.profile.endswith('_shorts') else 'Выберите запись ведущего и сценарий из корня выбранной папки.')
     draft=copy.deepcopy(project)
-    draft.intro,draft.blocks,draft.outro=parse_episode(read_script(script),draft.profile)
+    hints=folder_pair_hints(root,draft.profile)
+    draft.intro,draft.blocks,draft.outro=parse_episode(read_script(script),draft.profile,hints)
     draft.host=str(host);draft.hosts=[str(host)];draft.matches=[]
     draft.full_video=True;draft.whole_episode=True;draft.recording_times=''
     draft.episode_plan=None;draft.episode_key='';draft.settings.use_manual_clips=False
@@ -119,7 +130,7 @@ def build_import(project,folder,host,script,overrides=None):
             if path in seen:
                 notes.append('Повтор файла пропущен: '+str(path));continue
             a,b=source_names(path,draft.profile)
-            source=MatchSource(str(path),a,b,sport='combat' if draft.profile=='uz_combat' else 'football' if 'football' in draft.profile else 'hockey')
+            source=MatchSource(str(path),a,b,sport='combat' if draft.profile.startswith('uz_combat') else 'football' if 'football' in draft.profile else 'hockey')
             if source.sport=='combat':
                 candidates=[n for n in block_teams(block.title) if identity(n,draft.profile) in (identity(path.stem,draft.profile),identity(path.parent.name,draft.profile))]
                 if len(candidates)==1:source.fighter=source.home=candidates[0]
@@ -130,3 +141,7 @@ def build_import(project,folder,host,script,overrides=None):
 
 def unresolved_sources(project):
     return [m for m in project.matches if (not m.fighter.strip() if m.sport=='combat' else not m.home.strip() or not m.away.strip())]
+
+
+def folder_pair_hints(root,profile):
+    return [p.name for p in sorted(Path(root).iterdir()) if p.is_dir() and not p.is_symlink() and p.name.casefold()!="shorts" and pair_key(p.name,profile)]

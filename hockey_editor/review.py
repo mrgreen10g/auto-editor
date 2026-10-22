@@ -128,7 +128,7 @@ def fallback_cards(project, block, lines, duration, reason):
 def input_key(project, block):
     from .host_media import identity
     data=[project.profile,[identity(p) for p in project.host_paths()],block.uid,block.script,project.recording_times]
-    if project.profile=='uz_combat':data.extend([block.title,block.forecast,block.featured_pairs])
+    if project.profile.startswith('uz_combat'):data.extend([block.title,block.forecast,block.featured_pairs])
     return hashlib.sha256(json.dumps(data,ensure_ascii=False).encode()).hexdigest()
 
 
@@ -416,7 +416,7 @@ def describe_card(card,task,project,plan):
     if card.title=='РАЗБОР МАТЧА':return ('Представление пары' if kind=='intro' else 'Пара разбора'),where+' · внизу по центру'
     if card.title=='ПРОГНОЗ':return 'Ставка',where+' · внизу по центру'
     if card.title in ('СМЕНА МАТЧА','ИТОГИ ВЫПУСКА'):return 'Переход',where+' · полный экран'
-    bottom=project.profile!='uz_combat' and card.title=='СОСТАВ КОМАНДЫ' and len(card.text)>85
+    bottom=not project.profile.startswith('uz_combat') and card.title=='СОСТАВ КОМАНДЫ' and len(card.text)>85
     return card.title.capitalize(),where+(' · внизу' if bottom else ' · вверху слева')
 
 
@@ -446,7 +446,7 @@ def remove_old_subtitles(value):
 
 
 def migrate_project(project):
-    if project.profile=='uz_combat':return
+    if project.profile.startswith('uz_combat'):return
     from .episode import episode_key
     try:valid=bool(project.episode_plan and project.episode_key==episode_key(project))
     except OSError:valid=False

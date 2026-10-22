@@ -11,7 +11,7 @@ from .timeline import Plan,Card,frame
 
 def assembly_project(project):
     runtime=copy.copy(project)
-    runtime.blocks=([project.intro]+project.blocks+([project.outro] if project.outro.script.strip() or project.profile!='uz_combat' else [])) if project.full_video else project.blocks
+    runtime.blocks=([project.intro]+project.blocks+([project.outro] if project.outro.script.strip() or not project.profile.startswith('uz_combat') else [])) if project.full_video else project.blocks
     if project.profile.endswith('_shorts'):
         runtime.blocks=[b for b in runtime.blocks if b.kind=='analysis' or b.script.strip()]
     elif project.profile.startswith('uz_'):

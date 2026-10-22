@@ -73,7 +73,7 @@ class MatchMixin:
     def refresh_matches(self):
         block = self.project.blocks[self.index]
         football=self.project.profile.startswith('uz_') or 'football' in self.project.profile
-        combat=self.project.profile=='uz_combat'
+        combat=self.project.profile.startswith('uz_combat')
         self.match_materials.title_label.configure(text='Архивные бои' if combat else 'Исходные матчи')
         self.match_materials.subtitle_label.configure(text='Добавьте записи и выберите бойца для каждого файла. Уверенные активные фрагменты выбираются автоматически; сомнительные — на проверку.' if combat else 'Добавьте одну или несколько записей, на которые ссылается ведущий. Таймкоды не нужны.')
         self.matchtable.heading('title',text='Боец' if combat else 'Встреча')
@@ -129,7 +129,7 @@ class MatchMixin:
                     found=football_names(Path(path).stem)
                     names=found if len(found)==2 else block_teams(Path(path).stem)
                 source = MatchSource(path, names[0], names[1],sport='football' if 'football' in self.project.profile else 'hockey')
-                if self.project.profile=='uz_combat':source.sport='combat'
+                if self.project.profile.startswith('uz_combat'):source.sport='combat'
                 from .graphics import block_teams
                 dialog = SourceDialog(self.root, source,block_teams(self.project.blocks[self.index].title))
                 if not dialog.result: continue
@@ -138,7 +138,7 @@ class MatchMixin:
                 self.project.matches.append(source)
             else: source = existing
             block = self.project.blocks[self.index]
-            if self.project.profile=='uz_combat':
+            if self.project.profile.startswith('uz_combat'):
                 from .graphics import block_teams
                 if source.sport!='combat' or source.fighter not in block_teams(block.title):
                     messagebox.showinfo('Боец','Запись назначена бойцу вне выбранной пары.');continue
@@ -150,7 +150,7 @@ class MatchMixin:
 
     def reuse_match(self):
         self.collect(); block = self.project.blocks[self.index]
-        sources = [m for m in self.project.matches if m.id not in block.match_ids and (m.sport=='combat')==(self.project.profile=='uz_combat')]
+        sources = [m for m in self.project.matches if m.id not in block.match_ids and (m.sport=='combat')==(self.project.profile.startswith('uz_combat'))]
         if not sources:
             return messagebox.showinfo('Записи проекта', 'Других записей пока нет. Добавьте файл кнопкой «+ Записи».')
         dialog = tk.Toplevel(self.root); dialog.title('Запись из проекта'); dialog.transient(self.root); dialog.grab_set()
@@ -223,7 +223,7 @@ class MatchMixin:
         sources = copy.deepcopy([m for m in self.project.matches if m.id in block.match_ids])
         allow_other = self.project.settings.allow_other_matches
         self.invalidate(); self.show_page('review'); self.reviewtabs.select(self.events_page)
-        self.review_summary.set('Ищем удары и размены…' if self.project.profile=='uz_combat' else 'Ищем голы в исходных матчах…')
+        self.review_summary.set('Ищем удары и размены…' if self.project.profile.startswith('uz_combat') else 'Ищем голы в исходных матчах…')
         def work():
             scans = {}; errors = []
             for source in sources:

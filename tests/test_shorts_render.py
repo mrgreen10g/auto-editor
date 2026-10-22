@@ -15,7 +15,7 @@ class ShortsRenderTests(unittest.TestCase):
             run(['-y','-f','lavfi','-i','color=c=blue:s=180x320:r=30:d=6','-f','lavfi','-i','sine=f=220:r=48000:d=6','-t',6,'-c:v','libx264','-c:a','aac',d/'host.mp4'])
             for name,color in [('game','red'),('promo','green')]:
                 run(['-y','-f','lavfi','-i',f'color=c={color}:s={"180x320" if name=="promo" else "320x180"}:r=30:d=2','-c:v','libx264',d/(name+'.mp4')])
-            p=Project(host=str(d/'host.mp4'),profile=self.profile,blocks=[Block(title='Germaniya — Italiya',language='uz',script='Tanlovim — Italiya X2 va total 1,5 dan ko‘p.')],settings=Settings(width=720,height=1280,auto_rotate=False,zoom=False,transitions=False,animate_cards=False,wobble=False,color=False))
+            p=Project(host=str(d/'host.mp4'),profile=self.profile,blocks=[Block(title='Germaniya — Italiya',language='ru' if self.profile.startswith('ru_') else 'uz',sport='combat' if 'combat' in self.profile else 'football' if 'football' in self.profile else 'hockey',script='Tanlovim — Italiya X2 va total 1,5 dan ko‘p.')],settings=Settings(width=720,height=1280,auto_rotate=False,zoom=False,transitions=False,animate_cards=False,wobble=False,color=False))
             p.assets['telegram']=str(d/'promo.mp4')
             plan=Plan(0,6,[(0,6)],[Line('Test',0,6)],[Insert(str(d/'game.mp4'),1,3,0,'Game')],[Card(3,5.5,'ТЕЛЕГРАМ','Telegram',asset=p.assets['telegram'])],[],6,0,[],[dict(path=p.host,start=0,end=6,rotation=0,kind='host')])
             engine=Engine(p,0,d/'cache',threading.Event());engine.render(plan,d/'result.mp4')
@@ -54,3 +54,11 @@ class SmoothRuShortsTests(unittest.TestCase):
 
 class UzbekHockeyShortsRenderTests(ShortsRenderTests):
     profile = "uz_hockey_shorts"
+
+
+class RussianFootballShortsRenderTests(ShortsRenderTests):
+    profile = 'ru_football_shorts'
+
+
+class UzbekCombatShortsRenderTests(ShortsRenderTests):
+    profile = 'uz_combat_shorts'

@@ -35,8 +35,8 @@ async function refreshInputs(){
   line(card,r.message||({uploading:'Передача с устройства',waiting:'Ожидание'})[r.status]||r.status);
   if(r.size)line(card,Math.min(100,Math.round(r.received/r.size*100))+'% · '+(r.received/1048576).toFixed(1)+' / '+(r.size/1048576).toFixed(1)+' МБ','small');
   if(r.role==='match'){
-   line(card,d.profile==='uz_combat'?(r.fighter||'Укажите бойца'):(r.home||'?')+' — '+(r.away||'?'));
-   fileAction(card,'Участники записи',async()=>{const home=prompt(d.profile==='uz_combat'?'Какому бойцу принадлежит запись?':'Первая команда архивной записи',r.fighter||r.home);if(home===null)return;const away=d.profile==='uz_combat'?'':prompt('Вторая команда архивной записи',r.away);if(away===null)return;await api('input-edit',{id:d.id,file:r.id,home,away,fighter:home});await refreshInputs()});
+   line(card,d.profile.startsWith('uz_combat')?(r.fighter||'Укажите бойца'):(r.home||'?')+' — '+(r.away||'?'));
+   fileAction(card,'Участники записи',async()=>{const home=prompt(d.profile.startsWith('uz_combat')?'Какому бойцу принадлежит запись?':'Первая команда архивной записи',r.fighter||r.home);if(home===null)return;const away=d.profile.startsWith('uz_combat')?'':prompt('Вторая команда архивной записи',r.away);if(away===null)return;await api('input-edit',{id:d.id,file:r.id,home,away,fighter:home});await refreshInputs()});
   }
   if(['paused','error'].includes(r.status))fileAction(card,'Продолжить',async()=>{if(r.source==='device'&&r.received<r.size){notice('Выберите тот же файл ещё раз в поле загрузки с устройства.');return}await api('input-retry',{id:d.id,file:r.id});await refreshInputs()});
   if(!d.project&&!['downloading','checking'].includes(r.status))fileAction(card,'Убрать из выпуска',async()=>{if(!confirm('Убрать материал из выпуска? Скачанный файл останется на сервере.'))return;await api('input-edit',{id:d.id,file:r.id,remove:true});await refreshInputs()});

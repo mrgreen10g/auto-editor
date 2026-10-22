@@ -10,7 +10,7 @@ def parse(d,text):
     text=str(text)
     if not text.strip() or len(text.encode())>500000:raise RemoteError('Сценарий пустой или больше 500 КБ.')
     from .folder_import import parse_episode
-    intro,blocks,outro=parse_episode(text,d['profile'])
+    intro,blocks,outro=parse_episode(text,d['profile'],d['pair_hints']) if d.get('pair_hints') else parse_episode(text,d['profile'])
     if not blocks:raise RemoteError('Разборы не найдены. Проверьте сценарий и выбранный шаблон.')
     old={}
     for b in d.get('blocks',[]):old.setdefault(pair_key(b['title'],d['profile']),[]).append(b)

@@ -401,6 +401,18 @@ def check():
         root.update();assert not app.project.intro.script and not app.project.outro.script
         app.project.save(tmp/'ru-shorts.hockeyproj')
         assert Project.load(tmp/'ru-shorts.hockeyproj').profile=='ru_hockey_shorts'
+        # Both new templates are selectable and use the correct source controls.
+        for profile,sport in [('ru_football_shorts','football'),('uz_combat_shorts','combat')]:
+            select_profile(profile)
+            with patch('hockey_editor.profiles.kit_path',return_value=tmp/(profile+'.json')):app.switch_profile()
+            root.update();app.collect()
+            assert app.project.profile==profile and app.project.settings.width<app.project.settings.height
+            assert all(b.sport==sport for b in [app.project.intro,*app.project.blocks,app.project.outro])
+            if sport=='combat':
+                assert not app.logos_panel.winfo_manager()
+                assert app.find_events_button.cget('text')=='Найти удары / размены'
+            app.project.save(tmp/(profile+'.hockeyproj'))
+            assert Project.load(tmp/(profile+'.hockeyproj')).profile==profile
         # Review queue: edit timing/text, delete/undo and persist without another ASR run.
         from hockey_editor.review import attach,pending
         from hockey_editor.review_ui import ReviewDialog

@@ -79,7 +79,7 @@ def optional_subscription(cards,duration):
 
 def framing_cards(project,block,lines,duration):
     if '_top5_' in project.profile:return [],[]
-    if project.profile=='ru_hockey_shorts':
+    if project.profile in ('ru_hockey_shorts','ru_football_shorts'):
         cards=[]
         for i,line in enumerate(lines):
             title=classify_card(line.text)
@@ -92,7 +92,10 @@ def framing_cards(project,block,lines,duration):
     if project.profile.startswith('uz_hockey'):
         from .uz_hockey import framing_cards as hockey_cards
         return hockey_cards(project,block,lines,duration)
-    if project.profile=='uz_combat':
+    if project.profile=='uz_combat_shorts':
+        from .combat_shorts import framing_cards as short_cards
+        return short_cards(project,block,lines,duration)
+    if project.profile.startswith('uz_combat'):
         from .combat import framing_cards as combat_cards
         return combat_cards(project,block,lines,duration)
     if block.language=='uz':

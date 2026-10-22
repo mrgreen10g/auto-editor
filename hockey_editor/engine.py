@@ -157,7 +157,7 @@ class Engine:
 
     def render(self,plan,target,draft=False):
         self.check();self.project.validate(self.index)
-        if not draft and self.project.profile=='uz_combat':
+        if not draft and self.project.profile.startswith('uz_combat'):
             from .goals import unresolved
             if any(unresolved(b) for b in self.project.blocks):raise ValueError('Проверьте боевые вставки или выберите «Оставить ведущего» перед экспортом.')
         from .editing import validate_plan

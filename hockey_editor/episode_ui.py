@@ -117,23 +117,9 @@ class EpisodeMixin:
             try:
                 from .script_input import read_script
                 text=read_script(path);parsed=None
-                if '_top5_' in draft.profile:
-                    from .top5 import parse_script
-                    start,parsed,end=parse_script(text,'football' if 'football' in draft.profile else 'hockey');intro=start.script;outro=end.script;blocks=[(b.title,b.script) for b in parsed]
-                elif draft.profile=='ru_football':
-                    from .ru_football import parse_script
-                    start,parsed,end=parse_script(text);intro=start.script;outro=end.script;blocks=[(b.title,b.script) for b in parsed]
-                elif draft.profile=='ru_hockey_shorts':
-                    from .shorts import parse_ru_script
-                    start,parsed,end=parse_ru_script(text);intro=start.script;outro=end.script;blocks=[(b.title,b.script) for b in parsed]
-                elif draft.profile.startswith('uz_'):
-                    if draft.profile=='uz_hockey_shorts':from .uz_hockey_shorts import parse_script
-                    elif draft.profile=='uz_football_shorts':from .shorts import parse_script
-                    elif draft.profile=='uz_hockey':from .uz_hockey import parse_script
-                    elif draft.profile=='uz_combat':from .combat import parse_script
-                    else:from .uzbek import parse_script
-                    start,parsed,end=parse_script(text);intro=start.script;outro=end.script;blocks=[(b.title,b.script) for b in parsed]
-                else:intro,blocks,outro=split_full_script(text)
+                from .folder_import import parse_episode
+                start,parsed,end=parse_episode(text,draft.profile)
+                intro=start.script;outro=end.script;blocks=[(b.title,b.script) for b in parsed]
                 if not messagebox.askyesno('Импорт сценария',f'Найдено разборов: {len(blocks)}. Заменить тексты начала, разборов и завершения?\nМатчи и настройки совпадающих пар сохранятся.',parent=w):return
                 old={b.title.casefold():b for b in draft.blocks};updated=[]
                 for title,script in blocks:
@@ -160,13 +146,13 @@ class EpisodeMixin:
                 if draft.recording_times:
                     try:
                         from .recording_times import parse_times
-                        parse_times(draft.recording_times,len(draft.blocks),allow_promos=draft.profile.endswith('_shorts'),include_outro=draft.profile!='uz_combat' or bool(fields['outro'].get('1.0','end').strip()))
+                        parse_times(draft.recording_times,len(draft.blocks),allow_promos=draft.profile.endswith('_shorts'),include_outro=not draft.profile.startswith('uz_combat') or bool(fields['outro'].get('1.0','end').strip()))
                     except ValueError as error:return messagebox.showerror('Таймкоды записи',str(error),parent=w)
             for key,field in fields.items():getattr(draft,key).script=field.get('1.0','end').strip()
             draft.assets={k:v.get().strip() for k,v in asset_vars.items()};draft.full_video=enabled.get()
             draft.asset_folder=material_folder.get()
             if draft.full_video:
-                if any(len(getattr(draft,k).script)<(3 if draft.profile.endswith('_shorts') else 30) for k in fields if not (draft.profile.endswith('_shorts') and not getattr(draft,k).script) and not (draft.profile=='uz_combat' and k=='outro' and not draft.outro.script)):return messagebox.showerror('Тексты','Заполните начало и завершение.',parent=w)
+                if any(len(getattr(draft,k).script)<(3 if draft.profile.endswith('_shorts') else 30) for k in fields if not (draft.profile.endswith('_shorts') and not getattr(draft,k).script) and not (draft.profile.startswith('uz_combat') and k=='outro' and not draft.outro.script)):return messagebox.showerror('Тексты','Заполните начало и завершение.',parent=w)
                 required=() if draft.profile.endswith('_shorts') else ('disclaimer',) if draft.profile.startswith('uz_') else ('disclaimer','telegram','subscribe')
                 if any(not draft.assets.get(k) or not Path(draft.assets[k]).is_file() for k in required):return messagebox.showerror('Материалы','Выберите дисклеймер.' if draft.profile.startswith('uz_') else 'Выберите дисклеймер, Telegram и подписку.',parent=w)
                 if any(v and not Path(v).is_file() for v in draft.assets.values()):return messagebox.showerror('Материалы','Один из выбранных файлов не найден.',parent=w)

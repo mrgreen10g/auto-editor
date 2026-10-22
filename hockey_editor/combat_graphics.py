@@ -50,3 +50,42 @@ def card_image(card,path):
         d.text((640,105),'FIGHT NIGHT',font=font(36,True),anchor='mm',fill=INK)
     im.save(path)
     return (0,0) if transition else ((1280-im.width)//2,720-im.height-35) if wide else (1280-im.width-28,28)
+
+
+def portrait_card(card,path):
+    """Fight identities without club crests, in the shared Shorts safe area."""
+    from .fighters import clean_name
+    pair=card.title=='РАЗБОР МАТЧА';width=608
+    label={'РАЗБОР МАТЧА':'JANG TAHLILI','ПРОГНОЗ':'TANLOV','СТАТИСТИКА':'STATISTIKA',
+           'ИНФОРМАЦИЯ':'MUHIM FAKT','УСЛОВИЯ ПРОГНОЗА':'TANLOV SHARTLARI',
+           'ВОПРОС ЗРИТЕЛЮ':'SIZNING FIKRINGIZ'}.get(card.title,'JANG TAHLILI')
+    measure=ImageDraw.Draw(Image.new('RGBA',(1,1)))
+    if pair:
+        names=[clean_name(n) for n in block_teams(card.text)]
+        size=27
+        while size>16 and any(measure.textlength(n,font=font(size,True))>245 for n in names):size-=1
+        height=154;body=[]
+    else:
+        size=32
+        while True:
+            body=wrap(measure,card.text,font(size,True),width-56)
+            if len(body)*(size+7)<=185:break
+            if size<=18:raise ValueError('Сократите боевую плашку Shorts, сохранив условие ставки.')
+            size-=1
+        height=66+len(body)*(size+7)+(30 if card.fixture else 0)
+    im=Image.new('RGBA',(width,height),PAPER);d=ImageDraw.Draw(im)
+    d.rectangle((0,0,width,47),fill=INK);d.text((24,13),label,font=font(17,True),fill=PAPER)
+    glove(d,width-47,5,.47,RED)
+    if pair:
+        for name,x in zip(names,(143,465)):d.text((x,97),name,font=font(size,True),anchor='mm',fill=INK)
+        d.text((304,97),'VS',font=font(22,True),anchor='mm',fill=RED)
+    else:
+        y=58
+        if card.fixture:
+            fs=18
+            while fs>11 and d.textlength(card.fixture,font=font(fs,True))>width-48:fs-=1
+            d.text((24,y),card.fixture,font=font(fs,True),fill=BLUE);y+=30
+        for row in body:d.text((24,y),row,font=font(size,True),fill=INK);y+=size+7
+    d.rectangle((0,height-6,width//2,height),fill=RED);d.rectangle((width//2,height-6,width,height),fill=BLUE)
+    im.save(path)
+    return (40,70) if pair else (40,min(865,1090-height))

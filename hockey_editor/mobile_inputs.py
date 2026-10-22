@@ -69,7 +69,7 @@ class Inputs:
 
     def server_import(self,data):
         from .mini_export import folder
-        from .folder_import import presenter_folder,build_import
+        from .folder_import import presenter_folder,build_import,folder_pair_hints
         from .model import Project
         from .profiles import apply_profile
         from .script_input import read_script
@@ -86,10 +86,12 @@ class Inputs:
             project,_,notes=build_import(project,root,data.get('host',''),data.get('script',''))
             if not project.blocks:raise RemoteError('Разборы не найдены. Проверьте сценарий и выбранный шаблон.')
             d=dict(id=secrets.token_hex(16),name=target.name,folder=str(target),profile=project.profile,preset=str(data.get('preset','')),asset_folder='',script=read_script(data['script']),intro=asdict(project.intro),blocks=[asdict(b) for b in project.blocks],outro=asdict(project.outro),files=[],created=time.time(),project='',import_notes=notes)
+            d['pair_hints']=folder_pair_hints(root,project.profile)
             d['script_source']=str(Path(data['script']).resolve());d['script_updated']=time.time()
             if old:
                 from .mobile_reparse import parse,reopen,reconcile_files
                 # Parse the newly read file, preserving IDs only for unique identical pairs.
+                old['pair_hints']=d['pair_hints']
                 refreshed=parse(old,d['script']);reopen(refreshed);reconcile_files(refreshed)
                 refreshed.update(script_source=d['script_source'],preset=d['preset'],import_notes=refreshed.get('import_notes',[])+notes)
                 d=refreshed
@@ -287,7 +289,7 @@ class Inputs:
         if any(r['status']!='ready' for r in files):problems.append('Дождитесь загрузок или уберите ненужные материалы.')
         for r in files:
             if r['status']=='ready' and (not r['path'] or not Path(r['path']).is_file()):problems.append('Файл недоступен: '+r['name'])
-            if r['role']=='match' and (not r['fighter'] if d['profile']=='uz_combat' else not r['home'] or not r['away']):problems.append('Укажите участников записи: '+r['name'])
+            if r['role']=='match' and (not r['fighter'] if d['profile'].startswith('uz_combat') else not r['home'] or not r['away']):problems.append('Укажите участников записи: '+r['name'])
         counts={b['uid']:sum(r['role']=='match' and r['block']==b['uid'] and r['status']=='ready' for r in files) for b in d['blocks']}
         notes=d.get('import_notes',[])+[b['title']+': записей нет, останется ведущий.' for b in d['blocks'] if not counts[b['uid']]]
         return dict(problems=problems,notes=notes,hosts=[r['name'] for r in hosts],counts=counts,can_create=not problems)
@@ -318,7 +320,7 @@ class Inputs:
                 for block in project.blocks:block.match_ids=[]
                 ready=[r for r in d['files'] if r['status']=='ready'];project.hosts=[r['path'] for r in ready if r['role']=='host'];project.host=project.hosts[0]
                 project.full_video=True;project.whole_episode=True;project.settings.use_manual_clips=False
-                sport='combat' if d['profile']=='uz_combat' else 'football' if 'football' in d['profile'] else 'hockey'
+                sport='combat' if d['profile'].startswith('uz_combat') else 'football' if 'football' in d['profile'] else 'hockey'
                 for r in ready:
                     if r['role']!='match':continue
                     m=MatchSource(r['path'],r['fighter'] if sport=='combat' else r['home'],r['away'],sport=sport,fighter=r['fighter']);project.matches.append(m)
