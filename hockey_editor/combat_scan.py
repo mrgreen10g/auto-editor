@@ -1,11 +1,11 @@
-"""Reviewable fight proposals require a running round clock and local action."""
+"""Generic fight illustrations from continuous live rounds, without action matching."""
 from dataclasses import asdict
 import json,re,shutil
 import numpy as np
 from PIL import Image
 from .media import probe,run
 
-DETECTOR_VERSION='combat-selective-review-v5'
+DETECTOR_VERSION='combat-live-illustrations-v6'
 
 
 def clock_value(text):
@@ -33,7 +33,7 @@ def motion_score(previous,current):
 
 def scan(source,scanner):
     import cv2
-    from .goals import Candidate,source_signature
+    from .goals import source_signature
     scanner.check();signature=source_signature(source);folder=scanner.root/signature[:24];folder.mkdir(parents=True,exist_ok=True)
     saved=folder/'goals.json'
     if saved.exists():
@@ -43,22 +43,24 @@ def scan(source,scanner):
     if not info['video'] or not 5<=duration<=4*3600:raise ValueError('Нужна видеозапись боя от 5 секунд до 4 часов.')
     visual=folder/'combat-frames-v1';visual.mkdir(exist_ok=True)
     complete=False
-    scanner.log('Бои: ищу идущие раунды по таймеру и активные размены. Уверенные фрагменты будут выбраны автоматически.')
+    scanner.log('Бои: ищу непрерывные эпизоды идущего боя для иллюстраций. Конкретный удар или действие из текста не требуется.')
     try:
-        from rapidocr_onnxruntime import RapidOCR
-        from .speech_cache import cpu_threads
-        import onnxruntime
-        onnxruntime.disable_telemetry_events()
-        ocr=RapidOCR(intra_op_num_threads=min(4,cpu_threads()),inter_op_num_threads=1,det_limit_type='max',det_limit_side_len=960)
         from .scan_cache import single_frames
         from .processing_cache import read_json,write_json
-        files=single_frames(source,visual,duration,2,'960:540',scanner.cancel,scanner.log)
         checkpoint=folder/'combat-analysis-v1.json'
         state=read_json(checkpoint,{})
+        complete_analysis=(state.get('count',0)>0 and len(state.get('motion',[]))==state['count'] and len(state.get('cuts',[]))==state['count'] and bool(state.get('observations')))
+        if not complete_analysis:
+            from rapidocr_onnxruntime import RapidOCR
+            from .speech_cache import cpu_threads
+            import onnxruntime
+            onnxruntime.disable_telemetry_events()
+            ocr=RapidOCR(intra_op_num_threads=min(4,cpu_threads()),inter_op_num_threads=1,det_limit_type='max',det_limit_side_len=960)
+        files=([None]*state['count'] if complete_analysis else single_frames(source,visual,duration,2,'960:540',scanner.cancel,scanner.log))
         if state.get('count')!=len(files):state={}
         observations=state.get('observations',[]);motion=state.get('motion',[]);cuts=state.get('cuts',[])
         previous=None;clock_box=state.get('clock_box')
-        if motion:
+        if motion and not complete_analysis:
             with Image.open(files[len(motion)-1]) as im:rgb=np.asarray(im.convert('RGB'))
             previous=cv2.cvtColor(cv2.resize(rgb,(240,135)),cv2.COLOR_RGB2GRAY)
             scanner.log(f'Продолжаю анализ боя с {len(motion)/2:.1f} с.')
@@ -92,21 +94,12 @@ def scan(source,scanner):
             if i%120==0:
                 save();scanner.log(f'Боевая запись: проверено {i/2:.0f} с')
         save()
-        ranges=live_ranges(observations,duration);candidates=[]
-        for lo,hi in ranges:
-            start=lo
-            while hi-start>=2.5:
-                end=min(hi,start+3.5);indices=list(range(int((start+.5)*2),min(len(motion),int((end-.5)*2)+1)))
-                peak=max(indices,key=lambda i:motion[i]) if indices else None
-                if peak is not None and motion[peak]>=.8:
-                    strong=confident_action(start,end,observations,motion,cuts)
-                    note='Идущий раунд, устойчивый таймер и активное движение без смены кадра.' if strong else 'Активное движение найдено, но таймер или непрерывность сцены требуют проверки.'
-                    candidates.append(Candidate(f'combat-{len(candidates)}',None,None,peak/2,start,end,.86 if strong else .7,note,kind='play'))
-                start=end+2
-        data={'detector_version':DETECTOR_VERSION,'fighter':source.fighter,'signature':signature,'duration':duration,'candidates':[asdict(c) for c in candidates],'observations':observations,'gameplay_ranges':ranges,'ranges':ranges,'box':None,'note':'Если таймер не виден, задайте фрагмент вручную. Уверенные активные фрагменты выбираются автоматически; сомнительные требуют проверки.'}
+        ranges=live_ranges(observations,duration)
+        candidates=illustration_candidates(observations,motion,cuts,duration)
+        data={'detector_version':DETECTOR_VERSION,'fighter':source.fighter,'signature':signature,'duration':duration,'candidates':[asdict(c) for c in candidates],'observations':observations,'gameplay_ranges':ranges,'ranges':ranges,'box':None,'note':'Иллюстрации идущего боя без привязки к конкретному действию. Неподтверждённые сцены исключены; если подходящих кадров нет, остаётся ведущий.'}
         tmp=saved.with_suffix('.tmp');tmp.write_text(json.dumps(data,ensure_ascii=False),encoding='utf-8');tmp.replace(saved)
         complete=True
-        scanner.log(f'Боевых фрагментов для просмотра: {len(candidates)}');return data
+        scanner.log(f'Готовых иллюстраций боя: {len(candidates)}');return data
     finally:
         if complete:shutil.rmtree(visual,ignore_errors=True)
 
@@ -126,3 +119,38 @@ def confident_action(start,end,observations,motion,cuts):
     lo=max(0,int(start*2));hi=min(len(motion),int(end*2)+1)
     local=motion[lo:hi]
     return bool(len(local)>=5 and not any(cuts[lo:hi]) and max(local)>=1.2 and sum(v>=.8 for v in local)/len(local)>=.5)
+
+
+def confident_fight(start,end,observations,motion,cuts):
+    """Continuous clock plus visible movement; not evidence of a named action.
+
+    Missing/frozen/reversed clocks and cuts fail closed. In particular a gap
+    between two OCR successes must not cover an ad or a round break.
+    """
+    points=[o for o in observations if start-2.1<=o[0]<=end+2.1]
+    if len(points)<3 or points[0][0]>start or points[-1][0]<end:return False
+    if any(len(o)<3 or o[1] is None or o[2]<.8 for o in points):return False
+    direction=None
+    for a,b in zip(points,points[1:]):
+        dt=b[0]-a[0];dv=b[1]-a[1]
+        if not 0<dt<=2.1 or abs(abs(dv)-dt)>.75 or dv==0:return False
+        sign=1 if dv>0 else -1
+        if direction is not None and sign!=direction:return False
+        direction=sign
+    lo=max(0,int((start-.5)*2));hi=min(len(motion),int((end+.5)*2)+1)
+    local=motion[lo:hi]
+    return bool(len(local)>=5 and len(cuts)>=hi and not any(cuts[lo:hi]) and sum(v>=.2 for v in local)/len(local)>=.3)
+
+
+def illustration_candidates(observations,motion,cuts,duration):
+    from .goals import Candidate
+    result=[]
+    for lo,hi in live_ranges(observations,duration):
+        start=lo
+        while hi-start>=2.5:
+            end=min(hi,start+3.5)
+            if confident_fight(start,end,observations,motion,cuts):
+                result.append(Candidate(f'combat-{len(result)}',None,None,(start+end)/2,start,end,.86,
+                    'Идущий бой: непрерывный таймер, движение и отсутствие смены сцены. Иллюстрация, без утверждения о конкретном действии.',kind='play'))
+            start=end+2
+    return result

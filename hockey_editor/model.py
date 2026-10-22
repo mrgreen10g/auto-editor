@@ -280,6 +280,8 @@ class Project:
         if project.profile.startswith('uz_combat'):
             from .combat_cards import migrate_project
             migrate_project(project)
+            from .combat import migrate_optional_archives
+            migrate_optional_archives(project)
         from .review import migrate_project as migrate_review
         migrate_review(project)
         from .material_folder import resolve as resolve_materials

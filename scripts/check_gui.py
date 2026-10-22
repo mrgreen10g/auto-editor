@@ -410,7 +410,7 @@ def check():
             assert all(b.sport==sport for b in [app.project.intro,*app.project.blocks,app.project.outro])
             if sport=='combat':
                 assert not app.logos_panel.winfo_manager()
-                assert app.find_events_button.cget('text')=='Найти удары / размены'
+                assert app.find_events_button.cget('text')=='Найти эпизоды боя'
             app.project.save(tmp/(profile+'.hockeyproj'))
             assert Project.load(tmp/(profile+'.hockeyproj')).profile==profile
         # Review queue: edit timing/text, delete/undo and persist without another ASR run.
@@ -483,7 +483,7 @@ def check():
         with patch('hockey_editor.profiles.kit_path',return_value=tmp/'combat-kit.json'):app.switch_profile()
         root.update();assert app.project.profile=='uz_combat'
         assert not app.logos_panel.winfo_manager()
-        assert app.find_events_button.cget('text')=='Найти удары / размены'
+        assert app.find_events_button.cget('text')=='Найти эпизоды боя'
         app.add_block();assert app.project.blocks[-1].sport=='combat'
         from hockey_editor.match_ui import SourceDialog
         source=MatchSource(str(host),'','',sport='combat')

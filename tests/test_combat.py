@@ -55,14 +55,15 @@ class CombatTests(unittest.TestCase):
   p=self.project();b=p.blocks[0]
   sources=[MatchSource('a','Alex','',sport='combat',fighter='ALEKSANDR XALZOV'),MatchSource('b','Azamat','',sport='combat',fighter='AZAMAT ESPAY')]
   b.match_ids=[s.id for s in sources];found=events(b,sources)
-  self.assertEqual([e.source_id for e in found],[sources[0].id]*2+[sources[1].id]*2)
+  self.assertEqual([e.source_id for e in found],[sources[0].id]+[sources[1].id]*2)
   self.assertFalse(any('U juda kuchli' in e.phrase for e in found))
  def test_no_other_fighter_substitution_or_auto_acceptance(self):
   a=MatchSource('a','A','',sport='combat',fighter='A');b=MatchSource('b','B','',sport='combat',fighter='B')
   candidate=dict(id='combat-0',start=2,end=5,time=3,confidence=.9,kind='play',score=None,before=None,note='Check')
   e=EventRequest(a.id,'zarba','play')
   propose([e],{b.id:{'signature':'b','candidates':[candidate]}},[a,b],True);self.assertIsNone(e.selection)
-  propose([e],{a.id:{'signature':'a','candidates':[candidate]}},[a,b],True);self.assertFalse(e.selection.accepted)
+  e=EventRequest(a.id,'zarba','play')
+  propose([e],{a.id:{'signature':'a','candidates':[candidate]}},[a,b],True);self.assertIsNone(e.selection);self.assertTrue(e.skipped)
   missing=EventRequest('','zarba','play');propose([missing],{a.id:{'signature':'a','candidates':[candidate]}},[a,b],True);self.assertIsNone(missing.selection)
  def test_empty_asr_preserves_script_without_fake_outro(self):
   p=self.project()

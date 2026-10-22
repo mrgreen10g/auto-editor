@@ -75,10 +75,10 @@ class MatchMixin:
         football=self.project.profile.startswith('uz_') or 'football' in self.project.profile
         combat=self.project.profile.startswith('uz_combat')
         self.match_materials.title_label.configure(text='Архивные бои' if combat else 'Исходные матчи')
-        self.match_materials.subtitle_label.configure(text='Добавьте записи и выберите бойца для каждого файла. Уверенные активные фрагменты выбираются автоматически; сомнительные — на проверку.' if combat else 'Добавьте одну или несколько записей, на которые ссылается ведущий. Таймкоды не нужны.')
+        self.match_materials.subtitle_label.configure(text='Добавьте записи и выберите бойца для каждого файла. Эпизоды идущего боя вставляются автоматически как иллюстрации. Если подходящих кадров нет, остаётся ведущий.' if combat else 'Добавьте одну или несколько записей, на которые ссылается ведущий. Таймкоды не нужны.')
         self.matchtable.heading('title',text='Боец' if combat else 'Встреча')
         self.eventtable.heading('source',text='Боец' if combat else 'Матч')
-        self.find_events_button.configure(text='Найти удары / размены' if combat else 'Найти игровые вставки' if football else 'Найти голы')
+        self.find_events_button.configure(text='Найти эпизоды боя' if combat else 'Найти игровые вставки' if football else 'Найти голы')
         if football:self.score_region_button.pack_forget()
         elif not self.score_region_button.winfo_manager():self.score_region_button.pack(side='left',padx=8)
         self.matchtable.delete(*self.matchtable.get_children())
@@ -223,7 +223,7 @@ class MatchMixin:
         sources = copy.deepcopy([m for m in self.project.matches if m.id in block.match_ids])
         allow_other = self.project.settings.allow_other_matches
         self.invalidate(); self.show_page('review'); self.reviewtabs.select(self.events_page)
-        self.review_summary.set('Ищем удары и размены…' if self.project.profile.startswith('uz_combat') else 'Ищем голы в исходных матчах…')
+        self.review_summary.set('Ищем эпизоды идущего боя…' if self.project.profile.startswith('uz_combat') else 'Ищем голы в исходных матчах…')
         def work():
             scans = {}; errors = []
             for source in sources:

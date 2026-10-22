@@ -174,9 +174,9 @@ class NewCaseTests(unittest.TestCase):
         scans={source.id:dict(signature='sig',fighter=source.fighter,detector_version=DETECTOR_VERSION,candidates=[candidate])}
         def event():return EventRequest(source.id,'Alpha zarba beradi','play',requested_teams=[source.fighter])
         e=event();propose([e],scans,[source]);self.assertTrue(e.selection.accepted)
-        e=event();e.requested_teams=['FIGHTER BETA'];propose([e],scans,[source]);self.assertFalse(e.selection.accepted)
-        candidate['confidence']=.7;e=event();propose([e],scans,[source]);self.assertFalse(e.selection.accepted)
-        candidate['confidence']=.86;scans[source.id].pop('detector_version');e=event();propose([e],scans,[source]);self.assertFalse(e.selection.accepted)
+        e=event();e.requested_teams=['FIGHTER BETA'];propose([e],scans,[source]);self.assertIsNone(e.selection);self.assertTrue(e.skipped)
+        candidate['confidence']=.7;e=event();propose([e],scans,[source]);self.assertIsNone(e.selection);self.assertTrue(e.skipped)
+        candidate['confidence']=.86;scans[source.id].pop('detector_version');e=event();propose([e],scans,[source]);self.assertIsNone(e.selection);self.assertTrue(e.skipped)
 
 
 class NHLRecognitionTests(unittest.TestCase):

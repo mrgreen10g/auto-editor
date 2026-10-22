@@ -60,7 +60,7 @@ def events(block,matches):
             continue
         title,_=classify(line);t=norm(line)
         if title=='ПРОГНОЗ' or any(x in t for x in ('telegram','obuna','layk')):continue
-        if not owner or not re.search(r'jang|zarba|hujum|himoya|nokaut|masofa|texnik|uslub|almashin|bosim|rekord|tajriba|boks|raund|temp|g.alab|mag.lub|yosh|statistik',t):continue
+        if not owner or not re.search(r'zarba|hujum|himoya|nokaut|masofa|texnik|uslub|almashin|bosim|boks|raund|temp|kurash|teykdaun|parter|kombinats|klinch',t):continue
         eligible=[s for s in sources if same_fighter(s.fighter,owner)]
         if not eligible:
             result.append(EventRequest('',line,'play',note='Нет записи бойца '+owner,requested_teams=[owner]));continue
@@ -73,14 +73,34 @@ def propose_event(event,scans,usage,source=None):
     if event.skipped or (event.selection and event.selection.accepted):return
     from .fighters import same_fighter
     data=scans.get(event.source_id,{})
-    choices=sorted(data.get('candidates',[]),key=lambda c:(-c['confidence'],c['time']));used=usage.setdefault(event.source_id,set())
-    c=next((c for c in choices if c['id'] not in used),None)
-    if not c:event.note='Нет нового боевого фрагмента. Выберите момент вручную или оставьте ведущего.';return
-    used.add(c['id'])
     from .combat_scan import DETECTOR_VERSION
-    owner=bool(source and len(event.requested_teams)==1 and same_fighter(source.fighter,event.requested_teams[0]) and norm(data.get('fighter',''))==norm(source.fighter))
-    accepted=owner and data.get('detector_version')==DETECTOR_VERSION and c.get('kind')=='play' and c['confidence']>=.85
-    event.selection=EventSelection(c['id'],c['start'],c['end'],c['time'],data['signature'],accepted,'Архив боя · '+', '.join(event.requested_teams));event.note=c['note']
+    owner=bool(source and len(event.requested_teams)==1 and same_fighter(source.fighter,event.requested_teams[0]) and same_fighter(data.get('fighter',''),source.fighter))
+    # No visual action/phrase correspondence is asserted. Only live footage
+    # of the requested fighter may be used as an illustration.
+    choices=sorted((c for c in data.get('candidates',[]) if owner and data.get('detector_version')==DETECTOR_VERSION and c.get('kind')=='play' and c.get('confidence',0)>=.85),key=lambda c:c['time'])
+    used=usage.setdefault(event.source_id,set())
+    c=next((c for c in choices if c['id'] not in used),None)
+    if not c:
+        event.skipped=True;event.selection=None
+        event.note='Оставлен ведущий: нет свободного подтверждённого эпизода боя. По желанию можно выбрать фрагмент вручную.'
+        return
+    used.add(c['id'])
+    event.selection=EventSelection(c['id'],c['start'],c['end'],c['time'],data['signature'],True,'Архив боя · '+', '.join(event.requested_teams))
+    event.note=c['note']
+
+
+def migrate_optional_archives(project):
+    """Old unresolved illustrations were never exported; keep the host instead.
+
+    Accepted trims and deliberate skips remain exactly as authored. Keep an
+    unaccepted proposal available in the picker, without a mandatory task.
+    """
+    if not project.profile.startswith('uz_combat'):return
+    for block in project.blocks:
+        for event in block.events:
+            if not event.skipped and (not event.selection or not event.selection.accepted):
+                event.skipped=True
+                event.note='Оставлен ведущий вместо неподтверждённой вставки. Новый поиск подберёт иллюстрации боя автоматически.'
 
 
 def active_blocks(project):return [b for b in [project.intro,*project.blocks,project.outro] if b.script.strip()]
@@ -224,7 +244,7 @@ def synchronize(project,cache,cancel,log):
         if all(e.skipped or (e.selection and e.selection.accepted) for e in b.events):continue
         scans={s.id:GoalScanner(cancel=cancel,log=log).scan(s) for s in local}
         b.events=propose(b.events,scans,local,False)
-        log('Вставки подобраны; неуверенные моменты доступны для проверки: '+b.title)
+        log('Иллюстрации боя подобраны автоматически; без надёжного эпизода оставлен ведущий: '+b.title)
 
 
 def framing_cards(project,block,lines,duration):
