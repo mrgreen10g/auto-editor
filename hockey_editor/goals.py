@@ -269,6 +269,8 @@ def propose(requests, scans, sources=(), allow_other=False):
     for event in requests:
         if event.selection and event.selection.accepted:
             usage.setdefault(event.source_id,set()).add(event.selection.candidate_id)
+            if source_map.get(event.source_id) and source_map[event.source_id].sport=='combat':
+                usage[event.source_id].add(('combat-range',event.selection.source_start,event.selection.source_end))
     def next_play(source_id):
         data = scans.get(source_id, {})
         choices = [Candidate(**c) for c in data.get('candidates', []) if c['kind'] == 'play' and c['confidence']>=.65]

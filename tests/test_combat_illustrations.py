@@ -72,3 +72,12 @@ class FightIllustrationTests(unittest.TestCase):
                 frames.assert_not_called()
             self.assertEqual(result['detector_version'],DETECTOR_VERSION)
             self.assertGreater(len(result['candidates']),0)
+
+    def test_previous_trim_reserved_even_if_detector_candidate_ids_changed(self):
+        s=MatchSource('a','','',sport='combat',fighter='Petr Yan')
+        old=EventRequest(s.id,'Old illustration','play',selection=EventSelection('old-id',2,5,3,'sig',True),requested_teams=[s.fighter])
+        new=EventRequest(s.id,'Yan himoya.','play',requested_teams=[s.fighter])
+        data=dict(signature='sig',fighter=s.fighter,detector_version=DETECTOR_VERSION,candidates=[dict(id=k,start=a,end=a+3,time=a+1,confidence=.86,kind='play',note='Fight') for k,a in [('new-overlap',3),('new-free',10)]])
+        propose([new,old],{s.id:data},[s])
+        self.assertEqual(new.selection.candidate_id,'new-free')
+        self.assertEqual(old.selection.source_start,2)

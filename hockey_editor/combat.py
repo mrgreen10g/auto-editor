@@ -79,12 +79,12 @@ def propose_event(event,scans,usage,source=None):
     # of the requested fighter may be used as an illustration.
     choices=sorted((c for c in data.get('candidates',[]) if owner and data.get('detector_version')==DETECTOR_VERSION and c.get('kind')=='play' and c.get('confidence',0)>=.85),key=lambda c:c['time'])
     used=usage.setdefault(event.source_id,set())
-    c=next((c for c in choices if c['id'] not in used),None)
+    c=next((c for c in choices if c['id'] not in used and not any(isinstance(v,tuple) and v[0]=='combat-range' and c['start']<v[2] and c['end']>v[1] for v in used)),None)
     if not c:
         event.skipped=True;event.selection=None
         event.note='Оставлен ведущий: нет свободного подтверждённого эпизода боя. По желанию можно выбрать фрагмент вручную.'
         return
-    used.add(c['id'])
+    used.add(c['id']);used.add(('combat-range',c['start'],c['end']))
     event.selection=EventSelection(c['id'],c['start'],c['end'],c['time'],data['signature'],True,'Архив боя · '+', '.join(event.requested_teams))
     event.note=c['note']
 
