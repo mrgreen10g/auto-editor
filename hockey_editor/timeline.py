@@ -181,7 +181,13 @@ def placements(block,lines,clip_meta,duration,frequency='normal',shorts=False):
                 named=[n for n in names if name_position(n,tail) is not None]
                 combat_owner=named[0] if len(named)==1 and re.search(r'misol|esa|rekord|statistik|tanish|bazasi',norm(tail)) else None
         if norm(l.text).rstrip('.')==norm(block.title):continue
-        if block.language=='uz':
+        if block.language=='ru' and block.sport=='combat':
+            from .ru_combat import classify,named
+            from .graphics import block_teams
+            owners=named(block_teams(block.title),l.text)
+            if owners:combat_owner=owners[0] if len(owners)==1 else None
+            title,body=classify(l.text)
+        elif block.language=='uz':
             if block.sport=='combat':
                 if shorts:from .combat_shorts import classify
                 else:from .combat import classify
@@ -202,7 +208,7 @@ def placements(block,lines,clip_meta,duration,frequency='normal',shorts=False):
                     body=polished_argument(body,l.recognized or l.text,block.script)
             elif annotation:title,body=annotation['title'],annotation['text']
         else:title=classify_card(l.text);body=summarize_card(title,l.text,topic) if title else l.text
-        if block.language=='uz' and block.sport=='combat' and combat_owner and title in ('СТАТИСТИКА','ИНФОРМАЦИЯ'):
+        if block.sport=='combat' and combat_owner and title in ('СТАТИСТИКА','ИНФОРМАЦИЯ'):
             from .fighters import clean_name
             body=clean_name(combat_owner).upper()+'\n'+body
         if str(i) in block.card_overrides:
@@ -212,7 +218,7 @@ def placements(block,lines,clip_meta,duration,frequency='normal',shorts=False):
     if block.sport=='football':
         from .football_players import cards as player_cards
         cards.extend(player_cards(block,lines,cards))
-    elif block.language=='ru' or block.sport=='hockey':
+    elif block.sport!='combat' and (block.language=='ru' or block.sport=='hockey'):
         from .nhl_players import cards as player_cards
         cards.extend(player_cards(block,lines,cards))
     return inserts,cards,warnings

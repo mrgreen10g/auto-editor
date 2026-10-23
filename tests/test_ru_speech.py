@@ -49,6 +49,12 @@ class RussianSpeechTests(unittest.TestCase):
         speech.append(segment(end+.2,'Пока!'))
         self.assertAlmostEqual(align_episode(blocks,speech)['outro'][0][-1].end,end+.6)
 
+    def test_farewell_survives_late_unrelated_recognition(self):
+        blocks,speech=sample();end=speech[-1]['end']
+        speech.append(segment(end+.2,'Пока!'))
+        speech.append(segment(end+4,'Субтитры подготовлены редакцией'))
+        self.assertAlmostEqual(align_episode(blocks,speech)['outro'][0][-1].end,end+.6)
+
     def test_intro_late_and_missing_analysis_are_rejected(self):
         blocks,speech=sample()
         late=copy.deepcopy(speech)

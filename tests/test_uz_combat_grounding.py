@@ -22,7 +22,7 @@ class GroundingTests(unittest.TestCase):
   self.assertIn('6 YOSH KICHIK',classify('U olti yosh kichik.')[1])
  def test_spoken_bundle_autoaccepted_but_numbers_conflict_reviewed(self):
   text="31 yosh, yettita g‘alaba, beshta mag‘lubiyat, bitta durang."
-  title,body=classify(text);b=Block(title='ALPHA FIRST — BETA SECOND')
+  title,body=classify(text);b=Block(title='ALPHA FIRST — BETA SECOND',language='uz',sport='combat')
   self.assertFalse(confidence(Card(0,8,title,body),Line(text,0,8,recognized=text),b,Project()))
   self.assertTrue(confidence(Card(0,8,title,body),Line(text,0,8,recognized=text.replace('yettita','oltita')),b,Project()))
  def test_no_written_unspoken_facts_and_intro_pairs_do_not_overlap(self):
@@ -36,7 +36,7 @@ class GroundingTests(unittest.TestCase):
   self.assertEqual(len(cards),2);self.assertLessEqual(cards[0].end,cards[1].start)
  def test_nickname_source_binding_and_comparison_safety(self):
   source=MatchSource('fight.mp4','','',sport='combat',fighter='Maksim Barmin')
-  b=Block(title='MAKSIM “BALU” BARMIN — DAVID OGANESYAN',match_ids=[source.id],sport='combat',script='Balu bosimni oshiradi. Barmin va Oganesyan tajribali. U zarba beradi.')
+  b=Block(title='MAKSIM “BALU” BARMIN — DAVID OGANESYAN',match_ids=[source.id],language='uz',sport='combat',script='Balu bosimni oshiradi. Barmin va Oganesyan tajribali. U zarba beradi.')
   found=events(b,[source]);self.assertEqual(len(found),1);self.assertEqual(found[0].source_id,source.id)
  def test_football_words_and_arguments(self):
   from hockey_editor.uzbek import classify as football

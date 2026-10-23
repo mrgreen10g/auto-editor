@@ -12,11 +12,12 @@ def glove(d,x,y,scale=1,color=RED):
     for i in (50,56):d.line(box(17,i,42,i),fill=PAPER,width=max(1,round(2*scale)))
     d.arc(box(17,8,44,32),195,280,fill=PAPER,width=max(1,round(2*scale)))
 
-def card_image(card,path):
+def card_image(card,path,language='uz'):
     transition=card.title in ('СМЕНА МАТЧА','ИТОГИ ВЫПУСКА');pair=card.title=='РАЗБОР МАТЧА';wide=transition or pair or card.title=='ПРОГНОЗ'
     width=1280 if transition else 1080 if pair else 900 if wide else 420
     height=720 if transition else 180 if pair else 320
     label={'РАЗБОР МАТЧА':'FIGHT CARD','СМЕНА МАТЧА':'NEXT FIGHT','ИТОГИ ВЫПУСКА':'FINAL PICKS','ПРОГНОЗ':'TANLOV','СТАТИСТИКА':'FIGHT STATS','ИНФОРМАЦИЯ':'KEY FACT','УСЛОВИЯ ПРОГНОЗА':'TANLOV SHARTLARI','ТЕЛЕГРАМ':'TELEGRAM','ПОДПИСКА':'OBUNA'}.get(card.title,'FIGHT INSIGHT')
+    if language=='ru':label={'РАЗБОР МАТЧА':'РАЗБОР БОЯ','СМЕНА МАТЧА':'СЛЕДУЮЩИЙ БОЙ','ИТОГИ ВЫПУСКА':'ИТОГИ'}.get(card.title,card.title)
     im=Image.new('RGBA',(width,height),PAPER);d=ImageDraw.Draw(im)
     top=195 if transition else 0
     d.rectangle((0,top,width,top+58),fill=INK)
@@ -47,12 +48,12 @@ def card_image(card,path):
     d.rectangle((0,im.height-7,width//2,im.height),fill=RED);d.rectangle((width//2,im.height-7,width,im.height),fill=BLUE)
     if transition:
         glove(d,70,50,1.5,RED);glove(d,1100,50,1.5,BLUE)
-        d.text((640,105),'FIGHT NIGHT',font=font(36,True),anchor='mm',fill=INK)
+        d.text((640,105),('ВЕЧЕР БОЁВ' if language=='ru' else 'FIGHT NIGHT'),font=font(36,True),anchor='mm',fill=INK)
     im.save(path)
     return (0,0) if transition else ((1280-im.width)//2,720-im.height-35) if wide else (1280-im.width-28,28)
 
 
-def portrait_card(card,path):
+def portrait_card(card,path,language='uz'):
     """Fight identities without club crests, in the shared Shorts safe area."""
     from .fighters import clean_name
     pair=card.title=='РАЗБОР МАТЧА';width=608
@@ -73,6 +74,7 @@ def portrait_card(card,path):
             if size<=18:raise ValueError('Сократите боевую плашку Shorts, сохранив условие ставки.')
             size-=1
         height=66+len(body)*(size+7)+(30 if card.fixture else 0)
+    if language=='ru':label={'РАЗБОР МАТЧА':'РАЗБОР БОЯ','СМЕНА МАТЧА':'СЛЕДУЮЩИЙ БОЙ','ИТОГИ ВЫПУСКА':'ИТОГИ'}.get(card.title,card.title)
     im=Image.new('RGBA',(width,height),PAPER);d=ImageDraw.Draw(im)
     d.rectangle((0,0,width,47),fill=INK);d.text((24,13),label,font=font(17,True),fill=PAPER)
     glove(d,width-47,5,.47,RED)

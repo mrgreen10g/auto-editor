@@ -62,3 +62,6 @@ class RussianFootballShortsRenderTests(ShortsRenderTests):
 
 class UzbekCombatShortsRenderTests(ShortsRenderTests):
     profile = 'uz_combat_shorts'
+
+class RussianCombatShortsRenderTests(ShortsRenderTests):
+    profile = 'ru_combat_shorts'

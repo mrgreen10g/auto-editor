@@ -42,6 +42,9 @@ def classify(text):
 
 
 def events(block,matches):
+    if block.language=='ru':
+        from .ru_combat import events as russian_events
+        return russian_events(block,matches)
     from .fighters import same_fighter
     sources=[s for s in matches if s.id in block.match_ids and s.sport=='combat']
     names=block_teams(block.title);owner=None;result=[];usage={};aliases={n:[n] for n in names}
@@ -95,7 +98,7 @@ def migrate_optional_archives(project):
     Accepted trims and deliberate skips remain exactly as authored. Keep an
     unaccepted proposal available in the picker, without a mandatory task.
     """
-    if not project.profile.startswith('uz_combat'):return
+    if not project.profile.startswith(('uz_combat','ru_combat')):return
     for block in project.blocks:
         for event in block.events:
             if not event.skipped and (not event.selection or not event.selection.accepted):
@@ -234,6 +237,9 @@ def synchronize(project,cache,cancel,log):
         segments=transcribe(project,Path(cache)/'combat-asr-v2',cancel,log)
         prepare(project,segments,sum(p['duration'] for p in sources(project)))
         log('Бои размечены по речи; сомнительные плашки сохранены для проверки.')
+    prepare_archives(project,cache,cancel,log)
+
+def prepare_archives(project,cache,cancel,log):
     from .goals import GoalScanner,propose
     for b in project.blocks:
         local=[s for s in project.matches if s.id in b.match_ids and s.sport=='combat']
@@ -344,6 +350,7 @@ def bind_confirmed_archives(block,matches):
     """
     from .fighters import same_fighter
     from .combat_cards import coverage
+    if block.language=='ru':from .ru_combat import coverage
     if not block.asr_lines:return
     slots=events(block,matches);used=set();sources={s.id:s for s in matches}
     for event in block.events:

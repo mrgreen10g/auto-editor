@@ -19,7 +19,10 @@ def parse(text, profile, pair_hints=()):
         value=value.strip(' #*[]():').strip()
         matches=[h for h in pair_hints if key(h)==key(value)]
         if len(set(matches))==1:return matches[0]
-        title=(spoken_fixture(value,sport) or fixture(value,sport)) if language=='uz' else ru_fixture_heading(value,sport)
+        if profile.startswith('ru_combat'):
+            from .ru_combat import pair_heading
+            title=pair_heading(value)
+        else:title=(spoken_fixture(value,sport) or fixture(value,sport)) if language=='uz' else ru_fixture_heading(value,sport)
         if title:return title
         if explicit:
             # The marker explicitly declares a fixture, including clubs outside dictionaries.
@@ -67,17 +70,21 @@ def parse(text, profile, pair_hints=()):
         stop=boundaries[n+1][0] if n+1<len(boundaries) else len(lines)
         body=lines[end+1:stop]
         if n==len(boundaries)-1:
-            split=next((j for j,row in enumerate(body) if key(row) in OUTRO|{'итоги','итог','вывод','заключение'} or re.match(r'^(?:demak\b|итак\b|подвед[её]м итоги\b)',key(row))),None)
+            split=next((j for j,row in enumerate(body) if key(row) in OUTRO|{'итоги','итог','вывод','заключение'} or re.match(r'^(?:demak\b|итак\b|подвед[её]м итоги\b|повторю\s+(?:\w+\s+)?(?:основны\w*\s+)?прогноз)',key(row))),None)
             if split is not None:
                 outro.script=clean('\n'.join(body[split:])).strip();body=body[:split]
         # Keep spoken announcements, but omit editorial pair headings and markers.
         announcement=clean(lines[start]).strip(' #*[](): ')
-        if spoken_fixture(announcement,sport):body=[announcement]+body
+        if profile.startswith('ru_combat'):
+            from .ru_combat import CUE
+            if re.match(CUE,announcement,re.I):body=[announcement]+body
+        elif spoken_fixture(announcement,sport):body=[announcement]+body
         script=clean('\n'.join(body)).strip()
         if not script:raise ValueError('У пары отсутствует текст разбора: '+title)
         block=Block(title=title,script=script,language=language,sport=sport)
         if sport=='combat':
-            from .combat_shorts import classify
+            if language=='ru':from .ru_combat import classify
+            else:from .combat_shorts import classify
             picks=[body for row in script.splitlines() for kind,body in [classify(row)] if kind=='ПРОГНОЗ']
             if picks:block.forecast=picks[-1]
         blocks.append(block)

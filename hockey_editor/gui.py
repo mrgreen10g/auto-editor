@@ -611,7 +611,7 @@ class App(EpisodeMixin,MatchMixin):
     def add_block(self):
         self.collect()
         self.project.whole_episode=True
-        self.project.blocks.append(Block(title=f'Разбор {len(self.project.blocks) + 1}',language='uz' if self.project.profile.startswith('uz_') else 'ru',sport='combat' if self.project.profile.startswith('uz_combat') else 'football' if 'football' in self.project.profile else 'hockey'))
+        self.project.blocks.append(Block(title=f'Разбор {len(self.project.blocks) + 1}',language='uz' if self.project.profile.startswith('uz_') else 'ru',sport='combat' if self.project.profile.startswith(('uz_combat','ru_combat')) else 'football' if 'football' in self.project.profile else 'hockey'))
         self.index = len(self.project.blocks) - 1
         self.invalidate()
         self.refresh()
@@ -750,7 +750,7 @@ class App(EpisodeMixin,MatchMixin):
             if str(self.logo_frames[slot])==selected:self.logo_select.current(slot);break
 
     def refresh_logo_tabs(self):
-        if self.project.profile.startswith('uz_combat'):
+        if self.project.profile.startswith(('uz_combat','ru_combat')):
             self.logos_panel.pack_forget();return
         if not self.logos_panel.winfo_manager():self.logos_panel.pack(fill='x',pady=8)
         from .graphics import block_teams
@@ -1057,7 +1057,7 @@ class App(EpisodeMixin,MatchMixin):
                 self.jobs.put(('plan', plan))
                 from .review import pending
                 from .goals import unresolved
-                if render and engine.project.profile.startswith('uz_combat') and any(unresolved(b) for b in engine.project.blocks):
+                if render and engine.project.profile.startswith(('uz_combat','ru_combat')) and any(unresolved(b) for b in engine.project.blocks):
                     self.jobs.put(('footage_review_required',None))
                 elif render and pending(plan):
                     self.jobs.put(('review_required',None))

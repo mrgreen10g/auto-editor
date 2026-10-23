@@ -15,7 +15,7 @@ def identity(name,profile):
 
 
 def assign(project):
-    if project.profile.startswith('uz_combat') or not project.logo_folder:return []
+    if project.profile.startswith(('uz_combat','ru_combat')) or not project.logo_folder:return []
     folder=Path(project.logo_folder)
     if not folder.is_dir():return ['Папка логотипов не найдена: '+str(folder)]
     files=[p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in ('.png','.jpg','.jpeg','.webp')]

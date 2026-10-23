@@ -42,6 +42,10 @@ def recording_key(project):
     return hashlib.sha256(json.dumps([MODEL_REV,'nhl-names-v1',recognition_prompt(project),[identity(p) for p in project.host_paths()]]).encode()).hexdigest()
 
 def recognition_prompt(project):
+    if project.profile.startswith('ru_combat'):
+        from .graphics import block_teams
+        from .fighters import name_spellings
+        return '; '.join(dict.fromkeys(v for b in project.blocks for n in block_teams(b.title) if n for v in name_spellings(n)))[:1500]
     from .nhl_players import prompt_names
     if 'football' in project.profile:
         from .football_players import mentioned_names as prompt_names
@@ -127,7 +131,7 @@ def _align_episode(blocks,segments):
     # Preserve a short spoken sign-off omitted from the written script.
     last=result[blocks[-1].uid][-1] if result[blocks[-1].uid] else None
     if last and blocks[-1].kind=='outro':
-        tail=[w for s in segments for w in s['words'] if w['start']>=last.end-.01]
+        tail=[w for s in segments for w in s['words'] if w['start']>=last.end-.01 and w['end']<=last.end+2]
         if tail and tail[-1]['end']-last.end<=2 and tokens(' '.join(w['word'] for w in tail)) in (['пока'],['всем','пока']):
             last.end=tail[-1]['end']
     previous=0
@@ -178,6 +182,10 @@ def prepare(project,blocks,cache,cancel,log):
             conflict=semantic_conflict(line.text,line.recognized)
             if conflict:line.review_reason=conflict;line.agreement=1.
         log(f'Подтверждён раздел «{b.title}»: {lines[0].start:.2f}–{lines[-1].end:.2f} с.')
+    if project.profile.startswith('ru_combat'):
+        for block in blocks:block.asr_lines=[vars(line).copy() for line in result[block.uid][0]]
+        from .combat import prepare_archives
+        prepare_archives(project,cache,cancel,log)
     return result
 
 

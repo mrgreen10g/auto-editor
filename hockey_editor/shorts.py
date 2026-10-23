@@ -139,7 +139,7 @@ def finish_cards(project,block,lines,cards,inserts,duration):
         for c in existing:cards.remove(c)
         reason='; '.join(dict.fromkeys([l.review_reason for l in lines[a:z+1] if l.review_reason]+[c.review_reason for c in existing if c.review_reason]))
         cards.append(Card(lo,hi,'ТЕЛЕГРАМ','Telegram',a if a==z else -1,review_reason=reason))
-    if block.language=='ru' and not block.top5_rank:
+    if block.language=='ru' and block.sport!='combat' and not block.top5_rank:
         cards=[c for c in cards if not (c.title=='РЕЗУЛЬТАТ ВСТРЕЧИ' and 0<=c.line<len(lines) and re.search(r'главный вопрос|пишите.*комментари',lines[c.line].text,re.I))]
         for c in cards:
             if c.title=='РЕЗУЛЬТАТ ВСТРЕЧИ' and 0<=c.line<len(lines) and re.match(r'^результат\b',lines[c.line].text,re.I):c.text=block.title+'\n'+c.text

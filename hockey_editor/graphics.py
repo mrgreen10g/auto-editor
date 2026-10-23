@@ -141,15 +141,15 @@ def card_image(card, path, logos=None,profile='ru_hockey'):
 
 
 def _card_image(card, path, logos=None,profile='ru_hockey'):
-    if profile=='uz_combat_shorts':
+    if profile in ('uz_combat_shorts','ru_combat_shorts'):
         from .combat_graphics import portrait_card
-        return portrait_card(card,path)
+        return portrait_card(card,path,language='ru' if profile.startswith('ru_') else 'uz')
     if profile.endswith('_shorts'):
         from .shorts_graphics import card_image as short_card
         return short_card(card,path,logos,language="uz" if profile.startswith("uz_") else "ru")
-    if profile.startswith('uz_combat'):
+    if profile.startswith(('uz_combat','ru_combat')):
         from .combat_graphics import card_image as combat_card
-        return combat_card(card,path)
+        return combat_card(card,path,language='ru' if profile.startswith('ru_') else 'uz')
     logos=logos or {}
     if card.title=='РАЗБОР МАТЧА': return match_card(card,path,logos,profile)
     if card.title=='ПРОГНОЗ':return forecast_card(card,path,profile)

@@ -11,11 +11,12 @@ from .timeline import Plan,Card,frame
 
 def assembly_project(project):
     runtime=copy.copy(project)
-    runtime.blocks=([project.intro]+project.blocks+([project.outro] if project.outro.script.strip() or not project.profile.startswith('uz_combat') else [])) if project.full_video else project.blocks
+    runtime.blocks=([project.intro]+project.blocks+([project.outro] if project.outro.script.strip() or not project.profile.startswith(('uz_combat','ru_combat')) else [])) if project.full_video else project.blocks
     if project.profile.endswith('_shorts'):
         runtime.blocks=[b for b in runtime.blocks if b.kind=='analysis' or b.script.strip()]
     elif project.profile.startswith('uz_'):
         runtime.blocks=[b for b in runtime.blocks if b.kind=='analysis' or b.script.strip() or b.asr_lines]
+    if project.profile.startswith('ru_combat'):runtime.blocks=[b for b in runtime.blocks if b.script.strip()]
     return runtime
 
 
@@ -210,7 +211,7 @@ class EpisodeEngine(Engine):
         if self.project.full_video:
             # Uzbek scripts can contain CTAs omitted in the actual recording.
             # Spoken overlays validate their assets in asr_framing_cards.
-            required=() if self.project.profile.endswith('_shorts') else ('disclaimer',) if self.project.profile.startswith('uz_') else ('disclaimer','telegram','subscribe')
+            required=() if self.project.profile.endswith('_shorts') else ('disclaimer',) if self.project.profile.startswith(('uz_','ru_combat')) else ('disclaimer','telegram','subscribe')
             for key in required:
                 if not self.project.assets.get(key) or not Path(self.project.assets[key]).is_file():raise ValueError('Добавьте материал полного выпуска: '+{'disclaimer':'дисклеймер','telegram':'Telegram','subscribe':'подписка'}[key])
             for key,path in self.project.assets.items():
@@ -230,7 +231,7 @@ class EpisodeEngine(Engine):
         runtime=assembly_project(self.project)
         snapshot=[(copy.deepcopy(b.edit_plan),b.edit_key) for b in runtime.blocks]
         try:
-            if self.project.profile.startswith('ru_') and (self.project.full_video or self.project.settings.cut_pauses) and runtime.blocks[0].script.strip():
+            if self.project.profile.startswith('ru_') and (self.project.full_video or self.project.settings.cut_pauses or self.project.profile.startswith('ru_combat')) and runtime.blocks[0].script.strip():
                 from .ru_speech import prepare
                 return self._assemble(runtime,prepare(self.project,runtime.blocks,self.cache,self.cancel,self.log))
             return self._assemble(runtime)

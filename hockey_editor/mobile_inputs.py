@@ -289,7 +289,7 @@ class Inputs:
         if any(r['status']!='ready' for r in files):problems.append('Дождитесь загрузок или уберите ненужные материалы.')
         for r in files:
             if r['status']=='ready' and (not r['path'] or not Path(r['path']).is_file()):problems.append('Файл недоступен: '+r['name'])
-            if r['role']=='match' and (not r['fighter'] if d['profile'].startswith('uz_combat') else not r['home'] or not r['away']):problems.append('Укажите участников записи: '+r['name'])
+            if r['role']=='match' and (not r['fighter'] if d['profile'].startswith(('uz_combat','ru_combat')) else not r['home'] or not r['away']):problems.append('Укажите участников записи: '+r['name'])
         counts={b['uid']:sum(r['role']=='match' and r['block']==b['uid'] and r['status']=='ready' for r in files) for b in d['blocks']}
         notes=d.get('import_notes',[])+[b['title']+': записей нет, останется ведущий.' for b in d['blocks'] if not counts[b['uid']]]
         return dict(problems=problems,notes=notes,hosts=[r['name'] for r in hosts],counts=counts,can_create=not problems)
@@ -320,7 +320,7 @@ class Inputs:
                 for block in project.blocks:block.match_ids=[]
                 ready=[r for r in d['files'] if r['status']=='ready'];project.hosts=[r['path'] for r in ready if r['role']=='host'];project.host=project.hosts[0]
                 project.full_video=True;project.whole_episode=True;project.settings.use_manual_clips=False
-                sport='combat' if d['profile'].startswith('uz_combat') else 'football' if 'football' in d['profile'] else 'hockey'
+                sport='combat' if d['profile'].startswith(('uz_combat','ru_combat')) else 'football' if 'football' in d['profile'] else 'hockey'
                 for r in ready:
                     if r['role']!='match':continue
                     m=MatchSource(r['path'],r['fighter'] if sport=='combat' else r['home'],r['away'],sport=sport,fighter=r['fighter']);project.matches.append(m)

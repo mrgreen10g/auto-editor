@@ -10,6 +10,7 @@ from .media import probe,ffmpeg
 
 
 def prepared_script(block):
+    if block.sport=='combat' and block.language=='ru':return block.script
     if block.language=='uz' and block.sport=='hockey':
         from .uz_hockey import clean_script
         return clean_script(block.script)
@@ -56,6 +57,9 @@ def forecast_text(block):
     if block.sport=='combat':
         from .combat import classify
         if block.forecast:return block.forecast
+        if block.language=='ru':
+            from .ru_combat import primary_forecast
+            return primary_forecast(block.script)
     if block.language=='uz':
         if block.sport=='hockey':
             from .uz_hockey import classify
@@ -78,6 +82,9 @@ def optional_subscription(cards,duration):
 
 
 def framing_cards(project,block,lines,duration):
+    if project.profile.startswith('ru_combat'):
+        from .ru_combat import framing_cards as russian_cards
+        return russian_cards(project,block,lines,duration)
     if '_top5_' in project.profile:return [],[]
     if project.profile in ('ru_hockey_shorts','ru_football_shorts'):
         cards=[]

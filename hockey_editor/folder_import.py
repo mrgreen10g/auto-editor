@@ -24,9 +24,16 @@ def root_files(folder):
 
 def parse_episode(text,profile,pair_hints=()):
     from .script_sections import parse
-    return parse(text,profile,pair_hints) or _parse_episode(text,profile)
+    result=parse(text,profile,pair_hints) or _parse_episode(text,profile)
+    if profile.startswith('ru_combat'):
+        from .ru_combat import primary_forecast
+        for block in result[1]:block.forecast=primary_forecast(block.script)
+    return result
 
 def _parse_episode(text,profile):
+    if profile.startswith('ru_combat'):
+        from .ru_combat import parse_script
+        return parse_script(text,shorts=profile.endswith('_shorts'))
     if '_top5_' in profile:
         from .top5 import parse_script
         return parse_script(text,'football' if 'football' in profile else 'hockey')
@@ -48,7 +55,7 @@ def _parse_episode(text,profile):
         from .uz_hockey import parse_script as parse
     elif profile=='uz_football':
         from .uzbek import parse_script as parse
-    elif profile.startswith('uz_combat'):
+    elif profile.startswith(('uz_combat','ru_combat')):
         from .combat import parse_script as parse
     else:
         from .framing import split_full_script
@@ -60,7 +67,7 @@ def identity(name,profile):
     if 'football' in profile:
         from .team_names import football_identity
         return football_identity(name) or compact(name)
-    if profile.startswith('uz_combat'):
+    if profile.startswith(('uz_combat','ru_combat')):
         from .fighters import identity as canonical
         return canonical(name)
     from .hockey_names import identity as hockey_identity
@@ -83,7 +90,7 @@ def media_files(folder):
 def source_names(path,profile):
     """Infer only from the recording filename, never the forecast folder."""
     text=Path(path).stem.replace('_',' ')
-    if profile.startswith('uz_combat'):return '',''
+    if profile.startswith(('uz_combat','ru_combat')):return '',''
     if 'football' in profile:
         from .team_names import football_names
         found=football_names(text)
@@ -130,7 +137,7 @@ def build_import(project,folder,host,script,overrides=None):
             if path in seen:
                 notes.append('Повтор файла пропущен: '+str(path));continue
             a,b=source_names(path,draft.profile)
-            source=MatchSource(str(path),a,b,sport='combat' if draft.profile.startswith('uz_combat') else 'football' if 'football' in draft.profile else 'hockey')
+            source=MatchSource(str(path),a,b,sport='combat' if draft.profile.startswith(('uz_combat','ru_combat')) else 'football' if 'football' in draft.profile else 'hockey')
             if source.sport=='combat':
                 candidates=[n for n in block_teams(block.title) if identity(n,draft.profile) in (identity(path.stem,draft.profile),identity(path.parent.name,draft.profile))]
                 if len(candidates)==1:source.fighter=source.home=candidates[0]

@@ -76,6 +76,9 @@ def polished_argument(body,heard,script):
 
 
 def confidence(card,line,block,project):
+    if block.language=='ru' and block.sport=='combat':
+        from .ru_combat import confidence as russian_confidence
+        return russian_confidence(card,line,block,project)
     """Only the displayed fact needs proof; unrelated paraphrases don't veto it."""
     from .combat import name_position,pair_in
     from .graphics import block_teams

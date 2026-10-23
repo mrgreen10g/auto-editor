@@ -27,7 +27,7 @@ class Engine:
         return hashlib.sha256(json.dumps(data,ensure_ascii=False).encode()).hexdigest()
 
     def analyze(self,source_floor=0,speech=None,recover=True):
-        if recover and speech is None and self.project.profile.startswith('ru_') and self.project.settings.cut_pauses and getattr(self,'recover_speech',True):
+        if recover and speech is None and self.project.profile.startswith('ru_') and (self.project.settings.cut_pauses or self.project.profile.startswith('ru_combat')) and getattr(self,'recover_speech',True):
             self.project.validate(self.index)
             from .ru_speech import prepare
             found=prepare(self.project,self.project.blocks,self.cache,self.cancel,self.log)
@@ -130,6 +130,10 @@ class Engine:
         meta={c.path:probe(c.path) for c in block.clips}
         if any(not x['video'] for x in meta.values()):raise ValueError('Игровая вставка должна содержать видео.')
         inserts,cards,extra=placements(block,lines,meta,duration,p.settings.insert_frequency,shorts=p.profile.endswith('_shorts'))
+        if block.kind=='analysis' and p.profile.startswith('ru_combat'):
+            from .ru_combat import framing_cards as promos
+            extra_cards,notes=promos(p,block,lines,duration)
+            cards.extend(extra_cards);extra.extend(notes)
         if block.kind!='analysis':
             from .framing import framing_cards
             from .review import framing_draft
@@ -157,7 +161,7 @@ class Engine:
 
     def render(self,plan,target,draft=False):
         self.check();self.project.validate(self.index)
-        if not draft and self.project.profile.startswith('uz_combat'):
+        if not draft and self.project.profile.startswith(('uz_combat','ru_combat')):
             from .goals import unresolved
             if any(unresolved(b) for b in self.project.blocks):raise ValueError('Проверьте боевые вставки или выберите «Оставить ведущего» перед экспортом.')
         from .editing import validate_plan

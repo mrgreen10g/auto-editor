@@ -42,6 +42,15 @@ def name_index():
             k=name_key(spelling)
             if k in result and result[k][0]!=english:raise ValueError('Ambiguous fighter alias: '+spelling)
             result[k]=(english,uzbek,variants)
+    from .fighter_russian import NAMES,VARIANTS as RU_VARIANTS
+    for english,russian in NAMES.items():
+        row=result.get(name_key(english),(english,english,()))
+        variants=tuple(dict.fromkeys((*row[2],russian,*RU_VARIANTS.get(english,()))))
+        row=(row[0],row[1],variants)
+        for spelling in (english,row[0],row[1],*variants):
+            key=name_key(spelling)
+            if key in result and name_key(result[key][0])!=name_key(row[0]):raise ValueError('Ambiguous fighter alias: '+spelling)
+            result[key]=row
     return result
 
 @lru_cache(maxsize=8192)
@@ -52,6 +61,9 @@ def identity(name):
 
 def canonical_name(name,language='en'):
     row=name_index().get(name_key(name))
+    if language=='ru':
+        from .fighter_russian import NAMES
+        return next((ru for en,ru in NAMES.items() if name_key(en)==name_key(row[0] if row else name)),clean_name(name))
     return row[1 if language=='uz' else 0] if row else clean_name(name)
 
 

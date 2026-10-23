@@ -146,13 +146,13 @@ class EpisodeMixin:
                 if draft.recording_times:
                     try:
                         from .recording_times import parse_times
-                        parse_times(draft.recording_times,len(draft.blocks),allow_promos=draft.profile.endswith('_shorts'),include_outro=not draft.profile.startswith('uz_combat') or bool(fields['outro'].get('1.0','end').strip()))
+                        parse_times(draft.recording_times,len(draft.blocks),allow_promos=draft.profile.endswith('_shorts'),include_outro=not draft.profile.startswith(('uz_combat','ru_combat')) or bool(fields['outro'].get('1.0','end').strip()))
                     except ValueError as error:return messagebox.showerror('Таймкоды записи',str(error),parent=w)
             for key,field in fields.items():getattr(draft,key).script=field.get('1.0','end').strip()
             draft.assets={k:v.get().strip() for k,v in asset_vars.items()};draft.full_video=enabled.get()
             draft.asset_folder=material_folder.get()
             if draft.full_video:
-                if any(len(getattr(draft,k).script)<(3 if draft.profile.endswith('_shorts') else 30) for k in fields if not (draft.profile.endswith('_shorts') and not getattr(draft,k).script) and not (draft.profile.startswith('uz_combat') and k=='outro' and not draft.outro.script)):return messagebox.showerror('Тексты','Заполните начало и завершение.',parent=w)
+                if any(len(getattr(draft,k).script)<(3 if draft.profile.endswith('_shorts') else 30) for k in fields if not (draft.profile.endswith('_shorts') and not getattr(draft,k).script) and not (draft.profile.startswith(('uz_combat','ru_combat')) and k=='outro' and not draft.outro.script)):return messagebox.showerror('Тексты','Заполните начало и завершение.',parent=w)
                 required=() if draft.profile.endswith('_shorts') else ('disclaimer',) if draft.profile.startswith('uz_') else ('disclaimer','telegram','subscribe')
                 if any(not draft.assets.get(k) or not Path(draft.assets[k]).is_file() for k in required):return messagebox.showerror('Материалы','Выберите дисклеймер.' if draft.profile.startswith('uz_') else 'Выберите дисклеймер, Telegram и подписку.',parent=w)
                 if any(v and not Path(v).is_file() for v in draft.assets.values()):return messagebox.showerror('Материалы','Один из выбранных файлов не найден.',parent=w)
