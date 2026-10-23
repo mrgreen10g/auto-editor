@@ -2,7 +2,7 @@
 import json,os
 from pathlib import Path
 
-PROFILES={'ru':[('ru_combat','Бои · лонг'),('ru_combat_shorts','Бои · Shorts'),('ru_hockey','Хоккей · лонг'),('ru_football','Футбол · лонг'),('ru_hockey_shorts','Хоккей · Shorts'),('ru_football_shorts','Футбол · Shorts'),('ru_hockey_top5_shorts','Хоккей · Shorts ТОП‑5'),('ru_football_top5_shorts','Футбол · Shorts ТОП‑5')],
+PROFILES={'ru':[('ru_hockey','Хоккей · лонг'),('ru_combat','Бои · лонг'),('ru_combat_shorts','Бои · Shorts'),('ru_football','Футбол · лонг'),('ru_hockey_shorts','Хоккей · Shorts'),('ru_football_shorts','Футбол · Shorts'),('ru_hockey_top5_shorts','Хоккей · Shorts ТОП‑5'),('ru_football_top5_shorts','Футбол · Shorts ТОП‑5')],
           'uz':[('uz_football','Футбол · лонг'),('uz_hockey','Хоккей · лонг'),('uz_combat','Бои · лонг'),('uz_combat_shorts','Бои · Shorts'),('uz_football_shorts','Футбол · Shorts'),('uz_hockey_shorts','Хоккей · Shorts')]}
 
 

@@ -100,6 +100,8 @@ class RussianCombatTests(unittest.TestCase):
   from hockey_editor.goals import propose,unresolved
   b.events=propose(found,{},[s]);self.assertFalse(unresolved(b));self.assertTrue(b.events[0].skipped)
  def test_profiles_and_graphics(self):
+  from hockey_editor.profiles import PROFILES
+  self.assertEqual(PROFILES['ru'][0][0],'ru_hockey')
   from hockey_editor.graphics import card_image
   from PIL import Image
   with tempfile.TemporaryDirectory() as folder:
