@@ -133,6 +133,7 @@ def primary_forecast(script):
     return picks[0] if picks else ''
 
 def events(block,matches):
+    if block.kind!='analysis':return []
     from .fighters import same_fighter
     sources=[s for s in matches if s.id in block.match_ids and s.sport=='combat'];owner=None;result=[];usage={}
     for row in ([l['text'] for l in block.asr_lines] if block.asr_lines else split_script(block.script)):
@@ -140,11 +141,12 @@ def events(block,matches):
         if hits:owner=hits[0] if len(hits)==1 else None
         title,_=classify(row);t=plain(row)
         if title in ('ПРОГНОЗ','УСЛОВИЯ ПРОГНОЗА') or re.search(r'телеграм|telegram|подпис|лайк|ставк|коэффициент',t):continue
-        if not owner or not re.search(r'удар|борьб|борцов|защит|стойк|дистанц|давлен|тейкдаун|проход|контрол|ногами|руками|сабмиш|нокаут|размен',t):continue
-        available=[s for s in sources if same_fighter(s.fighter,owner)]
+        generic=not owner and bool(re.search(r'бой|поедин|раунд|соперник',t))
+        if (not owner and not generic) or not re.search(r'удар|борьб|борцов|защит|стойк|дистанц|давлен|тейкдаун|проход|контрол|ногами|руками|сабмиш|нокаут|размен|темп|атак|финиш|эпизод|раунд',t):continue
+        available=[s for s in sources if (same_fighter(s.fighter,owner) if owner else any(same_fighter(s.fighter,n) for n in block_teams(block.title)))]
         source=min(available,key=lambda s:usage.get(s.id,0)) if available else None
         if source:usage[source.id]=usage.get(source.id,0)+1
-        result.append(EventRequest(source.id if source else '',row,'play',requested_teams=[owner]))
+        result.append(EventRequest(source.id if source else '',row,'play',requested_teams=[source.fighter] if source else [owner] if owner else []))
     return result
 
 def coverage(expected,heard):

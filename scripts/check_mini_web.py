@@ -148,7 +148,14 @@ def check():
                 app.plan=copy.deepcopy(bridge.editor.app.plan) if bridge.editor.app.plan else None
                 from hockey_editor.timeline import Plan,Card,Line
                 app.plan=Plan(0,8,[(0,8)],[Line('Тестовая речь',0,8)],[],[Card(1,4,'СТАТИСТИКА','Три гола')],[],8)
+                kit=root/'telegram-kit';kit.mkdir();tg=kit/'telegram.mp4';tg.write_bytes(Path(original_host).read_bytes())
+                app.project.asset_folder=str(kit);app.project.assets['telegram']=str(tg)
                 click('#editTab');expect(page.locator('#editRows .item')).to_have_count(1)
+                click('#elementList > summary');page.get_by_text('Добавить Telegram-вставку',exact=True).click()
+                page.locator('#rangeStart').fill('00:05.00');page.locator('#rangeEnd').fill('00:05.80');click('#newTelegram')
+                assert app.plan.cards[-1].title=='ТЕЛЕГРАМ' and app.plan.cards[-1].asset==str(tg.resolve())
+                click('#editUndo');assert len(app.plan.cards)==1
+                page.locator('#elementList').evaluate('(e)=>e.open=false')
                 click('#elementList > summary');click('#editRows .item');page.locator('#editType').select_option('ВОПРОС ЗРИТЕЛЮ');page.locator('#editText').fill('Кто победит?');page.locator('#editStart').fill('00:01.50');click('#saveEdit')
                 assert app.plan.cards[0].title=='ВОПРОС ЗРИТЕЛЮ' and app.plan.cards[0].start==1.5
                 click('#editUndo');assert app.plan.cards[0].title=='СТАТИСТИКА'
@@ -237,6 +244,12 @@ def check():
                 expect(page.locator('#scriptRefreshStatus')).to_contain_text('разборов: 2')
                 assert 'Свежая правка сценария' in page.locator('#inputScript').input_value()
                 assert 'Свежая правка сценария' in bridge.inputs.load(page.evaluate('draftId'))['blocks'][0]['script']
+                extra=existing/'СКА — ЛАДА';extra.mkdir();(extra/'СКА — Лада.mp4').write_bytes(b'archive')
+                edited=page.locator('#inputScript').input_value().replace('Итак, повторю','СКА — ЛАДА\nСКА играет дома. Мой прогноз — победа СКА.\nИтак, повторю')
+                page.locator('#inputScript').fill(edited);click('#parseInput')
+                expect(page.locator('#scriptRefreshStatus')).to_contain_text('разборов: 3')
+                updated=bridge.inputs.load(page.evaluate('draftId'))
+                assert list(bridge.inputs.summary(updated)['counts'].values())==[1,1,1]
                 assert not errors,errors
                 browser.close()
         finally:stop.set();gateway.close()

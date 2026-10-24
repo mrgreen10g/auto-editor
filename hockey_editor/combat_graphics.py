@@ -50,7 +50,7 @@ def card_image(card,path,language='uz'):
         glove(d,70,50,1.5,RED);glove(d,1100,50,1.5,BLUE)
         d.text((640,105),('ВЕЧЕР БОЁВ' if language=='ru' else 'FIGHT NIGHT'),font=font(36,True),anchor='mm',fill=INK)
     im.save(path)
-    return (0,0) if transition else ((1280-im.width)//2,720-im.height-35) if wide else (1280-im.width-28,28)
+    return (0,0) if transition else ((1280-im.width)//2,720-im.height-35) if wide else (28,28)
 
 
 def portrait_card(card,path,language='uz'):

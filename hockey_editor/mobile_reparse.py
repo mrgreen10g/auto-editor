@@ -51,11 +51,14 @@ def refresh_script(inputs,data,from_file=False):
             if not path.is_file():raise RemoteError('Файл сценария недоступен. Вставьте обновлённый текст в поле сценария.')
             text=read_script(path)
         else:text=data.get('text','')
+        from .mobile_sources import update_hints,reconcile
+        d=copy.deepcopy(d);update_hints(d)
         result=parse(d,text);reopen(result);reconcile_files(result)
+        added=reconcile(inputs,result)
         target=Path(d['folder'])/'Сценарий'/'text.txt';target.parent.mkdir(exist_ok=True)
         from . import drive_upload as storage
         # Keep the imported source distinct from the editable working copy.
         if not from_file or not result.get('script_source'):result['script_source']=str(target)
         temporary=target.with_name('text-'+secrets.token_hex(4)+'.tmp');temporary.write_text(str(text),encoding='utf-8');temporary.replace(target)
         inputs.save(result)
-        return dict(ok=True,count=len(result['blocks']),updated=result['script_updated'],previous_project=result.get('previous_project',''))
+        return dict(ok=True,count=len(result['blocks']),updated=result['script_updated'],added=added,previous_project=result.get('previous_project',''))

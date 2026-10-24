@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 from .media import probe,run
 
-DETECTOR_VERSION='combat-live-illustrations-v6'
+DETECTOR_VERSION='combat-live-illustrations-v7'
 
 
 def clock_value(text):
@@ -127,17 +127,24 @@ def confident_fight(start,end,observations,motion,cuts):
     Missing/frozen/reversed clocks and cuts fail closed. In particular a gap
     between two OCR successes must not cover an ad or a round break.
     """
-    points=[o for o in observations if start-2.1<=o[0]<=end+2.1]
-    if len(points)<3 or points[0][0]>start or points[-1][0]<end:return False
-    if any(len(o)<3 or o[1] is None or o[2]<.8 for o in points):return False
+    # Read a wider context to distinguish a single OCR dropout from a break.
+    context=[o for o in observations if start-6.1<=o[0]<=end+6.1]
+    valid=[o for o in context if len(o)>=3 and o[1] is not None and o[2]>=.65]
+    before=[o for o in valid if o[0]<=start];after=[o for o in valid if o[0]>=end]
+    if not before or not after:return False
+    points=[o for o in valid if before[-1][0]<=o[0]<=after[0][0]]
+    if len(points)<3 or start-points[0][0]>2.1 or points[-1][0]-end>2.1:return False
+    gaps=any(b[0]-a[0]>2.1 for a,b in zip(points,points[1:]))
+    if gaps and (len(valid)<4 or len(valid)/max(1,len(context))<.7):return False
+    if sum(o[2] for o in points)/len(points)<.78:return False
     direction=None
     for a,b in zip(points,points[1:]):
         dt=b[0]-a[0];dv=b[1]-a[1]
-        if not 0<dt<=2.1 or abs(abs(dv)-dt)>.75 or dv==0:return False
+        if not 0<dt<=4.1 or abs(abs(dv)-dt)>1 or dv==0:return False
         sign=1 if dv>0 else -1
         if direction is not None and sign!=direction:return False
         direction=sign
-    lo=max(0,int((start-.5)*2));hi=min(len(motion),int((end+.5)*2)+1)
+    lo=max(0,int(start*2));hi=min(len(motion),int(end*2)+1)
     local=motion[lo:hi]
     return bool(len(local)>=5 and len(cuts)>=hi and not any(cuts[lo:hi]) and sum(v>=.2 for v in local)/len(local)>=.3)
 
@@ -148,9 +155,9 @@ def illustration_candidates(observations,motion,cuts,duration):
     for lo,hi in live_ranges(observations,duration):
         start=lo
         while hi-start>=2.5:
-            end=min(hi,start+3.5)
+            end=min(hi,start+5)
             if confident_fight(start,end,observations,motion,cuts):
                 result.append(Candidate(f'combat-{len(result)}',None,None,(start+end)/2,start,end,.86,
                     'Идущий бой: непрерывный таймер, движение и отсутствие смены сцены. Иллюстрация, без утверждения о конкретном действии.',kind='play'))
-            start=end+2
+            start=end+.5
     return result

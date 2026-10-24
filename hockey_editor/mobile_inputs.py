@@ -60,58 +60,57 @@ class Inputs:
 
     def server_files(self,data):
         from .mini_export import folder
-        from .folder_import import presenter_folder,root_files
+        from .folder_import import root_files
         from .profiles import PROFILES
         profile=data.get('profile')
         if profile not in {p for rows in PROFILES.values() for p,_ in rows}:raise RemoteError('Выберите шаблон.')
-        root=folder(data.get('folder',''));hosts,scripts=root_files(presenter_folder(root,profile))
-        return dict(hosts=[str(p) for p in hosts],scripts=[str(p) for p in scripts])
+        root=folder(data.get('folder',''))
+        target=root/'shorts' if profile.endswith('_shorts') else root
+        if profile.endswith('_shorts'):
+            choices=[p for p in root.iterdir() if p.is_dir() and not p.is_symlink() and p.name.casefold()=='shorts']
+            if len(choices)>1:raise RemoteError('Выберите единственную папку shorts.')
+            if choices:target=choices[0]
+        if target.is_symlink():raise RemoteError('Выберите обычную папку материалов, не символическую ссылку.')
+        hosts,scripts=root_files(target) if target.is_dir() else ([],[])
+        return dict(hosts=[str(p) for p in hosts],scripts=[str(p) for p in scripts],target=str(target))
 
     def server_import(self,data):
         from .mini_export import folder
-        from .folder_import import presenter_folder,build_import,folder_pair_hints
-        from .model import Project
-        from .profiles import apply_profile
+        from .mobile_sources import ready,reconcile,update_hints
+        from .mobile_reparse import parse,reopen,reconcile_files
         from .script_input import read_script
-        self.server_files(data)  # Validate profile and selected root before writes.
-        root=folder(data['folder']);target=presenter_folder(root,data['profile'])
+        found=self.server_files(data);root=folder(data['folder']);target=Path(found['target'])
+        host=str(data.get('host',''));script=str(data.get('script',''))
+        if host and host not in found['hosts']:raise ValueError('Выберите запись ведущего из списка файлов.')
+        if script and script not in found['scripts']:raise ValueError('Выберите сценарий из списка файлов.')
         with self.lock:
             previous=next((r for r in self.catalog() if Path(r['folder'])==target and r['profile']==data['profile']),None)
-            if previous and not data.get('refresh'):
-                saved=self.load(previous['id']);return dict(id=saved['id'],count=len(saved['blocks']),updated=saved.get('script_updated',0),refreshed=False)
-            old=self.load(previous['id']) if previous else None
+            if data.get('id'):
+                old=self.load(data['id'])
+                if old['profile']!=data['profile']:raise RemoteError('Шаблон папки должен совпадать с текущим черновиком.')
+                previous=next(r for r in self.catalog() if r['id']==old['id'])
+            else:old=self.load(previous['id']) if previous else None
+            if old and not data.get('refresh'):return dict(id=old['id'],count=len(old['blocks']),updated=old.get('script_updated',0),refreshed=False)
             if old and self.active and self.active[0]==old['id']:raise RemoteError('Дождитесь загрузки материалов.',409)
-            if not previous and (target/'mobile-draft.json').exists():raise RemoteError('В папке уже есть черновик другого выпуска. Выберите его в списке или используйте другую папку.')
-            project=Project();apply_profile(project,data['profile'])
-            project,_,notes=build_import(project,root,data.get('host',''),data.get('script',''))
-            if not project.blocks:raise RemoteError('Разборы не найдены. Проверьте сценарий и выбранный шаблон.')
-            d=dict(id=secrets.token_hex(16),name=target.name,folder=str(target),profile=project.profile,preset=str(data.get('preset','')),asset_folder='',script=read_script(data['script']),intro=asdict(project.intro),blocks=[asdict(b) for b in project.blocks],outro=asdict(project.outro),files=[],created=time.time(),project='',import_notes=notes)
-            d['pair_hints']=folder_pair_hints(root,project.profile)
-            d['script_source']=str(Path(data['script']).resolve());d['script_updated']=time.time()
-            if old:
-                from .mobile_reparse import parse,reopen,reconcile_files
-                # Parse the newly read file, preserving IDs only for unique identical pairs.
-                old['pair_hints']=d['pair_hints']
-                refreshed=parse(old,d['script']);reopen(refreshed);reconcile_files(refreshed)
-                refreshed.update(script_source=d['script_source'],preset=d['preset'],import_notes=refreshed.get('import_notes',[])+notes)
-                d=refreshed
-                # The selected presenter replaces the old presenter reference; files stay on disk.
-                for row in d['files']:
-                    if row['role']=='host':row['status']='removed'
-                for b,saved in zip(project.blocks,d['blocks']):b.uid=saved['uid']
-            def ready(path,role,block='',home='',away='',fighter=''):
-                if any(r['role']==role and r['block']==block and r['status']=='ready' and Path(r.get('path','')).resolve()==Path(path).resolve() for r in d['files']):return
-                p=Path(path);row=self.new_file(d,dict(role=role,block=block,name=p.name,home=home,away=away,fighter=fighter))
-                row.update(path=str(p),size=p.stat().st_size,received=p.stat().st_size,status='ready',source='local',message='Файл на сервере')
-            ready(project.host,'host')
-            for b in project.blocks:
-                for m in project.matches:
-                    if m.id in b.match_ids:ready(m.path,'match',b.uid,m.home,m.away,m.fighter)
-            (target/'Результат').mkdir(exist_ok=True)
+            if not old and (target/'mobile-draft.json').exists():raise RemoteError('В папке уже есть черновик другого выпуска.')
+            d=copy.deepcopy(old) if old else dict(id=secrets.token_hex(16),name=target.name,folder=str(target),profile=data['profile'],preset=str(data.get('preset','')),asset_folder='',script='',blocks=[],files=[],created=time.time(),project='',import_notes=[])
+            from .mobile_sources import roots
+            d['server_roots']=[str(p) for p in roots(d)]+[str(root)]
+            update_hints(d);reopen(d)
+            if script:
+                d=parse(d,read_script(script));reconcile_files(d);d['script_source']=str(Path(script).resolve())
+            elif d.get('script'):
+                # Refresh hints and discover additional headings from a newly attached root.
+                d=parse(d,d['script']);reconcile_files(d)
+            d['preset']=str(data.get('preset',d.get('preset','')))
+            if host:ready(self,d,host,'host')
+            added=reconcile(self,d)
+            target=Path(d['folder']);target.mkdir(parents=True,exist_ok=True)
+            for section in ('Ведущий','Матчи','Сценарий','Результат'):(target/section).mkdir(exist_ok=True)
             self.save(d)
             if not previous:
                 rows=self.catalog();rows.append({k:d[k] for k in ('id','name','folder','profile','created')});storage.write(self.index,rows)
-            return dict(id=d['id'],count=len(d['blocks']),updated=d['script_updated'],refreshed=bool(previous))
+            return dict(id=d['id'],count=len(d['blocks']),updated=d.get('script_updated',time.time()),refreshed=bool(previous),added=added)
     def create(self,data):
         from .profiles import PROFILES
         profile=data.get('profile')
@@ -134,6 +133,28 @@ class Inputs:
             for p in ('Ведущий','Матчи','Сценарий','Результат'): (target/p).mkdir(exist_ok=True)
             self.save(draft);rows=self.catalog();rows.append({k:draft[k] for k in ('id','name','folder','profile','created')}|{'request':request});storage.write(self.index,rows)
             return dict(id=draft['id'])
+    def local(self,data):
+        from .mini_export import folder
+        from .folder_import import VIDEO
+        from .mobile_sources import ready
+        p=Path(str(data.get('path',''))).resolve();folder(str(p.parent));role=data.get('role')
+        if role not in ('host','match','script') or not p.is_file() or p.is_symlink():raise RemoteError('Выберите существующий файл материала на сервере.')
+        if role=='script':
+            if p.suffix.lower() not in ('.txt','.docx'):raise RemoteError('Выберите TXT или DOCX.')
+            from .script_input import read_script
+            result=self.script(dict(id=data['id'],text=read_script(p),reparse=True))
+            with self.lock:
+                d=self.load(data['id']);d['script_source']=str(p);self.save(d)
+            return result
+        if p.suffix.lower() not in VIDEO:raise RemoteError('Выберите видеозапись.')
+        from .media import probe
+        info=probe(p)
+        if not info.get('video') or info.get('duration',0)<=0 or role=='host' and not info.get('audio'):raise RemoteError('Проверьте видео; у ведущего должна быть звуковая дорожка.')
+        with self.lock:
+            d=self.load(data['id']);self.mutable(d)
+            added=ready(self,d,p,role,str(data.get('block','')),str(data.get('home','')),str(data.get('away','')),str(data.get('fighter','')))
+            self.save(d);return dict(ok=True,added=added)
+
     def script(self,data):
         from .mobile_reparse import refresh_script
         return refresh_script(self,data)

@@ -119,11 +119,18 @@ def build_import(project,folder,host,script,overrides=None):
     draft.host=str(host);draft.hosts=[str(host)];draft.matches=[]
     draft.full_video=True;draft.whole_episode=True;draft.recording_times=''
     draft.episode_plan=None;draft.episode_key='';draft.settings.use_manual_clips=False
+    draft.matches,mapping,notes=discover_matches(draft.blocks,draft.profile,root,overrides)
+    return draft,mapping,notes
+
+
+def discover_matches(blocks,profile,folder,overrides=None):
+    """Pair folders are independent of presenter/script arrival order."""
+    root=Path(folder).resolve();matches=[]
     directories=sorted((p for p in root.iterdir() if p.is_dir() and not p.is_symlink() and p.name.casefold()!='shorts'),key=lambda p:p.name.casefold())
     notes=[];mapping={};seen={};used=set();overrides=overrides or {}
-    for i,block in enumerate(draft.blocks):
-        expected=pair_key(block.title,draft.profile)
-        choices=[p for p in directories if expected and pair_key(p.name,draft.profile)==expected]
+    for i,block in enumerate(blocks):
+        expected=pair_key(block.title,profile)
+        choices=[p for p in directories if expected and pair_key(p.name,profile)==expected]
         selected=Path(overrides[i]).resolve() if overrides.get(i) else choices[0] if len(choices)==1 else None
         if selected is None:
             notes.append(block.title+(': несколько подходящих папок — выберите одну.' if choices else ': папка матчей не найдена.'))
@@ -136,15 +143,15 @@ def build_import(project,folder,host,script,overrides=None):
         for path in files:
             if path in seen:
                 notes.append('Повтор файла пропущен: '+str(path));continue
-            a,b=source_names(path,draft.profile)
-            source=MatchSource(str(path),a,b,sport='combat' if draft.profile.startswith(('uz_combat','ru_combat')) else 'football' if 'football' in draft.profile else 'hockey')
+            a,b=source_names(path,profile)
+            source=MatchSource(str(path),a,b,sport='combat' if profile.startswith(('uz_combat','ru_combat')) else 'football' if 'football' in profile else 'hockey')
             if source.sport=='combat':
-                candidates=[n for n in block_teams(block.title) if identity(n,draft.profile) in (identity(path.stem,draft.profile),identity(path.parent.name,draft.profile))]
+                candidates=[n for n in block_teams(block.title) if identity(n,profile) in (identity(path.stem,profile),identity(path.parent.name,profile))]
                 if len(candidates)==1:source.fighter=source.home=candidates[0]
-            draft.matches.append(source);block.match_ids.append(source.id);seen[path]=source.id
+            matches.append(source);block.match_ids.append(source.id);seen[path]=source.id
     for p in directories:
         if p not in used:notes.append('Папка не использована: '+p.name)
-    return draft,mapping,notes
+    return matches,mapping,notes
 
 def unresolved_sources(project):
     return [m for m in project.matches if (not m.fighter.strip() if m.sport=='combat' else not m.home.strip() or not m.away.strip())]

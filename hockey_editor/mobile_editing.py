@@ -106,11 +106,13 @@ class Editor:
             for kind,items in [('card',p.cards),('insert',p.inserts)]:
                 for i,c in enumerate(items):
                     s=next((s for s in p.sections if s['start']<=c.start<s['end']),{})
-                    rows.append(dict(id=f'{kind}:{i}',kind=kind,start=c.start,end=c.end,text=c.text if kind=='card' else c.label,title=c.title if kind=='card' else 'Видео-вставка',source_in=c.source_in,source_min=getattr(c,'source_min',0),source_max=getattr(c,'source_max',None),block=s.get('block_id',''),block_title=s.get('title',''),owner=getattr(c,'forecast_id',''),asset=bool(getattr(c,'asset','')),offset_x=getattr(c,'offset_x',0),offset_y=getattr(c,'offset_y',0),scale=getattr(c,'scale',1),review_id=getattr(c,'review_id','')))
+                    rows.append(dict(id=f'{kind}:{i}',kind=kind,start=c.start,end=c.end,text=c.text if kind=='card' else c.label,title=c.title if kind=='card' else 'Видео-вставка',source_in=c.source_in,source_min=getattr(c,'source_min',0),source_max=getattr(c,'source_max',None),block=s.get('block_id',''),block_title=s.get('title',''),owner=getattr(c,'forecast_id',''),asset=bool(getattr(c,'asset','')),asset_path=getattr(c,'asset',''),offset_x=getattr(c,'offset_x',0),offset_y=getattr(c,'offset_y',0),scale=getattr(c,'scale',1),review_id=getattr(c,'review_id','')))
         from .graphics import block_teams
         teams=list(dict.fromkeys(n for block in app.project.blocks for n in block_teams(block.title) if n))
         logos=[dict(team=n,path=app.project.team_logos.get(n,''),available=bool(app.project.team_logos.get(n) and Path(app.project.team_logos[n]).is_file())) for n in teams]
-        return dict(logo_folder=app.project.logo_folder,logos=logos,revision=revision,locked=b.locked(),duration=p.duration if p else 0,items=sorted(rows,key=lambda r:(r['start'],r['kind'])),sections=p.sections if p else [],types=CARD_TYPES,blocks=[dict(uid=x.uid,title=x.title,script=x.script,kind=x.kind) for x in [app.project.intro,*app.project.blocks,app.project.outro]],settings=asdict(app.project.settings),music=app.project.music,recording_times=app.project.recording_times,matches=[dict(id=m.id,title=m.title,score_box=m.score_box) for m in app.project.matches],history=[dict(label=x['label'],time=x['time']) for x in reversed(h['undo'])],undo=bool(h['undo'] and h['undo'][-1]['fingerprint']==stamp),redo=bool(h['redo'] and h['redo'][-1]['fingerprint']==stamp))
+        from .mobile_telegram import choices
+        telegram_default,telegram_assets=choices(app.project)
+        return dict(telegram_default=telegram_default,telegram_assets=telegram_assets,logo_folder=app.project.logo_folder,logos=logos,revision=revision,locked=b.locked(),duration=p.duration if p else 0,items=sorted(rows,key=lambda r:(r['start'],r['kind'])),sections=p.sections if p else [],types=CARD_TYPES,blocks=[dict(uid=x.uid,title=x.title,script=x.script,kind=x.kind) for x in [app.project.intro,*app.project.blocks,app.project.outro]],settings=asdict(app.project.settings),music=app.project.music,recording_times=app.project.recording_times,matches=[dict(id=m.id,title=m.title,score_box=m.score_box) for m in app.project.matches],history=[dict(label=x['label'],time=x['time']) for x in reversed(h['undo'])],undo=bool(h['undo'] and h['undo'][-1]['fingerprint']==stamp),redo=bool(h['redo'] and h['redo'][-1]['fingerprint']==stamp))
     def apply(self,data):
         b=self.bridge;app=self.app;b.check_revision(data)
         if b.locked() or b.media_busy:raise RemoteError('Дождитесь завершения обработки/предпросмотра и закройте окно правок на ПК.',409)
@@ -166,6 +168,10 @@ class Editor:
                     from .media import probe
                     duration=probe(source.path)['duration'];start=frame(parse_time(data['start']));end=frame(parse_time(data['end']));source_in=frame(parse_time(data.get('source_in',0)))
                     p.inserts.append(Insert(source.path,start,end,source_in,source.title,source_min=0,source_max=duration));label='Добавлена видео-вставка'
+                elif op=='add-telegram':
+                    from .mobile_telegram import source,validate
+                    card=Card(frame(parse_time(data['start'])),frame(parse_time(data['end'])),'ТЕЛЕГРАМ','Telegram',-1,source(app.project,data.get('asset')),frame(parse_time(data.get('source_in',0))))
+                    validate(card);p.cards.append(card);label='Добавлена Telegram-вставка'
                 elif op=='add':
                     p.cards.append(Card(frame(parse_time(data['start'])),frame(parse_time(data['end'])),'СТАТИСТИКА',str(data.get('text','Новая плашка'))));label='Добавлена плашка'
                 else:
@@ -180,6 +186,11 @@ class Editor:
                         if kind=='card':
                             card_type(item,data.get('title',item.title),str(data.get('owner','')),app.project)
                             item.text=text;item.line=-1
+                            if item.title=='ТЕЛЕГРАМ':
+                                from .mobile_telegram import source,validate
+                                item.asset=source(app.project,data.get('asset',item.asset))
+                                item.source_in=frame(parse_time(data.get('source_in',item.source_in)))
+                                validate(item)
                             if not item.asset:
                                 for field,lo,hi in [('offset_x',-1280,1280),('offset_y',-1280,1280),('scale',.25,2)]:
                                     value=float(data.get(field,getattr(item,field)))

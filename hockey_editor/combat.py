@@ -42,6 +42,7 @@ def classify(text):
 
 
 def events(block,matches):
+    if block.kind!='analysis':return []
     if block.language=='ru':
         from .ru_combat import events as russian_events
         return russian_events(block,matches)
@@ -60,15 +61,16 @@ def events(block,matches):
             tail=re.split(r'[,;.!?]',line.rstrip(' .!?'))[-1]
             last=[n for n in names if name_position(n,tail) is not None]
             owner=last[0] if len(last)==1 and re.search(r'misol|esa|rekord|statistik|tanish|bazasi',norm(tail)) else None
-            continue
+            if not re.search(r'jang|raund|raqib|kurash|bosim',norm(line)):continue
         title,_=classify(line);t=norm(line)
         if title=='ПРОГНОЗ' or any(x in t for x in ('telegram','obuna','layk')):continue
-        if not owner or not re.search(r'zarba|hujum|himoya|nokaut|masofa|texnik|uslub|almashin|bosim|boks|raund|temp|kurash|teykdaun|parter|kombinats|klinch',t):continue
-        eligible=[s for s in sources if same_fighter(s.fighter,owner)]
+        generic=not owner and bool(re.search(r'jang|raund|raqib',t))
+        if (not owner and not generic) or not re.search(r'zarba|hujum|himoya|nokaut|masofa|texnik|uslub|almashin|bosim|boks|raund|temp|kurash|teykdaun|parter|kombinats|klinch',t):continue
+        eligible=[s for s in sources if (same_fighter(s.fighter,owner) if owner else any(same_fighter(s.fighter,n) for n in names))]
         if not eligible:
-            result.append(EventRequest('',line,'play',note='Нет записи бойца '+owner,requested_teams=[owner]));continue
+            result.append(EventRequest('',line,'play',note='Нет записи бойца '+(owner or 'пары'),requested_teams=[owner] if owner else []));continue
         source=min(eligible,key=lambda s:usage.get(s.id,0));usage[source.id]=usage.get(source.id,0)+1
-        result.append(EventRequest(source.id,line,'play',requested_teams=[owner]))
+        result.append(EventRequest(source.id,line,'play',requested_teams=[source.fighter]))
     return result
 
 

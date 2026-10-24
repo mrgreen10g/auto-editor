@@ -65,15 +65,17 @@ async function inputBrowse(path='',offset=0){
 $('inputTab').onclick=()=>guard(()=>switchPage('input'));
 function serverPayload(){return {folder:$('serverFolder').value,profile:$('inputProfile').value,preset:$('inputPreset').value}}
 $('chooseServerFolder').onclick=()=>guard(async()=>{inputFolderTarget='serverFolder';await inputBrowse($('serverFolder').value)});
-$('scanServerFolder').onclick=()=>guard(async()=>{const r=await api('input-server-files',serverPayload());for(const [id,key] of [['serverHost','hosts'],['serverScript','scripts']]){$(id).replaceChildren();for(const p of r[key])$(id).add(new Option(p.split(/[\\/]/).pop(),p));}notice('Выберите ведущего и сценарий, затем импортируйте выпуск.');});
-async function importServerFresh(){
+$('scanServerFolder').onclick=()=>guard(async()=>{const r=await api('input-server-files',serverPayload());for(const [id,key] of [['serverHost','hosts'],['serverScript','scripts']]){$(id).replaceChildren();for(const p of r[key])$(id).add(new Option(p.split(/[\\/]/).pop(),p));$(id).add(new Option('Добавлю позже / сохранить уже добавленное',''));}notice('Выберите доступные материалы. Недостающие можно добавить позже.');});
+async function importServerFresh(attach=false){
+ if(attach&&!draftId)throw Error('Сначала создайте или выберите черновик.');
  $('serverScriptStatus').textContent='Читаю сохранённый файл и заново определяю разборы…';
- const r=await api('input-server-import',{...serverPayload(),host:$('serverHost').value,script:$('serverScript').value,refresh:true});
+ const r=await api('input-server-import',{...serverPayload(),id:attach?draftId:undefined,host:$('serverHost').value,script:$('serverScript').value,refresh:true});
  draftId=r.id;draftLoaded='';await refreshInputs();inputStepTo('summary');
  const message='Файл перечитан · '+new Date(r.updated*1000).toLocaleTimeString()+' · разборов: '+r.count+'. Проверьте сводку и откройте обновлённый проект.';
  $('serverScriptStatus').textContent=message;notice(message);
 }
-$('importServerFolder').onclick=()=>guard(importServerFresh);
+$('importServerFolder').onclick=()=>guard(()=>importServerFresh());
+$('attachServerFolder').onclick=()=>guard(()=>importServerFresh(true));
 for(const b of $('inputSteps').querySelectorAll('button'))b.onclick=()=>inputStepTo(b.dataset.step);
 $('inputSpeaker').onchange=inputProfiles;
 $('draftChoice').onchange=()=>guard(async()=>{draftId=$('draftChoice').value;draftLoaded='';await refreshInputs()});
@@ -87,13 +89,13 @@ async function reparseScript(fromFile=false){
  $('scriptRefreshStatus').textContent=fromFile?'Перечитываю файл с сервера…':'Заново определяю разборы по тексту ниже…';
  try{const r=await api(fromFile?'input-script-reload':'input-script',{id:draftId,text:$('inputScript').value,reparse:true});
  draftLoaded='';await refreshInputs();inputStepTo('script');renderInputBlocks(inputState.draft);
- $('scriptRefreshStatus').textContent='Обновлено '+new Date(r.updated*1000).toLocaleTimeString()+' · разборов: '+r.count+(r.previous_project?'. После проверки сводки откройте обновлённый проект. Предыдущий сохранён.':'. Названия показаны ниже.');
+ $('scriptRefreshStatus').textContent='Обновлено '+new Date(r.updated*1000).toLocaleTimeString()+' · разборов: '+r.count+(r.previous_project?'. После проверки сводки откройте обновлённый проект. Предыдущий сохранён.':'. Добавлено записей из папок: '+(r.added||0)+'.');
  }catch(error){$('scriptRefreshStatus').textContent='Разборы не обновлены: '+error.message;throw error}
 }
 $('parseInput').onclick=()=>guard(()=>reparseScript());
 $('reloadServerScript').onclick=()=>guard(()=>reparseScript(true));
 $('saveTitles').onclick=()=>guard(async()=>{await api('input-settings',{id:draftId,titles:[...$('inputBlocks').querySelectorAll('input')].map(e=>e.value)});await refreshInputs();renderInputBlocks(inputState.draft);inputStepTo('files')});
-$('hostMethod').onchange=()=>{$('hostDrive').hidden=$('hostMethod').value!=='drive';$('hostDevice').hidden=$('hostMethod').value!=='device'};
+$('hostMethod').onchange=()=>{$('hostDrive').hidden=$('hostMethod').value!=='drive';$('hostDevice').hidden=$('hostMethod').value!=='device';$('hostServer').hidden=$('hostMethod').value!=='server'};
 $('addHostLink').onclick=()=>guard(async()=>{await api('input-link',{id:draftId,role:'host',url:$('hostUrl').value});await refreshInputs()});
 function matchData(){return {block:$('inputBlock').value,home:$('matchHome').value,away:$('matchAway').value,fighter:$('matchHome').value}}
 $('addMatchLink').onclick=()=>guard(async()=>{await api('input-link',{id:draftId,role:'match',url:$('matchUrl').value,...matchData()});await refreshInputs()});
@@ -132,3 +134,7 @@ $('saveServerScript').onclick=()=>guard(async()=>{const r=await api('input-scrip
 $('serverScript').onchange=()=>{$('serverScriptEditor').hidden=true;serverScriptVersion=''};
 $('inputBlock').onchange=()=>guard(refreshInputs);
 $('loadScriptDoc').onclick=()=>guard(async()=>{const r=await api('input-doc-start',{url:$('scriptDocUrl').value});notice('Загружаю текст Google Документа…');for(let i=0;i<90;i++){await new Promise(r=>setTimeout(r,1000));const job=await api('input-doc-status',{job:r.job});if(job.status==='error')throw Error(job.error);if(job.status==='ready'){$('inputScript').value=job.text;await reparseScript();return}}throw Error('Загрузка документа занимает слишком много времени. Повторите позже.');});
+
+$('addHostServer').onclick=()=>guard(async()=>{await api('input-local',{id:draftId,role:'host',path:$('hostServerPath').value});await refreshInputs()});
+$('addMatchServer').onclick=()=>guard(async()=>{await api('input-local',{id:draftId,role:'match',path:$('matchServerPath').value,...matchData()});await refreshInputs()});
+$('addScriptServer').onclick=()=>guard(async()=>{await api('input-local',{id:draftId,role:'script',path:$('scriptServerPath').value});draftLoaded='';await refreshInputs();inputStepTo('script')});

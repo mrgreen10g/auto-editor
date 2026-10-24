@@ -143,12 +143,14 @@ def placements(block,lines,clip_meta,duration,frequency='normal',shorts=False):
         start=max(start,intro_end)  # The introduction belongs to the presenter.
         if clip.kind=='play' and not explicit_reference(clip.phrase):
             gap,maximum=({'low':(6,3),'normal':(3,4),'high':(1.5,4)} if shorts else {'low':(15,3.5),'normal':(8,5),'high':(3,7)})[frequency]
+            if block.sport=='combat':
+                gap,maximum=({'low':(4,3),'normal':(1.5,4),'high':(1,4)} if shorts else {'low':(8,4),'normal':(3,5),'high':(1.5,5)})[frequency]
             if inserts and start-inserts[-1].end<gap: continue
             source=clip.origin_path or clip.path
             flexible=clip.flexible_source or clip.context_label.startswith('Архив')
             # Spacing must not sample the same source every third event from an
             # otherwise balanced A/B/C sequence. Prefer a nearby alternate slot.
-            if flexible and source==last_play_source and any(
+            if block.sport!='combat' and flexible and source==last_play_source and any(
                 c.kind=='play' and (c.flexible_source or c.context_label.startswith('Архив'))
                 and (c.origin_path or c.path)!=source and 0<lines[j].start-start<=8
                 for j,c in matched[number+1:]):continue
