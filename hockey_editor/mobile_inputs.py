@@ -81,8 +81,8 @@ class Inputs:
         from .script_input import read_script
         found=self.server_files(data);root=folder(data['folder']);target=Path(found['target'])
         host=str(data.get('host',''));script=str(data.get('script',''))
-        if host and host not in found['hosts']:raise ValueError('Выберите запись ведущего из списка файлов.')
-        if script and script not in found['scripts']:raise ValueError('Выберите сценарий из списка файлов.')
+        if host and Path(host).resolve() not in {Path(p).resolve() for p in found['hosts']}:raise ValueError('Выберите запись ведущего из списка файлов.')
+        if script and Path(script).resolve() not in {Path(p).resolve() for p in found['scripts']}:raise ValueError('Выберите сценарий из списка файлов.')
         with self.lock:
             previous=next((r for r in self.catalog() if Path(r['folder'])==target and r['profile']==data['profile']),None)
             if data.get('id'):
