@@ -29,13 +29,13 @@ def update_hints(d):
     d['server_roots']=[str(p) for p in selected];d['server_root']=str(selected[0]);d['pair_hints']=list(dict.fromkeys(hints))
 
 
-def ready(inputs,d,path,role,block='',home='',away='',fighter=''):
+def ready(inputs,d,path,role,block='',home='',away='',fighter='',explicit=False):
     p=Path(path).resolve()
     existing=[r for r in d['files'] if r['role']==role and r.get('path') and Path(r['path']).resolve()==p]
     if any(r['status']=='ready' and r['block']==block for r in existing):return False
     # Keep explicit removals removed; a pair disappearing is not a manual removal.
-    if any(r['status']=='removed' and not r.get('unassigned') and r['block']==block for r in existing):return False
-    if role=='match' and any(r['status']=='ready' and r['block']!=block for r in existing):
+    if not explicit and any(r['status']=='removed' and not r.get('unassigned') and r['block']==block for r in existing):return False
+    if not explicit and role=='match' and any(r['status']=='ready' and r['block']!=block for r in existing):
         d.setdefault('import_notes',[]).append('Запись уже назначена другому разбору: '+p.name);return False
     row=inputs.new_file(d,dict(role=role,block=block,name=p.name,home=home,away=away,fighter=fighter))
     row.update(path=str(p),size=p.stat().st_size,received=p.stat().st_size,status='ready',source='local',message='Файл на сервере')

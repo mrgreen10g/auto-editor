@@ -50,6 +50,10 @@ class HybridTests(unittest.TestCase):
     inputs.local(dict(id=ident,role='match',block=block,path=str(match),home='Амур',away='Спартак'))
    d=inputs.load(ident);self.assertTrue(inputs.summary(d)['can_create']);self.assertEqual(len(d['files']),2)
    self.assertEqual(d['script_source'],str(script.resolve()))
+   row=next(r for r in d['files'] if r['role']=='host');inputs.edit_file(dict(id=ident,file=row['id'],remove=True))
+   with patch('hockey_editor.media.probe',return_value=dict(duration=10,video=True,audio=True)):
+    inputs.local(dict(id=ident,role='host',path=str(host)))
+   self.assertTrue(inputs.summary(inputs.load(ident))['can_create'])
  def test_legacy_root_is_recovered_for_reparse(self):
   with tempfile.TemporaryDirectory() as folder:
    root=Path(folder);host,script=setup(root);inputs=Inputs(Bridge(app_fixture(root)),root/'index.json')

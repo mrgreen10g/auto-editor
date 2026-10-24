@@ -103,7 +103,7 @@ class Inputs:
                 # Refresh hints and discover additional headings from a newly attached root.
                 d=parse(d,d['script']);reconcile_files(d)
             d['preset']=str(data.get('preset',d.get('preset','')))
-            if host:ready(self,d,host,'host')
+            if host:ready(self,d,host,'host',explicit=True)
             added=reconcile(self,d)
             target=Path(d['folder']);target.mkdir(parents=True,exist_ok=True)
             for section in ('Ведущий','Матчи','Сценарий','Результат'):(target/section).mkdir(exist_ok=True)
@@ -152,7 +152,7 @@ class Inputs:
         if not info.get('video') or info.get('duration',0)<=0 or role=='host' and not info.get('audio'):raise RemoteError('Проверьте видео; у ведущего должна быть звуковая дорожка.')
         with self.lock:
             d=self.load(data['id']);self.mutable(d)
-            added=ready(self,d,p,role,str(data.get('block','')),str(data.get('home','')),str(data.get('away','')),str(data.get('fighter','')))
+            added=ready(self,d,p,role,str(data.get('block','')),str(data.get('home','')),str(data.get('away','')),str(data.get('fighter','')),explicit=True)
             self.save(d);return dict(ok=True,added=added)
 
     def script(self,data):
