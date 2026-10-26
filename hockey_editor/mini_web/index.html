@@ -31,11 +31,12 @@
 <section id="processPanel" hidden>
 <div class="surface"><div class="eyebrow">ТЕКУЩИЙ ВЫПУСК</div><p id="processScope"></p><div id="processSteps"></div></div>
 <div class="surface next-step"><h2 id="processNext">Следующий шаг</h2><p id="primaryHint" class="hint"></p><button id="primaryAction" class="primary wide">Подключение…</button></div>
+<button id="openBoundaries">Границы разделов</button>
 <div id="processJob"><h3 id="processState"></h3><progress id="processProgress" max="100"></progress><p id="processMessage"></p><p id="processElapsed" class="hint"></p><p id="processError"></p><button id="cancelProcess" class="danger" hidden>Остановить обработку</button></div>
 <details class="surface"><summary>Настройки и повторный запуск</summary>
 <label class="check"><input id="autoTiming" type="checkbox"> После проверки видео автоматически искать тайминги</label>
 <p class="hint">Рендер запускается отдельно. После ошибки или отмены автоматический переход не выполняется.</p>
-<div class="secondary-actions"><button id="findClips">Заново найти фрагменты</button><button id="openBoundaries">Границы разделов</button><button id="findTimings">Заново найти тайминги</button></div>
+<div class="secondary-actions"><button id="findClips">Заново найти фрагменты</button><button id="findTimings">Заново найти тайминги</button></div>
 </details>
 <details class="surface"><summary>Журнал обработки</summary><pre id="processLog"></pre></details>
 </section>
