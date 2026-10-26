@@ -201,6 +201,7 @@ class App(EpisodeMixin,MatchMixin):
         self.button(presenter,'Восстановить ссылки',self.relink_media).pack(anchor='w',pady=(6,0))
         framing=ui.card(page,'Начало и завершение','Дисклеймер, представление команд, Telegram, итоги и подписка.')
         self.button(framing,'Настроить полный выпуск…',self.edit_framing).pack(anchor='w')
+        self.button(framing,'Границы разделов…',lambda:__import__('hockey_editor.boundary_ui',fromlist=['open_boundaries']).open_boundaries(self)).pack(anchor='w')
         self.framing_hint=ttk.Label(framing,style='CardMuted.TLabel',wraplength=650);self.framing_hint.pack(anchor='w',pady=(8,0))
         script = ui.card(page, 'Сценарий разбора', 'Вставьте текст так, как его произносит ведущий. Таймкоды не нужны.', '02')
         row = ttk.Frame(script, style='Card.TFrame')
@@ -1067,7 +1068,8 @@ class App(EpisodeMixin,MatchMixin):
                 self.jobs.put(('cancelled',None))
                 self.jobs.put(('log', 'Отменено. Можно изменить настройки и повторить.'))
             except Exception as e:
-                self.jobs.put(('error', str(e)))
+                from .alignment import BoundaryReviewRequired
+                self.jobs.put(('boundary_required' if isinstance(e,BoundaryReviewRequired) else 'error', str(e)))
             finally:
                 self.jobs.put(('done', None))
 
@@ -1144,6 +1146,9 @@ class App(EpisodeMixin,MatchMixin):
                     self.folderbutton.configure(state='normal')
                     self.show_page('export')
                     self.status.set('Готово! Нажмите «Открыть результат», чтобы посмотреть ролик.')
+                elif kind == 'boundary_required':
+                    self.boundary_reason=value;self.stage='boundary_required';self.auto_timing_ready=False
+                    self.log_lines.append(value);self.status.set('Подтвердите границы разделов, затем продолжите.')
                 elif kind == 'error':
                     from .notifications import emit
                     self.auto_timing_ready=False
@@ -1162,6 +1167,10 @@ class App(EpisodeMixin,MatchMixin):
                         self.review_summary.set('Анализ не завершён. Проверьте журнал и повторите.')
                     elif self.stage=='footage_review_required':
                         self.show_page('review');self.reviewtabs.select(self.events_page)
+                    elif self.stage=='boundary_required':
+                        if not getattr(self,'remote_render',False):
+                            from .boundary_ui import open_boundaries
+                            self.root.after_idle(lambda:open_boundaries(self,self.boundary_reason))
                     elif self.stage=='review_required':
                         self.show_page('review')
                         if not getattr(self,'remote_render',False):self.root.after_idle(self.open_speech_review)

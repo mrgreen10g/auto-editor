@@ -3,7 +3,7 @@ from pathlib import Path
 import hashlib,json,re,math,os,shutil
 from . import __version__
 from .media import probe,run,audio_extract,Cancelled
-from .alignment import align,AlignmentError,SpeechIssue
+from .alignment import align,AlignmentError,SpeechIssue,BoundaryReviewRequired
 from .timeline import Plan,Line,Card,keep_ranges,map_time,placements,zoom_windows,frame
 from .graphics import card_image
 
@@ -27,12 +27,13 @@ class Engine:
         return hashlib.sha256(json.dumps(data,ensure_ascii=False).encode()).hexdigest()
 
     def analyze(self,source_floor=0,speech=None,recover=True):
-        if recover and speech is None and self.project.profile.startswith('ru_') and (self.project.settings.cut_pauses or self.project.profile.startswith('ru_combat')) and getattr(self,'recover_speech',True):
+        if recover and speech is None and self.project.profile.startswith('ru_') and (self.project.recording_times.strip() or self.project.settings.cut_pauses or self.project.profile.startswith('ru_combat')) and getattr(self,'recover_speech',True):
             self.project.validate(self.index)
             from .ru_speech import prepare
             found=prepare(self.project,self.project.blocks,self.cache,self.cancel,self.log)
             speech=found[self.project.blocks[self.index].uid]
         try:return self._analyze(source_floor,speech)
+        except BoundaryReviewRequired:raise
         except AlignmentError:
             if not recover or not getattr(self,'recover_speech',True) or speech is not None:raise
             from .ru_speech import prepare
@@ -94,8 +95,9 @@ class Engine:
             cached.write_text(json.dumps({'key':key,'lines':[vars(l) for l in source],'warnings':warnings},ensure_ascii=False,indent=2),encoding='utf-8')
         if not source or any(l.end<=l.start for l in source):
             raise AlignmentError('Некорректная разметка: требуется ручная проверка границ.')
-        if block.kind=='intro' and source[-1].end>120 and not any(l.review_reason for l in source):
-            raise AlignmentError(f'Конец вступления определён на {source[-1].end:.2f} с — позже 02:00. Проверьте границу вступления и первого разбора; это не время начала видео.')
+        if block.kind=='intro' and source[-1].end>120 and not p.recording_times.strip() and not any(l.review_reason for l in source):
+            from .alignment import BoundaryReviewRequired
+            raise BoundaryReviewRequired(f'Конец вступления определён на {source[-1].end:.2f} с — позже 02:00. Проверьте границу вступления и первого разбора; это не время начала видео.')
         warnings=list(warnings)
         if block.source_hint and (abs(block.source_hint[0]-source[0].start)>3 or block.source_hint[-1]>total+1):
             warnings.append('Таймкоды сценария не совпадают с записью. Использована проверка по речи, а не отметки из текста.')

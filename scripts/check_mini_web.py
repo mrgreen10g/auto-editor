@@ -72,6 +72,8 @@ def check():
                 page.screenshot(path=str(ROOT/'build/gui-mini-clip.jpg'),full_page=True)
                 click('#approve');page.locator('#list').wait_for(state='visible')
                 assert app.project.blocks[0].events[0].selection.accepted
+                click('#processTab');click('#openBoundaries');expect(page.locator('#boundaryDialog')).to_be_visible();click('#closeBoundaries')
+                assert not app.project.recording_times
                 # A separate timing launch must work without an output filename/dialog.
                 page.on('dialog',lambda dialog:dialog.accept())
                 timing_calls=[]

@@ -21,6 +21,11 @@ class AlignmentError(SpeechIssue):
     """Acoustic timing is unsafe; a lexical check may recover it."""
     pass
 
+class BoundaryReviewRequired(AlignmentError):
+    """Fatal section mismatch recoverable through explicit recording ranges."""
+    pass
+
+
 def split_script(text):
     result=[]
     for line in text.splitlines():

@@ -1,5 +1,5 @@
 """Local lexical fallback for continuous Russian episodes; script text is retained."""
-import hashlib,json,os,re,urllib.request
+import copy,hashlib,json,os,re,urllib.request
 from pathlib import Path
 from difflib import SequenceMatcher
 import numpy as np
@@ -163,7 +163,26 @@ def prepare(project,blocks,cache,cancel,log):
     if project.settings.cut_pauses:
         segments,cuts=remove_retakes(blocks,segments)
         if cuts:log(f'Удалены повторные неудачные дубли: {len(cuts)}.')
-    try:result=align_episode(blocks,segments)
+    try:
+        if project.recording_times.strip():
+            from .recording_times import recording_ranges
+            from .speech_boundaries import slice_segments
+            from .review import draft_alignment
+            result={}
+            ranges=recording_ranges(project,segments)
+            owners=[project.intro,*project.blocks,project.outro]
+            by_id={b.uid:r for b,r in zip(owners,ranges)}
+            for block in blocks:
+                lo,hi=by_id[block.uid]
+                local=slice_segments(segments,lo,hi)
+                local=copy.deepcopy(local)
+                for segment in local:
+                    segment['start']-=lo;segment['end']-=lo
+                    for word in segment['words']:word['start']-=lo;word['end']-=lo
+                recovered=draft_alignment([block],local,hi-lo,'Ручные границы: проверьте сомнительные фразы.')
+                for line in recovered[block.uid][0]:line.start+=lo;line.end+=lo
+                result.update(recovered)
+        else:result=align_episode(blocks,segments)
     except AlignmentError as error:
         from .review import draft_alignment
         from .host_media import sources

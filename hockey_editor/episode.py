@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 from .engine import Engine
-from .alignment import AlignmentError
+from .alignment import AlignmentError,BoundaryReviewRequired
 from .editing import project_edit_key,store_plan,saved_plan,validate_plan
 from .timeline import Plan,Card,frame
 
@@ -231,10 +231,13 @@ class EpisodeEngine(Engine):
         runtime=assembly_project(self.project)
         snapshot=[(copy.deepcopy(b.edit_plan),b.edit_key) for b in runtime.blocks]
         try:
-            if self.project.profile.startswith('ru_') and (self.project.full_video or self.project.settings.cut_pauses or self.project.profile.startswith('ru_combat')) and runtime.blocks[0].script.strip():
+            if self.project.profile.startswith('ru_') and (self.project.recording_times.strip() or self.project.full_video or self.project.settings.cut_pauses or self.project.profile.startswith('ru_combat')) and runtime.blocks[0].script.strip():
                 from .ru_speech import prepare
                 return self._assemble(runtime,prepare(self.project,runtime.blocks,self.cache,self.cancel,self.log))
             return self._assemble(runtime)
+        except BoundaryReviewRequired:
+            for block,(plan,key) in zip(runtime.blocks,snapshot):block.edit_plan=plan;block.edit_key=key
+            raise
         except AlignmentError:
             for block,(plan,key) in zip(runtime.blocks,snapshot):block.edit_plan=plan;block.edit_key=key
             if not self.project.profile.startswith('ru_'):raise
@@ -256,7 +259,7 @@ class EpisodeEngine(Engine):
             engine.recover_speech=False
             p=engine.analyze(source_floor=max(0,previous-(.15 if self.project.full_video else 1)),**kwargs)
             if p.source_start<previous-1.01:
-                raise AlignmentError('Порядок разборов не совпадает с записью: '+block.title)
+                raise BoundaryReviewRequired('Порядок разборов не совпадает с записью: '+block.title)
             # Refresh intro/outro overlays from current assets and shared bets, even when speech is cached.
             if block.kind!='analysis':
                 from .framing import framing_cards

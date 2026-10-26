@@ -192,6 +192,7 @@ $('pauseUpload').onclick=()=>guard(async()=>{await api('drive-pause',{id:selecte
 
 async function refreshProcess(){
  processState=await api('process-status');const s=processState,j=s.job;
+ if(j?.boundary_required&&!s.locked&&boundarySeen!==j.id){boundarySeen=j.id;await openBoundaries(j.error);}
  $('processScope').textContent=s.scope;$('processNext').textContent=s.next;
  $('processSteps').replaceChildren();
  for(const step of s.steps){const row=document.createElement('p'),name=document.createElement('strong'),value=document.createElement('span');name.textContent=step.name;value.textContent=step.state;row.append(name,value);$('processSteps').append(row)}
@@ -241,3 +242,17 @@ function setupPhoneViewport(){
  const safe=()=>{document.documentElement.style.setProperty('--tg-content-safe-top',((tg?.contentSafeAreaInset?.top||0)+(tg?.safeAreaInset?.top||0))+'px');document.documentElement.style.setProperty('--tg-content-safe-bottom',Math.max(tg?.contentSafeAreaInset?.bottom||0,tg?.safeAreaInset?.bottom||0)+'px')};safe();tg?.onEvent?.('safeAreaChanged',safe);tg?.onEvent?.('contentSafeAreaChanged',safe);
 }
 document.addEventListener('pointerup',e=>{const active=document.activeElement;if(active?.matches('input,textarea,[contenteditable="true"]')&&!e.target.closest('input,textarea,select,button,a,label,summary,video,canvas,[contenteditable="true"]')){active.blur();if(tg?.isVersionAtLeast?.('9.1'))tg.hideKeyboard?.()}});
+
+let boundarySeen='';
+async function openBoundaries(reason=''){
+ editorState=await api('editor-state');if(editorState.locked)throw Error('Дождитесь завершения обработки.');
+ $('boundaryTimes').value=editorState.recording_times||editorState.boundary_suggestion||'';$('boundaryReason').textContent=reason||'Необязательная ручная настройка. По умолчанию всё автоматически.';
+ if(!$('boundaryDialog').open)$('boundaryDialog').showModal();
+}
+$('openBoundaries').onclick=()=>guard(()=>openBoundaries());
+$('closeBoundaries').onclick=()=>$('boundaryDialog').close();
+$('saveBoundaries').onclick=()=>guard(async()=>{
+ await api('editor-action',{revision:editorState.revision,op:'project',recording_times:$('boundaryTimes').value});
+ $('boundaryDialog').close();await refreshProcess();
+ await api('process-start',{stage:'analyze',revision:processState.revision,request:crypto.randomUUID()});await refreshProcess();
+});

@@ -35,7 +35,7 @@
 <details class="surface"><summary>Настройки и повторный запуск</summary>
 <label class="check"><input id="autoTiming" type="checkbox"> После проверки видео автоматически искать тайминги</label>
 <p class="hint">Рендер запускается отдельно. После ошибки или отмены автоматический переход не выполняется.</p>
-<div class="secondary-actions"><button id="findClips">Заново найти фрагменты</button><button id="findTimings">Заново найти тайминги</button></div>
+<div class="secondary-actions"><button id="findClips">Заново найти фрагменты</button><button id="openBoundaries">Границы разделов</button><button id="findTimings">Заново найти тайминги</button></div>
 </details>
 <details class="surface"><summary>Журнал обработки</summary><pre id="processLog"></pre></details>
 </section>
@@ -108,7 +108,7 @@
 <details class="surface"><summary>История изменений</summary><div id="editHistory"></div></details>
 </section>
 </main>
-<dialog id="errorDialog"><h2>Нужно внимание</h2><p id="errorText"></p><button id="closeError" class="primary wide">Понятно</button></dialog>
+<dialog id="boundaryDialog"><h2>Границы разделов</h2><p id="boundaryReason"></p><p>По строке на вступление, каждый разбор и заключение: 00:00 00:39 Вступление. Время исходного видео. Пусто — автоматика.</p><textarea id="boundaryTimes" rows="10"></textarea><button id="saveBoundaries">Сохранить и найти тайминги</button><button id="closeBoundaries">Позже</button></dialog><dialog id="errorDialog"><h2>Нужно внимание</h2><p id="errorText"></p><button id="closeError" class="primary wide">Понятно</button></dialog>
 <footer id="actions" hidden><button id="approve" class="primary">Подтвердить и далее</button><button id="remove" class="danger">Удалить</button><button id="pending">Проверить позже</button></footer>
 <nav id="navigation" aria-label="Разделы"><button id="inputTab"><span>＋</span>Выпуск</button><button id="processTab"><span>01</span>Процесс</button><button id="reviewTab"><span id="reviewBadge">02</span>Проверка</button><button id="editTab"><span>03</span>Монтаж</button><button id="exportTab"><span>04</span>Результат</button></nav>
 <script defer src="/input.js"></script><script defer src="/editor.js"></script><script defer src="/live.js"></script>

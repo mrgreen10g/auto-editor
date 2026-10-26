@@ -60,3 +60,14 @@ def recording_ranges(project,segments):
 def recording_bounds(project,segments):
     ranges=recording_ranges(project,segments)
     return [a for a,b in ranges]+[ranges[-1][1]]
+
+
+def suggested_times(project):
+    """Editable ASR proposal, never a confirmed override until the user saves."""
+    def clock(v):
+        n=round(v*100);return f'{n//6000:02d}:{n//100%60:02d}.{n%100:02d}'
+    rows=[]
+    for b in [project.intro,*project.blocks,project.outro]:
+        if not b.asr_lines:return ''
+        rows.append(f"{clock(b.asr_lines[0]['start'])} {clock(b.asr_lines[-1]['end'])} {b.title}")
+    return '\n'.join(rows)

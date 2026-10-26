@@ -130,7 +130,7 @@ class Process:
         job=self.job
         if not job:return
         if kind=='done':
-            if getattr(self.bridge.app,'stage',job['stage']) not in (job['stage'],'review_required','footage_review_required'):return
+            if getattr(self.bridge.app,'stage',job['stage']) not in (job['stage'],'review_required','footage_review_required','boundary_required'):return
             if job['status'] in ('running','cancelling'):
                 success=job['stage']=='goals' and self.scan_received or job['stage']=='analyze' and self.plan_received
                 job.update(status='completed' if success else 'cancelled' if job['status']=='cancelling' else 'error',message='Этап завершён' if success else 'Этап остановлен')
@@ -147,6 +147,7 @@ class Process:
             job['progress']=int(match[1]) if match else None
         elif kind=='plan':self.plan_received=True
         elif kind=='result':job.update(status='completed',message='Видео готово',progress=100)
+        elif kind=='boundary_required':self.auto_scope=None;job.update(status='review',boundary_required=True,message='Подтвердите границы разделов',error=str(value))
         elif kind=='error':self.auto_scope=None;job.update(status='error',message='Ошибка обработки',error=str(value))
         elif kind=='cancelled':self.auto_scope=None;job.update(status='cancelled',message='Обработка отменена')
-        elif kind in ('review_required','footage_review_required'):job.update(status='review',message='Нужна проверка перед рендером')
+        elif kind in ('review_required','footage_review_required','boundary_required'):job.update(status='review',message='Нужна проверка перед рендером')
