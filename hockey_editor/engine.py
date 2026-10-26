@@ -95,7 +95,7 @@ class Engine:
         if not source or any(l.end<=l.start for l in source):
             raise AlignmentError('Некорректная разметка: требуется ручная проверка границ.')
         if block.kind=='intro' and source[-1].end>120 and not any(l.review_reason for l in source):
-            raise AlignmentError('Начало оказалось за пределами первых двух минут. Требуется проверка по словам.')
+            raise AlignmentError(f'Конец вступления определён на {source[-1].end:.2f} с — позже 02:00. Проверьте границу вступления и первого разбора; это не время начала видео.')
         warnings=list(warnings)
         if block.source_hint and (abs(block.source_hint[0]-source[0].start)>3 or block.source_hint[-1]>total+1):
             warnings.append('Таймкоды сценария не совпадают с записью. Использована проверка по речи, а не отметки из текста.')

@@ -20,7 +20,7 @@ def recording_key(project):
     return hashlib.sha256(json.dumps([MODEL_REV,'beam5-vocabulary-v2',recognition_prompt(project),project.profile,[b.title for b in project.blocks],data]).encode()).hexdigest()
 
 def speech_key(project):
-    return hashlib.sha256(json.dumps(['uz-local-evidence-v13-heard-context',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['uz-local-evidence-v14-spoken-transitions',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
 
 def model_path(cancel,log):
     folder=Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'Models'/'uzbek-turbo'
@@ -176,6 +176,9 @@ def telegram_spans(words):
         if any(v in nxt for v in ('havola','silka','silqa','sivgay','opisani','tavsif')):
             hi+=1
             while hi+1<len(words) and not words[hi]['word'].rstrip().endswith(('.','!','?')):hi+=1
+        # ASR punctuation can merge the promo with the first match.
+        stop=next((j for j in range(i+1,hi+1) if token(words[j]['word']) in ('boshladik','boshlaymiz')),None)
+        if stop is not None:hi=stop-1
         span=(words[lo]['start'],words[hi]['end'])
         if not result or span[0]>result[-1][1]:result.append(span)
     return result
@@ -196,8 +199,36 @@ def contextual_telegram_spans(block,segments,lo,hi,allow_analysis=False):
 
 def recap_cue(text):
     t=norm(text)
-    return bool(re.search(r'qaytar|takror|yakun|xulosa|jaml|(?:demak|deming).*bugungi.*tanlo',t) or
+    # A club having finished a season (yakunlab) is not an episode recap.
+    return bool(re.search(r'\b(?:qaytar\w*|takror\w*|xulosa|jaml\w*)\b',t) or
+                re.search(r'\byakun(?:laymiz|lasak|ida|iy)?\b',t) or
+                re.search(r'\b(?:demak|deming|demir)\b.*bugun.*(?:tanlo|tahlil\s+qildik)',t) or
                 (re.search(r'eslat|isatib',t) and re.search(r'tanlovlar|variantlar',t) and re.search(r'yana|oxir|qisqacha',t)))
+
+
+def section_segments(project,segments):
+    """Split merged ASR sentences only at explicit, locally grounded transitions."""
+    words=[w for s in segments for w in s.get('words',[])]
+    cuts={s['start'] for s in segments};cuts.add(words[-1]['end'] if words else 0.)
+    for i,w in enumerate(words):
+        if token(w['word']) in ('boshladik','boshlaymiz') and i+1<len(words):
+            cuts.add(words[i+1]['start'])
+        text=norm(' '.join(v['word'] for v in words[i:i+5]))
+        if re.match(r"(?:birinchi|ikkinchi|uchinchi|to'rtinchi|beshinchi|oxirgi)\s+(?:uchrashuv|bahs|o.yin)",text):
+            local=words[i:i+16]
+            if any(pair_hits(b.title,local) for b in project.blocks):
+                cuts.add(w['start'])
+                # An ordinal alone at the preceding ASR edge belongs to its pair.
+                for edge in list(cuts):
+                    if w['start']<edge<=words[min(i+1,len(words)-1)]['start']:cuts.discard(edge)
+        if token(w['word']) in ('demak','deming','demir') and recap_cue(' '.join(v['word'] for v in words[i:i+22])):
+            cuts.add(w['start'])
+    result=[];edges=sorted(cuts)
+    for a,z in zip(edges,edges[1:]):
+        selected=[w for w in words if a<=w['start']<z]
+        if selected:result.append(dict(start=selected[0]['start'],end=selected[-1]['end'],text=' '.join(w['word'] for w in selected),words=selected))
+    return result
+
 
 def sections(project,segments):
     if project.profile=='uz_football_shorts':
@@ -207,6 +238,7 @@ def sections(project,segments):
     if project.recording_times.strip():
         from .recording_times import recording_bounds
         return recording_bounds(project,segments),tg,words
+    segments=section_segments(project,segments)
     from .uz_anchors import script_ranges
     grounded=script_ranges([project.intro,*project.blocks,project.outro],segments,words[-1]['end']) if words else None
     if grounded:return [a for a,z in grounded]+[grounded[-1][1]],tg,words
