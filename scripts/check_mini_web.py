@@ -138,14 +138,20 @@ def check():
                 page.locator('#inputScript').fill(SCRIPT);click('#parseInput')
                 assert page.locator('#inputBlocks input').count()==2
                 click('#saveTitles');page.locator('#hostMethod').select_option('device')
-                page.locator('#hostFile').set_input_files(original_host)
+                second_host=root/'second-host.mp4'
+                from hockey_editor.media import run
+                run(['-y','-i',original_host,'-map','0','-c','copy','-metadata','title=Second part',second_host],threading.Event())
+                page.locator('#hostFile').set_input_files([original_host,str(second_host)])
                 expect(page.locator('#deviceProgress')).to_contain_text('готово',timeout=60000)
+                expect(page.locator('#hostParts > div')).to_have_count(2,timeout=60000)
+                click('#hostParts > div:first-child button');expect(page.locator('#hostParts > div:first-child')).to_contain_text('second-host.mp4')
                 click('[data-step="summary"]');expect(page.locator('#activateInput')).to_be_enabled()
                 page.screenshot(path=str(ROOT/'build/gui-mini-create.jpg'),full_page=True)
                 click('#activateInput');expect(page.locator('#processPanel')).to_be_visible()
                 assert Path(app.project_path).name=='Выпуск.hockeyproj'
                 assert len(app.project.blocks)==2 and Path(app.project.host).is_file()
                 assert app.project.full_video and app.project.whole_episode
+                assert len(app.project.hosts)==2 and Path(app.project.hosts[0]).read_bytes()==second_host.read_bytes()
                 # Mobile montage: readable times, edit type, persisted undo/redo.
                 app.plan=copy.deepcopy(bridge.editor.app.plan) if bridge.editor.app.plan else None
                 from hockey_editor.timeline import Plan,Card,Line

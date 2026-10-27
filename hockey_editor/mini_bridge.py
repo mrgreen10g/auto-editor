@@ -281,7 +281,7 @@ class Bridge:
             if kind=='input-doc-status':return document_status(self.inputs,data)
             if kind=='input-script-open':return local_script(self.inputs,data)
             if kind=='input-script-save':return local_script(self.inputs,data,True)
-            actions={'status':self.inputs.status,'mkdir':self.inputs.mkdir,'create':self.inputs.create,
+            actions={'host-links':self.inputs.host_links,'host-order':self.inputs.host_order,'status':self.inputs.status,'mkdir':self.inputs.mkdir,'create':self.inputs.create,
                      'local':self.inputs.local,'server-files':self.inputs.server_files,'server-import':self.inputs.server_import,
                      'script':self.inputs.script,'settings':self.inputs.settings,'upload':self.inputs.upload_init,
                      'finish':self.inputs.finish,'link':self.inputs.link,'retry':self.inputs.retry,

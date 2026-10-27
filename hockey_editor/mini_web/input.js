@@ -27,6 +27,16 @@ async function refreshInputs(){
   renderInputBlocks(d);inputStepTo(d.project?'summary':d.blocks.length?'files':'script');
  }
  if(!$('inputPreset').options.length||$('inputPreset').options.length===1){for(const p of inputState.presets)if(![...$('inputPreset').options].some(o=>o.value===p))$('inputPreset').add(new Option(p,p));}
+ $('hostParts').replaceChildren();
+ const hosts=d.files.filter(r=>r.role==='host'&&r.status!=='removed');
+ for(let i=0;i<hosts.length;i++){
+  const r=hosts[i],box=line($('hostParts'),`${i+1}. ${r.name}`,'div');
+  line(box,r.message||r.status,'small');if(r.url)line(box,r.url,'small');
+  if(!d.project)for(const [label,step] of [['↑ Раньше',-1],['↓ Позже',1]]){
+   const j=i+step;if(j<0||j>=hosts.length)continue;
+   fileAction(box,label,async()=>{const expected=hosts.map(x=>x.id),order=[...expected];[order[i],order[j]]=[order[j],order[i]];await api('input-host-order',{id:d.id,expected,order});await refreshInputs()});
+  }
+ }
  $('inputFiles').replaceChildren();
  for(const r of d.files.filter(r=>r.status!=='removed')){
   const card=document.createElement('div');card.className='input-file';$('inputFiles').append(card);
@@ -38,7 +48,7 @@ async function refreshInputs(){
    line(card,/^(ru|uz)_combat/.test(d.profile)?(r.fighter||'Укажите бойца'):(r.home||'?')+' — '+(r.away||'?'));
    fileAction(card,'Участники записи',async()=>{const home=prompt(/^(ru|uz)_combat/.test(d.profile)?'Какому бойцу принадлежит запись?':'Первая команда архивной записи',r.fighter||r.home);if(home===null)return;const away=/^(ru|uz)_combat/.test(d.profile)?'':prompt('Вторая команда архивной записи',r.away);if(away===null)return;await api('input-edit',{id:d.id,file:r.id,home,away,fighter:home});await refreshInputs()});
   }
-  if(['paused','error'].includes(r.status))fileAction(card,'Продолжить',async()=>{if(r.source==='device'&&r.received<r.size){notice('Выберите тот же файл ещё раз в поле загрузки с устройства.');return}await api('input-retry',{id:d.id,file:r.id});await refreshInputs()});
+  if(['paused','error','queued'].includes(r.status))fileAction(card,'Продолжить',async()=>{if(r.source==='device'&&r.received<r.size){notice('Выберите тот же файл ещё раз в поле загрузки с устройства.');return}await api('input-retry',{id:d.id,file:r.id});await refreshInputs()});
   if(!d.project&&!['downloading','checking'].includes(r.status))fileAction(card,'Убрать из выпуска',async()=>{if(!confirm('Убрать материал из выпуска? Скачанный файл останется на сервере.'))return;await api('input-edit',{id:d.id,file:r.id,remove:true});await refreshInputs()});
  }
  const statusFor=role=>d.files.filter(r=>r.role===role&&r.status!=='removed'&&(role==='host'||r.block===$('inputBlock').value)).map(r=>r.name+' · '+(r.message||r.status)+(r.size?' · '+Math.min(100,Math.round(r.received/r.size*100))+'%':'')).join('\n');
@@ -96,7 +106,7 @@ $('parseInput').onclick=()=>guard(()=>reparseScript());
 $('reloadServerScript').onclick=()=>guard(()=>reparseScript(true));
 $('saveTitles').onclick=()=>guard(async()=>{await api('input-settings',{id:draftId,titles:[...$('inputBlocks').querySelectorAll('input')].map(e=>e.value)});await refreshInputs();renderInputBlocks(inputState.draft);inputStepTo('files')});
 $('hostMethod').onchange=()=>{$('hostDrive').hidden=$('hostMethod').value!=='drive';$('hostDevice').hidden=$('hostMethod').value!=='device';$('hostServer').hidden=$('hostMethod').value!=='server'};
-$('addHostLink').onclick=()=>guard(async()=>{await api('input-link',{id:draftId,role:'host',url:$('hostUrl').value});await refreshInputs()});
+$('addHostLink').onclick=()=>guard(async()=>{await api('input-host-links',{id:draftId,urls:$('hostUrl').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean)});$('hostUrl').value='';await refreshInputs()});
 function matchData(){return {block:$('inputBlock').value,home:$('matchHome').value,away:$('matchAway').value,fighter:$('matchHome').value}}
 $('addMatchLink').onclick=()=>guard(async()=>{await api('input-link',{id:draftId,role:'match',url:$('matchUrl').value,...matchData()});await refreshInputs()});
 $('reuseInput').onclick=()=>guard(async()=>{const [from_draft,file]=$('reuseChoice').value.split(':');if(!file)throw Error('Нет ранее добавленных записей.');await api('input-reuse',{id:draftId,from_draft,file,block:$('inputBlock').value});await refreshInputs()});

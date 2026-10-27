@@ -219,10 +219,11 @@ class Inputs:
                 else:raise RemoteError('Повторите загрузку с подтверждённого места.',409)
             item.update(received=path.stat().st_size,status='uploading');self.save(d)
             return dict(offset=item['received'])
-    def launch(self,d,item,download=False):
+    def launch(self,d,item,download=False,_queued=False):
         self.mutable(d)
-        if self.worker and self.worker.is_alive():raise RemoteError('Дождитесь текущего скачивания или проверки файла.',409)
-        self.active=(d['id'],item['id']);self.cancel.clear();item.update(status='downloading' if download else 'checking',message='Скачивание на сервер' if download else 'Проверка файла');self.save(d)
+        if not _queued and self.worker and self.worker.is_alive():raise RemoteError('Дождитесь текущего скачивания или проверки файла.',409)
+        if not _queued:self.cancel.clear()
+        self.active=(d['id'],item['id']);item.update(status='downloading' if download else 'checking',message='Скачивание на сервер' if download else 'Проверка файла');self.save(d)
         def update(**values):
             with self.lock:
                 fresh=self.load(d['id']);row=self.item(fresh,item['id']);row.update(values);self.save(fresh);item.update(values)
@@ -252,7 +253,12 @@ class Inputs:
                 update(status='ready',message='Готово',path=str(final),received=final.stat().st_size,size=final.stat().st_size)
             except InterruptedError:update(status='paused',message='Остановлено. Можно продолжить.')
             except Exception as e:update(status='error',message=str(e) if isinstance(e,(ValueError,RemoteError)) else 'Не удалось получить файл. Проверьте ссылку, доступ и свободное место; повторите загрузку.')
-            finally:self.active=None
+            finally:
+                with self.lock:
+                    self.active=None
+                    fresh=self.load(d['id'])
+                    queued=next((r for r in fresh['files'] if r['role']=='host' and r['status']=='queued'),None)
+                    if queued and not self.cancel.is_set():self.launch(fresh,queued,True,_queued=True)
         self.worker=threading.Thread(target=work,daemon=True);self.worker.start()
         return dict(ok=True)
     def finish(self,data):
@@ -279,6 +285,41 @@ class Inputs:
             if self.worker and self.worker.is_alive():raise RemoteError('Дождитесь скачивания предыдущего файла.',409)
             item=self.new_file(d,data);item.update(source=source,url=url,profile=d['profile'],name=('Ведущий' if item['role']=='host' else 'Запись')+'.mp4')
             return self.launch(d,item,True)
+    def host_links(self,data):
+        from .mobile_downloads import canonical
+        values=data.get('urls')
+        if not isinstance(values,list) or not values or len(values)>100:raise RemoteError('Добавьте от 1 до 100 ссылок Google Диска.')
+        urls=[]
+        for value in values:
+            source,url=canonical(value)
+            if source!='drive':raise RemoteError('Для ведущего нужны ссылки Google Диска.')
+            if url not in urls:urls.append(url)
+        with self.lock:
+            d=self.load(data['id']);self.mutable(d)
+            if self.worker and self.worker.is_alive():raise RemoteError('Дождитесь текущей загрузки или остановите её.',409)
+            for url in urls:
+                row=next((r for r in d['files'] if r['role']=='host' and r.get('url')==url and r['status']!='removed'),None)
+                if row and row['status']=='ready':continue
+                if row is None:
+                    row=self.new_file(d,dict(role='host'))
+                    row.update(source='drive',url=url,profile=d['profile'],name='Ведущий '+str(sum(r['role']=='host' and r['status']!='removed' for r in d['files']))+'.mp4')
+                row.update(status='queued',message='В очереди скачивания')
+            self.save(d)
+            row=next((r for r in d['files'] if r['role']=='host' and r['status']=='queued'),None)
+            if row:self.launch(d,row,True)
+            return dict(ok=True)
+
+    def host_order(self,data):
+        with self.lock:
+            d=self.load(data['id']);self.mutable(d)
+            positions=[i for i,r in enumerate(d['files']) if r['role']=='host' and r['status']!='removed']
+            current=[d['files'][i]['id'] for i in positions];order=data.get('order')
+            if data.get('expected')!=current:raise RemoteError('Порядок изменился. Обновите список.',409)
+            if not isinstance(order,list) or len(order)!=len(current) or set(order)!=set(current):raise RemoteError('Укажите все части ведущего по одному разу.')
+            by_id={d['files'][i]['id']:d['files'][i] for i in positions}
+            for i,ident in zip(positions,order):d['files'][i]=by_id[ident]
+            self.save(d);return dict(ok=True)
+
     def edit_file(self,data):
         with self.lock:
             d=self.load(data['id']);self.mutable(d);item=self.item(d,data['file'])
