@@ -139,7 +139,6 @@ def check():
                 assert page.locator('#inputBlocks input').count()==2
                 click('#saveTitles');page.locator('#hostMethod').select_option('device')
                 second_host=root/'second-host.mp4'
-                from hockey_editor.media import run
                 run(['-y','-i',original_host,'-map','0','-c','copy','-metadata','title=Second part',second_host],threading.Event())
                 page.locator('#hostFile').set_input_files([original_host,str(second_host)])
                 expect(page.locator('#deviceProgress')).to_contain_text('готово',timeout=60000)
