@@ -142,7 +142,7 @@ class Gateway:
                     if not isinstance(data,dict):raise RemoteError('Нужен объект JSON.')
                     if path=='/api/auth':return self.response(200,{'session':gateway.login(data.get('initData'))})
                     gateway.authorize(self.headers.get('Authorization',''))
-                    if path in {'/api/input-'+k for k in ('status','mkdir','create','script','settings','upload','finish','link','retry','edit','reuse','activate','pause','server-files','server-import','local','script-open','script-save','script-reload','doc-start','doc-status')}:
+                    if path in {'/api/input-'+k for k in ('host-links','host-order','status','mkdir','create','script','settings','upload','finish','link','retry','edit','reuse','activate','pause','server-files','server-import','local','script-open','script-save','script-reload','doc-start','doc-status')}:
                         return self.response(200,gateway.bridge.request(path.removeprefix('/api/'),data))
                     if path not in ('/api/live-scene','/api/live-art','/api/editor-logo-upload','/api/preview-stream','/api/editor-files','/api/editor-state','/api/editor-action','/api/result-status','/api/result-stream','/api/drive-config','/api/drive-start','/api/drive-pause','/api/process-status','/api/process-start','/api/process-cancel','/api/process-config','/api/export-status','/api/folders','/api/export-start','/api/export-cancel','/api/state','/api/item','/api/action','/api/prepare','/api/job','/api/media'):raise RemoteError('Не найдено.',404)
                     result=gateway.bridge.request(path.removeprefix('/api/'),data)
