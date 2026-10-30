@@ -22,7 +22,7 @@ class Engine:
         def stat(p):
             s=Path(p).stat();return [str(Path(p).resolve()),s.st_size,s.st_mtime_ns]
         from .framing import prepared_script
-        data={'version':ALIGNMENT_VERSION,'host':stat(self.project.host) if len(self.project.host_paths())==1 else [stat(v) for v in self.project.host_paths()],'script':prepared_script(self.project.blocks[self.index]),'floor':frame(source_floor)}
+        data={'microphones':[[stat(k),stat(v)] for k,v in self.project.microphones.items() if k in self.project.host_paths()],'version':ALIGNMENT_VERSION,'host':stat(self.project.host) if len(self.project.host_paths())==1 else [stat(v) for v in self.project.host_paths()],'script':prepared_script(self.project.blocks[self.index]),'floor':frame(source_floor)}
         if self.project.profile not in ('ru_hockey','ru_football','ru_hockey_shorts'):data['profile']=self.project.profile
         return hashlib.sha256(json.dumps(data,ensure_ascii=False).encode()).hexdigest()
 
@@ -146,7 +146,7 @@ class Engine:
         from .orientation import detect_rotation
         rotation=detect_rotation(p.host,self.cache,self.cancel,self.log) if p.settings.auto_rotate else p.settings.rotate
         plan=Plan(start,end,keep,lines,inserts,cards,list(warnings)+extra,duration,rotation)
-        if len(parts)>1 or p.full_video:
+        if len(parts)>1 or p.full_video or p.microphones:
             plan.media=media_ranges(p,plan,parts,self.cache,self.cancel,self.log)
         from .review import attach,preserve_edits
         attach(plan,block,p)

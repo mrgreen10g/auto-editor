@@ -38,3 +38,11 @@ class HostPartsTests(unittest.TestCase):
             self.assertEqual([r['status'] for r in rows],['ready','ready'])
             self.assertEqual(called,self.links())
             self.assertEqual(len(set(r['path'] for r in rows)),2)
+
+    def test_microphone_is_optional_and_bound_to_host(self):
+        d=self.inputs.load(self.ident)
+        with self.assertRaises(RemoteError):self.inputs.new_file(d,dict(role='mic',block='missing',name='microphone.mov'))
+        host=self.inputs.new_file(d,dict(role='host',name='camera.mp4'));host['status']='ready'
+        mic=self.inputs.new_file(d,dict(role='mic',block=host['id'],name='mic.mov'))
+        self.assertEqual(mic['block'],host['id'])
+        with self.assertRaises(RemoteError):self.inputs.new_file(d,dict(role='mic',block=host['id'],name='other.mov'))

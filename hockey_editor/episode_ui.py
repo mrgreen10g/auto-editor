@@ -22,13 +22,13 @@ class EpisodeMixin:
 
     def edit_hosts(self):
         if self.busy:return
-        self.collect();paths=[p for p in self.project.host_paths() if p]
-        w=tk.Toplevel(self.root);w.title('Части записи ведущего');w.geometry('800x400');w.transient(self.root)
+        self.collect();paths=[p for p in self.project.host_paths() if p];microphones=dict(self.project.microphones)
+        w=tk.Toplevel(self.root);w.title('Части записи ведущего');w.geometry('1000x480');w.transient(self.root)
         ttk.Label(w,text='Расположите файлы от начала к продолжению. Склеивать видео заранее не нужно.',wraplength=740).pack(anchor='w',padx=16,pady=16)
-        table=ui.table(w,[('order','Порядок',80),('file','Запись ведущего',620)],7);table.master.pack_configure(padx=16)
+        table=ui.table(w,[('order','Порядок',80),('file','Запись ведущего',450),('mic','Микрофон (необязательно)',350)],7);table.master.pack_configure(padx=16)
         def refresh(selected=0):
             table.delete(*table.get_children())
-            for i,path in enumerate(paths):table.insert('','end',iid=str(i),values=(f'Часть {i+1}',Path(path).name))
+            for i,path in enumerate(paths):table.insert('','end',iid=str(i),values=(f'Часть {i+1}',Path(path).name,Path(microphones[path]).name if microphones.get(path) else 'Звук камеры'))
             if paths:table.selection_set(str(min(selected,len(paths)-1)))
         def add():
             values=filedialog.askopenfilenames(parent=w,title='Добавить части в порядке записи',filetypes=[('Видео','*.mp4 *.mov *.mkv *.avi *.webm')])
@@ -41,10 +41,22 @@ class EpisodeMixin:
             if 0<=j<len(paths):paths[i],paths[j]=paths[j],paths[i];refresh(j)
         def remove():
             if table.selection():paths.pop(int(table.selection()[0]));refresh()
+        def microphone(clear=False):
+            if not table.selection():return
+            i=int(table.selection()[0]);path=paths[i]
+            if clear:microphones.pop(path,None)
+            else:
+                value=filedialog.askopenfilename(parent=w,title='Видео или аудио с микрофона для этой части',filetypes=[('Микрофон','*.mp4 *.mov *.mkv *.webm *.mp3 *.wav *.m4a *.aac *.flac')])
+                if value:microphones[path]=value
+            refresh(i)
+        micbar=ttk.Frame(w,padding=12);micbar.pack(fill='x')
+        ttk.Button(micbar,text='Добавить микрофон к выбранной части…',command=microphone).pack(side='left')
+        ttk.Button(micbar,text='Использовать звук камеры',command=lambda:microphone(True)).pack(side='left',padx=8)
         bar=ttk.Frame(w,padding=16);bar.pack(fill='x')
         for text,cmd in [('+ Добавить части',add),('↑ Выше',lambda:move(-1)),('↓ Ниже',lambda:move(1)),('Убрать',remove)]:ttk.Button(bar,text=text,command=cmd).pack(side='left',padx=(0,8))
         def apply():
             if not paths:return messagebox.showinfo('Запись','Добавьте хотя бы одну часть.',parent=w)
+            self.project.microphones={p:microphones[p] for p in paths if microphones.get(p)}
             self.project.hosts=paths[:];self.project.host=paths[0];self.invalidate();self.refresh();w.destroy()
         ttk.Button(w,text='Сохранить порядок',command=apply).pack(anchor='e',padx=16,pady=(0,12))
         refresh();w.grab_set()

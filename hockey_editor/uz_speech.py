@@ -15,7 +15,7 @@ DIGESTS={'config.json':'0bda718f9243009dfbd4163c1890ff1981c90108fe26c615cd698a49
 
 def recording_key(project):
     data=[]
-    for name in project.host_paths():
+    for name in project.host_paths()+[project.microphones[p] for p in project.host_paths() if project.microphones.get(p)]:
         p=Path(name).resolve();s=p.stat();data.append([str(p),s.st_size,s.st_mtime_ns])
     return hashlib.sha256(json.dumps([MODEL_REV,'beam5-vocabulary-v2',recognition_prompt(project),project.profile,[b.title for b in project.blocks],data]).encode()).hexdigest()
 

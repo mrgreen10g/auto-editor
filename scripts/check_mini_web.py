@@ -144,12 +144,21 @@ def check():
                 expect(page.locator('#deviceProgress')).to_contain_text('готово',timeout=60000)
                 expect(page.locator('#hostParts > div')).to_have_count(2,timeout=60000)
                 click('#hostParts > div:first-child button');expect(page.locator('#hostParts > div:first-child')).to_contain_text('second-host.mp4')
+                # Real server file picker, then associate microphone video with the first part.
+                page.locator('#micHost').evaluate('(e)=>e.closest("details").open=true')
+                click('#browseMicFile')
+                page.evaluate('(p)=>browseMaterial(p)',str(Path(original_host).parent))
+                page.locator('#materialFiles button').filter(has_text=Path(original_host).name).first.click()
+                expect(page.locator('#micServerPath')).to_have_value(str(Path(original_host)))
+                click('#addMicServer')
+                expect(page.locator('#inputFiles')).to_contain_text('Микрофон')
                 click('[data-step="summary"]');expect(page.locator('#activateInput')).to_be_enabled()
                 page.screenshot(path=str(ROOT/'build/gui-mini-create.jpg'),full_page=True)
                 click('#activateInput');expect(page.locator('#processPanel')).to_be_visible()
                 assert Path(app.project_path).name=='Выпуск.hockeyproj'
                 assert len(app.project.blocks)==2 and Path(app.project.host).is_file()
                 assert app.project.full_video and app.project.whole_episode
+                assert app.project.microphones.get(app.project.hosts[0])==str(Path(original_host).resolve())
                 assert len(app.project.hosts)==2 and Path(app.project.hosts[0]).read_bytes()==second_host.read_bytes()
                 # Mobile montage: readable times, edit type, persisted undo/redo.
                 app.plan=copy.deepcopy(bridge.editor.app.plan) if bridge.editor.app.plan else None

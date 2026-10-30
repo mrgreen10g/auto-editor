@@ -1,6 +1,6 @@
 """FFmpeg execution, cancellation and bounded metadata reads."""
 from pathlib import Path
-import subprocess, threading, re, os, shutil
+import subprocess, threading, re, os, shutil, math
 from functools import lru_cache
 
 class Cancelled(Exception): pass
@@ -11,9 +11,29 @@ def ffmpeg():
     import imageio_ffmpeg
     return imageio_ffmpeg.get_ffmpeg_exe()
 
+def command_args(args):
+    """Serialize duration options without exponent notation (FFmpeg rejects it)."""
+    result=[]
+    previous=None
+    for value in args:
+        if previous in ('-ss','-sseof','-t','-to','-itsoffset'):
+            try:
+                number=float(value)
+            except (ValueError,TypeError):
+                pass  # Preserve valid HH:MM:SS syntax.
+            else:
+                if not math.isfinite(number):
+                    raise ValueError('Некорректное время FFmpeg.')
+                value=format(number,'.9f')
+                if float(value)==0:value='0'
+        result.append(str(value))
+        previous=str(value)
+    return result
+
+
 def run(args, cancel=None, log_path=None, progress=None):
     flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-    command = [ffmpeg(), '-hide_banner','-nostdin', *map(str,args)]
+    command = [ffmpeg(), '-hide_banner','-nostdin', *command_args(args)]
     proc = subprocess.Popen(command,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,
                             creationflags=flags,text=True,encoding='utf-8',errors='replace')
     lines=[]

@@ -11,9 +11,12 @@ def identity(path):
     return [str(p.resolve()),st.st_size,st.st_mtime_ns]
 
 
-def sources(project):
+def sources(project,cache=None,cancel=None,log=lambda _:None):
     result=[];cursor=0
     for path in project.host_paths():
+        if cache is not None and project.microphones.get(path):
+            from .microphone import prepare
+            path=prepare(path,project.microphones[path],cache,cancel,log)
         info=probe(path)
         if not info['video'] or not info['audio']:raise ValueError('У каждой части ведущего должны быть видео и голос: '+Path(path).name)
         duration=math.floor(info['duration']*30)/30
@@ -23,8 +26,8 @@ def sources(project):
 
 
 def analysis_source(project,cache,cancel,log):
-    parts=sources(project)
-    if len(parts)==1:return project.host,parts[0]['duration'],parts
+    parts=sources(project,cache,cancel,log)
+    if len(parts)==1:return parts[0]['path'],parts[0]['duration'],parts
     key=hashlib.sha256(json.dumps([identity(p['path']) for p in parts]).encode()).hexdigest()
     root=Path(cache).parent/'host-audio';root.mkdir(exist_ok=True)
     path=root/(key+'.wav')

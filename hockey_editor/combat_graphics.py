@@ -12,7 +12,44 @@ def glove(d,x,y,scale=1,color=RED):
     for i in (50,56):d.line(box(17,i,42,i),fill=PAPER,width=max(1,round(2*scale)))
     d.arc(box(17,8,44,32),195,280,fill=PAPER,width=max(1,round(2*scale)))
 
+def transition_image(card,path,language):
+    im=Image.new('RGBA',(1280,720),'#0b1020');d=ImageDraw.Draw(im)
+    for y in range(720):
+        shade=int(9+12*(1-abs(y-360)/360));d.line((0,y,1280,y),fill=(shade,shade+5,shade+17,255))
+    d.polygon([(0,0),(440,0),(160,720),(0,720)],fill='#271425')
+    d.polygon([(1280,0),(1050,0),(800,720),(1280,720)],fill='#102449')
+    for x in range(-720,1600,70):d.line((x,720,x+720,0),fill='#1c2638',width=1)
+    d.rounded_rectangle((52,48,1228,672),radius=24,outline='#39465d',width=2)
+    label=('СЛЕДУЮЩИЙ БОЙ' if language=='ru' else 'KEYINGI JANG') if card.title=='СМЕНА МАТЧА' else ('ИТОГИ ВЕЧЕРА' if language=='ru' else 'YAKUNIY TANLOVLAR')
+    d.text((640,108),label,font=font(25,True),anchor='mm',fill='#b8c8df')
+    d.rectangle((550,145,730,150),fill=RED)
+    if card.title=='СМЕНА МАТЧА':
+        from .fighters import clean_name
+        names=[clean_name(n).upper() for n in block_teams(card.text)]
+        for name,cx,color in zip(names,(335,945),(RED,BLUE)):
+            size=58
+            while size>24 and len(wrap(d,name,font(size,True),470))>3:size-=1
+            rows=wrap(d,name,font(size,True),470)
+            y=340-(len(rows)-1)*(size+12)/2
+            for row in rows:d.text((cx,y),row,font=font(size,True),anchor='mm',fill='white');y+=size+12
+            d.rounded_rectangle((cx-110,510,cx+110,517),radius=3,fill=color)
+        d.ellipse((587,287,693,393),fill='#18243a',outline='#4a5971',width=2)
+        d.text((640,340),'VS',font=font(36,True),anchor='mm',fill='white')
+    else:
+        text=card.text.replace(' · ','\n');size=42
+        while size>=18:
+            rows=[r for part in text.splitlines() for r in wrap(d,part,font(size,True),1030)]
+            if len(rows)*(size+14)<=380:break
+            size-=1
+        if size<18:raise ValueError('Сократите текст итоговой плашки боя.')
+        y=350-(len(rows)-1)*(size+14)/2
+        for row in rows:d.text((640,y),row,font=font(size,True),anchor='mm',fill='white');y+=size+14
+    d.text((640,610),'FIGHT NIGHT  /  ANALYSIS',font=font(17,True),anchor='mm',fill='#8fabc9')
+    im.save(path);return (0,0)
+
+
 def card_image(card,path,language='uz'):
+    if card.title in ('СМЕНА МАТЧА','ИТОГИ ВЫПУСКА'):return transition_image(card,path,language)
     transition=card.title in ('СМЕНА МАТЧА','ИТОГИ ВЫПУСКА');pair=card.title=='РАЗБОР МАТЧА';wide=transition or pair or card.title=='ПРОГНОЗ'
     width=1280 if transition else 1080 if pair else 900 if wide else 420
     height=720 if transition else 180 if pair else 320

@@ -37,11 +37,13 @@ async function refreshInputs(){
    fileAction(box,label,async()=>{const expected=hosts.map(x=>x.id),order=[...expected];[order[i],order[j]]=[order[j],order[i]];await api('input-host-order',{id:d.id,expected,order});await refreshInputs()});
   }
  }
+ const micSelected=$('micHost').value;$('micHost').replaceChildren();for(const h of hosts.filter(r=>r.status==='ready'))$('micHost').add(new Option(h.name,h.id));if([...$('micHost').options].some(o=>o.value===micSelected))$('micHost').value=micSelected;
  $('inputFiles').replaceChildren();
  for(const r of d.files.filter(r=>r.status!=='removed')){
   const card=document.createElement('div');card.className='input-file';$('inputFiles').append(card);
-  line(card,({host:'Ведущий',match:'Запись матча',script:'Сценарий'})[r.role]+' · '+r.name,'strong');
-  if(r.block)line(card,d.blocks.find(b=>b.uid===r.block)?.title||'','small');
+  line(card,({host:'Ведущий',match:'Запись матча',script:'Сценарий',mic:'Микрофон'})[r.role]+' · '+r.name,'strong');
+  if(r.role==='mic')line(card,'Для части: '+(hosts.find(h=>h.id===r.block)?.name||'удалена'),'small');
+  if(r.block&&r.role!=='mic')line(card,d.blocks.find(b=>b.uid===r.block)?.title||'','small');
   line(card,r.message||({uploading:'Передача с устройства',waiting:'Ожидание'})[r.status]||r.status);
   if(r.size)line(card,Math.min(100,Math.round(r.received/r.size*100))+'% · '+(r.received/1048576).toFixed(1)+' / '+(r.size/1048576).toFixed(1)+' МБ','small');
   if(r.role==='match'){
@@ -132,7 +134,7 @@ async function uploadDevice(file,role,extra={}){
 }
 async function filesSelected(element,role){
  if(deviceBusy){notice('Дождитесь передачи выбранного файла.');return}deviceBusy=true;
- try{for(const file of element.files)await uploadDevice(file,role,role==='match'?matchData():{});await refreshInputs();notice('Файлы сохранены на сервере.');}
+ try{for(const file of element.files)await uploadDevice(file,role,role==='match'?matchData():role==='mic'?{block:$('micHost').value}:{});await refreshInputs();notice('Файлы сохранены на сервере.');}
  catch(error){errorNotice(error.message);}finally{deviceBusy=false;element.value='';}
 }
 $('hostFile').onchange=()=>filesSelected($('hostFile'),'host');$('matchFile').onchange=()=>filesSelected($('matchFile'),'match');
@@ -148,3 +150,24 @@ $('loadScriptDoc').onclick=()=>guard(async()=>{const r=await api('input-doc-star
 $('addHostServer').onclick=()=>guard(async()=>{await api('input-local',{id:draftId,role:'host',path:$('hostServerPath').value});await refreshInputs()});
 $('addMatchServer').onclick=()=>guard(async()=>{await api('input-local',{id:draftId,role:'match',path:$('matchServerPath').value,...matchData()});await refreshInputs()});
 $('addScriptServer').onclick=()=>guard(async()=>{await api('input-local',{id:draftId,role:'script',path:$('scriptServerPath').value});draftLoaded='';await refreshInputs();inputStepTo('script')});
+
+let materialRole='host', materialState={};
+async function browseMaterial(path='',offset=0){
+ const data=await api('folders',{path,offset,files:materialRole});materialState=data;
+ $('materialBrowser').hidden=false;$('materialPath').textContent=data.path||'Диски сервера';
+ if(!offset)$('materialFiles').replaceChildren();
+ for(const item of data.folders){
+  const b=document.createElement('button');b.className='item';b.textContent=(item.file?'📄 ':'📁 ')+item.name;
+  b.onclick=()=>guard(async()=>{if(item.file){$(materialRole+'ServerPath').value=item.path;$('materialBrowser').hidden=true;}else await browseMaterial(item.path)});
+  $('materialFiles').append(b);
+ }
+ $('materialMore').hidden=data.next==null;$('materialUp').disabled=!data.path;
+}
+for(const role of ['host','match','script','mic'])$('browse'+role[0].toUpperCase()+role.slice(1)+'File').onclick=()=>guard(async()=>{materialRole=role;await browseMaterial()});
+$('materialRoots').onclick=()=>guard(()=>browseMaterial());
+$('materialUp').onclick=()=>guard(()=>browseMaterial(materialState.parent));
+$('materialMore').onclick=()=>guard(()=>browseMaterial(materialState.path,materialState.next));
+$('materialClose').onclick=()=>{$('materialBrowser').hidden=true};
+
+$('micFile').onchange=()=>filesSelected($('micFile'),'mic');
+$('addMicServer').onclick=()=>guard(async()=>{await api('input-local',{id:draftId,role:'mic',block:$('micHost').value,path:$('micServerPath').value});await refreshInputs()});

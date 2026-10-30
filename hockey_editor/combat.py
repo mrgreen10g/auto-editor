@@ -63,9 +63,10 @@ def events(block,matches):
             owner=last[0] if len(last)==1 and re.search(r'misol|esa|rekord|statistik|tanish|bazasi',norm(tail)) else None
             if not re.search(r'jang|raund|raqib|kurash|bosim',norm(line)):continue
         title,_=classify(line);t=norm(line)
-        if title=='ПРОГНОЗ' or any(x in t for x in ('telegram','obuna','layk')):continue
-        generic=not owner and bool(re.search(r'jang|raund|raqib',t))
-        if (not owner and not generic) or not re.search(r'zarba|hujum|himoya|nokaut|masofa|texnik|uslub|almashin|bosim|boks|raund|temp|kurash|teykdaun|parter|kombinats|klinch',t):continue
+        if re.search(r'prognoz|tanlov|stavka|koeffits|telegram|obuna|layk',t):continue
+        generic=not owner and bool(re.search(r'jang|raund|raqib|zarba|hujum|himoya|kurash|bosim|masofa|boks|teykdaun|parter|kombinats|klinch|oyoq|nazorat',t))
+        if generic and re.match(r'^(?:u|uning|ular|ularning)\b',t):generic=False
+        if (not owner and not generic) or not re.search(r'zarba|hujum|himoya|nokaut|masofa|texnik|uslub|almashin|bosim|boks|raund|temp|kurash|teykdaun|parter|kombinats|klinch|oyoq|nazorat|chidam|tezlik',t):continue
         eligible=[s for s in sources if (same_fighter(s.fighter,owner) if owner else any(same_fighter(s.fighter,n) for n in names))]
         if not eligible:
             result.append(EventRequest('',line,'play',note='Нет записи бойца '+(owner or 'пары'),requested_teams=[owner] if owner else []));continue
@@ -247,6 +248,8 @@ def prepare_archives(project,cache,cancel,log):
         local=[s for s in project.matches if s.id in b.match_ids and s.sport=='combat']
         if not local:continue
         bind_confirmed_archives(b,local)
+        # Retry only automatic absence decisions, preserving deliberate user skips.
+        b.events=[e for e in b.events if not (e.skipped and e.note.startswith(('Оставлен ведущий: нет свободного подтверждённого эпизода боя.','Оставлен ведущий вместо неподтверждённой вставки.')))]
         existing={(e.source_id,norm(e.phrase)) for e in b.events}
         b.events.extend(e for e in events(b,local) if (e.source_id,norm(e.phrase)) not in existing)
         if all(e.skipped or (e.selection and e.selection.accepted) for e in b.events):continue

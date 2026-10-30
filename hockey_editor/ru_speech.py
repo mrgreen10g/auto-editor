@@ -39,7 +39,7 @@ def model_path(cancel,log):
 
 def recording_key(project):
     from .host_media import identity
-    return hashlib.sha256(json.dumps([MODEL_REV,'nhl-names-v1',recognition_prompt(project),[identity(p) for p in project.host_paths()]]).encode()).hexdigest()
+    return hashlib.sha256(json.dumps([MODEL_REV,'nhl-names-v1',recognition_prompt(project),[identity(p) for p in project.host_paths()]+[identity(project.microphones[p]) for p in project.host_paths() if project.microphones.get(p)]]).encode()).hexdigest()
 
 def recognition_prompt(project):
     if project.profile.startswith('ru_combat'):

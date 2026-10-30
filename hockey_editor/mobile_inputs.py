@@ -138,7 +138,7 @@ class Inputs:
         from .folder_import import VIDEO
         from .mobile_sources import ready
         p=Path(str(data.get('path',''))).resolve();folder(str(p.parent));role=data.get('role')
-        if role not in ('host','match','script') or not p.is_file() or p.is_symlink():raise RemoteError('Выберите существующий файл материала на сервере.')
+        if role not in ('host','match','script','mic') or not p.is_file() or p.is_symlink():raise RemoteError('Выберите существующий файл материала на сервере.')
         if role=='script':
             if p.suffix.lower() not in ('.txt','.docx'):raise RemoteError('Выберите TXT или DOCX.')
             from .script_input import read_script
@@ -146,10 +146,10 @@ class Inputs:
             with self.lock:
                 d=self.load(data['id']);d['script_source']=str(p);self.save(d)
             return result
-        if p.suffix.lower() not in VIDEO:raise RemoteError('Выберите видеозапись.')
+        if p.suffix.lower() not in (set(VIDEO)|{'.mp3','.wav','.m4a','.aac','.flac'} if role=='mic' else VIDEO):raise RemoteError('Выберите видеозапись.')
         from .media import probe
         info=probe(p)
-        if not info.get('video') or info.get('duration',0)<=0 or role=='host' and not info.get('audio'):raise RemoteError('Проверьте видео; у ведущего должна быть звуковая дорожка.')
+        if (not info.get('video') and role!='mic') or info.get('duration',0)<=0 or role in ('host','mic') and not info.get('audio'):raise RemoteError('Проверьте видео; у ведущего должна быть звуковая дорожка.')
         with self.lock:
             d=self.load(data['id']);self.mutable(d)
             added=ready(self,d,p,role,str(data.get('block','')),str(data.get('home','')),str(data.get('away','')),str(data.get('fighter','')),explicit=True)
@@ -171,9 +171,12 @@ class Inputs:
             self.save(d);return dict(ok=True)
     def new_file(self,d,data):
         self.mutable(d);role=data.get('role')
-        if role not in ('host','script','match'):raise RemoteError('Неизвестный тип материала.')
+        if role not in ('host','script','match','mic'):raise RemoteError('Неизвестный тип материала.')
         block=str(data.get('block',''))
         if role=='match' and block not in {b['uid'] for b in d['blocks']}:raise RemoteError('Сначала определите разборы и выберите нужный.')
+        if role=='mic':
+            if block not in {r['id'] for r in d['files'] if r['role']=='host' and r['status']=='ready'}:raise RemoteError('Сначала загрузите и выберите часть ведущего.')
+            if any(r['role']=='mic' and r['block']==block and r['status']!='removed' for r in d['files']):raise RemoteError('У этой части уже есть микрофон. Уберите прежний файл перед заменой.')
         if len(d['files'])>=200:raise RemoteError('В черновике слишком много файлов.')
         item=dict(id=secrets.token_hex(16),role=role,block=block,name=str(data.get('name','Видео'))[:100],home=str(data.get('home',''))[:120],away=str(data.get('away',''))[:120],fighter=str(data.get('fighter',''))[:120],status='waiting',message='',received=0,size=0,path='',source='',fingerprint='')
         if role=='match':
@@ -185,17 +188,17 @@ class Inputs:
         if not row:raise RemoteError('Материал не найден.',404)
         return row
     def path(self,d,item,partial=False):
-        section={'host':'Ведущий','match':'Матчи','script':'Сценарий'}[item['role']]
+        section={'host':'Ведущий','match':'Матчи','script':'Сценарий','mic':'Микрофон'}[item['role']]
         root=Path(d['folder'])/section
         if item['role']=='match':root=root/item.get('subfolder',item['block'])
         root.mkdir(parents=True,exist_ok=True)
         ext=Path(item['name']).suffix.lower()
-        if ext not in ('.mp4','.mov','.mkv','.webm','.m4v','.txt','.docx'):ext='.mp4'
+        if ext not in ('.mp4','.mov','.mkv','.webm','.m4v','.txt','.docx','.mp3','.wav','.m4a','.aac','.flac'):ext='.mp4'
         return root/(('.partial-' if partial else '')+item['id']+ext)
     def upload_init(self,data):
         with self.lock:
             d=self.load(data['id']);self.mutable(d);size=int(data.get('size',0));role=data.get('role');filename=name(data.get('name',''))
-            allowed=('.txt','.docx') if role=='script' else ('.mov','.mp4','.m4v','.mkv','.webm')
+            allowed=('.mp3','.wav','.m4a','.aac','.flac','.mp4','.mov','.mkv','.webm') if role=='mic' else ('.txt','.docx') if role=='script' else ('.mov','.mp4','.m4v','.mkv','.webm')
             if Path(filename).suffix.lower() not in allowed:raise RemoteError('Выберите TXT/DOCX сценарий или MOV/MP4 видео.')
             if not 0<size<=(8*1024**2 if role=='script' else MAX_VIDEO):raise RemoteError('Недопустимый размер файла.')
             fingerprint=str(data.get('fingerprint',''))
@@ -246,8 +249,8 @@ class Inputs:
                 else:
                     from .media import probe
                     info=probe(partial)
-                    if not info.get('video') or info.get('duration',0)<=0:raise ValueError('В файле не найдено видео.')
-                    if item['role']=='host' and not info.get('audio'):raise ValueError('В записи ведущего нет звуковой дорожки.')
+                    if (not info.get('video') and item['role']!='mic') or info.get('duration',0)<=0:raise ValueError('В файле не найдено видео.')
+                    if item['role'] in ('host','mic') and not info.get('audio'):raise ValueError('В записи ведущего нет звуковой дорожки.')
                     final=self.path(d,item)
                     if partial!=final:partial.replace(final)
                 update(status='ready',message='Готово',path=str(final),received=final.stat().st_size,size=final.stat().st_size)
@@ -350,6 +353,7 @@ class Inputs:
         if not hosts:problems.append('Добавьте запись ведущего.')
         if any(r['status']!='ready' for r in files):problems.append('Дождитесь загрузок или уберите ненужные материалы.')
         for r in files:
+            if r['role']=='mic' and r['block'] not in {h['id'] for h in hosts}:problems.append('Уберите микрофон удалённой части ведущего: '+r['name'])
             if r['status']=='ready' and (not r['path'] or not Path(r['path']).is_file()):problems.append('Файл недоступен: '+r['name'])
             if r['role']=='match' and (not r['fighter'] if d['profile'].startswith(('uz_combat','ru_combat')) else not r['home'] or not r['away']):problems.append('Укажите участников записи: '+r['name'])
         counts={b['uid']:sum(r['role']=='match' and r['block']==b['uid'] and r['status']=='ready' for r in files) for b in d['blocks']}
@@ -381,6 +385,8 @@ class Inputs:
                 # those links against the source objects created below.
                 for block in project.blocks:block.match_ids=[]
                 ready=[r for r in d['files'] if r['status']=='ready'];project.hosts=[r['path'] for r in ready if r['role']=='host'];project.host=project.hosts[0]
+                host_ids={r['id']:r['path'] for r in ready if r['role']=='host'}
+                project.microphones={host_ids[r['block']]:r['path'] for r in ready if r['role']=='mic'}
                 project.full_video=True;project.whole_episode=True;project.settings.use_manual_clips=False
                 sport='combat' if d['profile'].startswith(('uz_combat','ru_combat')) else 'football' if 'football' in d['profile'] else 'hockey'
                 for r in ready:

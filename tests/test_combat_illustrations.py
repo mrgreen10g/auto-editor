@@ -50,6 +50,14 @@ class FightIllustrationTests(unittest.TestCase):
         found=events(b,[s]);self.assertEqual(len(found),2)
         self.assertTrue(all('masofa' in e.phrase or 'himoya' in e.phrase for e in found))
 
+    def test_uz_tactical_expectation_is_not_a_pick(self):
+        source=MatchSource('fight.mp4','','',sport='combat',fighter='Petr Yan')
+        for profile in ('uz_combat','uz_combat_shorts'):
+            b=Block(title='Petr Yan — Merab Dvalishvili',sport='combat',language='uz',match_ids=[source.id],script="Yan bosim va zarbalar bilan nokaut kutmoqda. Tanlovim — Yan g'alabasi.")
+            found=events(b,[source])
+            self.assertEqual(len(found),1)
+            self.assertEqual(found[0].source_id,source.id)
+
     def test_missing_or_wrong_owner_never_auto_accepted(self):
         s=MatchSource('a','','',sport='combat',fighter='Petr Yan')
         for who in ('Merab Dvalishvili',''):

@@ -113,6 +113,7 @@ class Project:
     episode_plan: dict | None = None
     episode_key: str = ''
     hosts: list[str] = field(default_factory=list)
+    microphones: dict[str,str] = field(default_factory=dict)
     full_video: bool = False
     intro: Block = field(default_factory=lambda: Block(title='Начало', uid='intro', kind='intro'))
     outro: Block = field(default_factory=lambda: Block(title='Итоги', uid='outro', kind='outro'))
@@ -196,6 +197,7 @@ class Project:
             except ValueError: return str(Path(s).resolve())
         for key in ('host','music','logo_folder','asset_folder'): data[key] = relative(data[key])
         data['hosts'] = [relative(path) for path in self.host_paths()] if self.hosts else []
+        data['microphones'] = {relative(k):relative(v) for k,v in self.microphones.items()}
         data['assets'] = {key: relative(path) for key,path in self.assets.items()}
         def plan_paths(plan):
             if not plan:return
@@ -271,6 +273,7 @@ class Project:
             settings.setdefault('auto_rotate', settings.get('rotate', 0) == 0)
             settings.setdefault('use_manual_clips', any(b.clips for b in blocks))
         project=cls(asset_folder=resolve(data.get('asset_folder','')),logo_folder=resolve(data.get('logo_folder','')),host=resolve(data['host']),music=resolve(data.get('music','')),profile=data.get('profile','ru_hockey'),recording_times=data.get('recording_times',''),
+                   microphones={resolve(k):resolve(v) for k,v in data.get('microphones',{}).items()},
                    hosts=[resolve(v) for v in data.get('hosts',[])],full_video=data.get('full_video',False),
                    intro=framing('intro'),outro=framing('outro'),assets={k:resolve(v) for k,v in data.get('assets',{}).items()},
                    whole_episode=data.get('whole_episode',False),episode_plan=episode,episode_key=data.get('episode_key',''),

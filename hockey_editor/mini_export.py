@@ -30,10 +30,12 @@ class Export:
             return dict(path='',parent='',folders=[dict(name=str(p),path=str(p)) for p in roots if p.is_dir()],free=None)
         path=folder(data['path']);offset=max(0,int(data.get('offset',0)))
         try:
-            children=sorted((p for p in path.iterdir() if p.is_dir()),key=lambda p:p.name.casefold())
+            from .folder_import import VIDEO
+            suffixes=set(VIDEO)|{'.mp3','.wav','.m4a','.aac','.flac'} if data.get('files')=='mic' else {'.txt','.docx'} if data.get('files')=='script' else VIDEO
+            children=sorted((p for p in path.iterdir() if p.is_dir() or (data.get('files') in ('host','match','script','mic') and p.is_file() and not p.is_symlink() and p.suffix.lower() in suffixes)),key=lambda p:(not p.is_dir(),p.name.casefold()))
             free=shutil.disk_usage(path).free
         except OSError:raise RemoteError('Нет доступа к этой папке.') from None
-        return dict(path=str(path),parent=str(path.parent) if path.parent!=path else '',free=free,folders=[dict(name=p.name,path=str(p)) for p in children[offset:offset+200]],next=offset+200 if offset+200<len(children) else None)
+        return dict(path=str(path),parent=str(path.parent) if path.parent!=path else '',free=free,folders=[dict(name=p.name,path=str(p),file=p.is_file()) for p in children[offset:offset+200]],next=offset+200 if offset+200<len(children) else None)
     def status(self):
         app=self.bridge.app
         if self.job and self.job['status'] in ('running','cancelling'):self.job['elapsed']=round(time.time()-self.job['started'])

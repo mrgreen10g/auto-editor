@@ -35,9 +35,10 @@ def project_edit_key(project, index):
     if project.profile.endswith('_shorts'):
         structural['shorts_revision']='ru-fullscreen-caption-v3'
         structural['telegram_asset']=identity(project.assets.get('telegram',''))
-    data=['workflow-0.7.15',block,structural,identity(project.host),
+    data=['workflow-0.8.9rc6',block,structural,identity(project.host),
           [(m.id,m.home,m.away,identity(m.path),m.score_box) for m in project.matches if m.id in block['match_ids']]]
     if project.full_video and project.profile=='ru_hockey':data.append('intro-boundary-v3-exact-nhl')
+    data.append(['microphone-v1',[(identity(k),identity(v)) for k,v in project.microphones.items() if k in project.host_paths()]])
     data.append(['manual-recording-ranges',project.recording_times])
     if project.profile!='ru_hockey':data.append(['uz-montage-v2',project.profile,project.recording_times,[(m.id,m.fighter,m.sport) for m in project.matches if m.id in block['match_ids']]])
     if len(project.host_paths())>1:data.append([identity(path) for path in project.host_paths()])

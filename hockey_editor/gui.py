@@ -84,6 +84,8 @@ class App(EpisodeMixin,MatchMixin):
         self.build_review()
         self.build_export()
         self.build_settings()
+        from .download_ui import Downloads
+        self.downloads=Downloads(self)
         self.build_footer()
         self.refresh()
         for var in [self.host, self.music, self.scope, self.title, self.rotate, self.noise,
@@ -120,7 +122,7 @@ class App(EpisodeMixin,MatchMixin):
         tk.Label(rail, text='ВАШ ВЫПУСК', bg=ui.NAV, fg=ui.NAV_MUTED,
                  font=('Segoe UI', 8, 'bold')).pack(anchor='w', padx=22, pady=(6, 12))
         self.nav = {}
-        for key, title in [('materials', '1   Материалы'), ('review', '2   Проверка'), ('export', '3   Экспорт')]:
+        for key, title in [('materials', '1   Материалы'), ('review', '2   Проверка'), ('export', '3   Экспорт'), ('downloads', 'YouTube · скачивание')]:
             b = tk.Button(rail, text=title, command=lambda k=key: self.show_page(k),
                           bg=ui.NAV, fg=ui.NAV_MUTED, activebackground='#244452',
                           activeforeground='white', bd=0, relief='flat', anchor='w',
@@ -197,7 +199,7 @@ class App(EpisodeMixin,MatchMixin):
         self.pathrow(presenter, self.host, self.choose_host, 'Выбрать видео')
         self.host_hint = ttk.Label(presenter, style='CardMuted.TLabel', wraplength=650)
         self.host_hint.pack(anchor='w', pady=(8, 0))
-        self.button(presenter,'Части записи · добавить / изменить порядок',self.edit_hosts).pack(anchor='w',pady=(8,0))
+        self.button(presenter,'Записи ведущего и микрофон · добавить / изменить порядок',self.edit_hosts).pack(anchor='w',pady=(8,0))
         self.button(presenter,'Восстановить ссылки',self.relink_media).pack(anchor='w',pady=(6,0))
         framing=ui.card(page,'Начало и завершение','Дисклеймер, представление команд, Telegram, итоги и подписка.')
         self.button(framing,'Настроить полный выпуск…',self.edit_framing).pack(anchor='w')
@@ -410,8 +412,11 @@ class App(EpisodeMixin,MatchMixin):
 
     def show_page(self, key):
         self.page = key
+        if key=='downloads':self.footer.pack_forget()
+        elif not self.footer.winfo_manager():self.footer.pack(side='bottom',fill='x',pady=(12,0),before=self.deck)
         self.pages[key].tkraise()
         headings = {
+            'downloads': ('Скачать видео с YouTube', 'Добавьте ссылки, названия и папки. Можно продолжать монтаж.'),
             'materials': ('Подготовим разбор', 'Добавьте исходники. Дальше программа сопоставит сценарий с голосом.'),
             'review': ('Проверим совпадения', 'Посмотрите разметку и поправьте информационные плашки, если нужно.'),
             'export': ('Соберём готовый ролик', 'Выберите оформление и сохраните результат в MP4.'),
@@ -555,6 +560,7 @@ class App(EpisodeMixin,MatchMixin):
         self.update_summary()
 
     def update_summary(self):
+        if self.page=='downloads':return
         script = self.script.get('1.0', 'end').strip()
         host = self.host.get().strip()
         clips = self.project.blocks[self.index].clips if self.use_manual.get() else []
@@ -1200,6 +1206,9 @@ class App(EpisodeMixin,MatchMixin):
                 messagebox.showerror('Папка результата', str(e))
 
     def close(self):
+        if hasattr(self,'downloads') and self.downloads.running:
+            if messagebox.askyesno('Идёт скачивание','Остановить скачивание? После остановки закройте окно повторно.'):self.downloads.cancel.set()
+            return
         if self.busy:
             if messagebox.askyesno('Идёт обработка', 'Отменить обработку? После остановки можно закрыть окно.'):
                 self.cancel.set()

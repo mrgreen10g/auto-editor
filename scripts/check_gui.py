@@ -87,6 +87,10 @@ def check():
         app.set_busy(True)
         app.set_busy(True)
         assert all(str(w.cget('state')) == 'disabled' for w in app.controls)
+        app.show_page('downloads')
+        root.update()
+        assert app.pages['downloads'].winfo_viewable()
+        before=len(app.downloads.rows);app.downloads.add();assert len(app.downloads.rows)==before+1
         app.show_page('materials')
         app.set_busy(False)
         assert str(app.blockbox.cget('state')) == 'readonly'
