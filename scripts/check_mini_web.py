@@ -149,7 +149,7 @@ def check():
                 click('#browseMicFile')
                 page.evaluate('(p)=>browseMaterial(p)',str(Path(original_host).parent))
                 page.locator('#materialFiles button').filter(has_text=Path(original_host).name).first.click()
-                expect(page.locator('#micServerPath')).to_have_value(str(Path(original_host)))
+                expect(page.locator('#micServerPath')).to_have_value(str(Path(original_host).resolve()))
                 click('#addMicServer')
                 expect(page.locator('#inputFiles')).to_contain_text('Микрофон')
                 click('[data-step="summary"]');expect(page.locator('#activateInput')).to_be_enabled()
