@@ -91,6 +91,15 @@ def check():
         root.update()
         assert app.pages['downloads'].winfo_viewable()
         before=len(app.downloads.rows);app.downloads.add();assert len(app.downloads.rows)==before+1
+        for i,row in enumerate(app.downloads.rows):
+            row['url'].set('https://www.youtube.com/watch?v=abcdefghijk');row['name'].set('queued-'+str(i));row['folder'].set(str(tmp))
+        def fake_download(item,path,update,cancel):
+            update(received=5,size=10,message='50%');path.write_bytes(b'test-video')
+        with patch('hockey_editor.download_ui.youtube_download',side_effect=fake_download):
+            app.downloads.start();deadline=time.monotonic()+10
+            while app.downloads.running and time.monotonic()<deadline:root.update();time.sleep(.02)
+        assert all(row['done'] for row in app.downloads.rows)
+        assert app.busy and (tmp/'queued-0.mp4').read_bytes()==b'test-video'
         app.show_page('materials')
         app.set_busy(False)
         assert str(app.blockbox.cget('state')) == 'readonly'

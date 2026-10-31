@@ -5,7 +5,7 @@ import numpy as np
 from scipy.signal import correlate
 from .media import run,probe,Cancelled
 
-REVISION='mic-sync-v1'
+REVISION='mic-sync-v4'
 
 def envelope(path,work,cancel):
     target=work/(hashlib.sha256(str(path).encode()).hexdigest()[:16]+'.wav')
@@ -23,7 +23,7 @@ def measure(camera,mic):
     if min(len(camera),len(mic))<size:raise ValueError('Для синхронизации нужно хотя бы 12 секунд общей речи.')
     sums=np.r_[0,np.cumsum(mic)];sq=np.r_[0,np.cumsum(mic*mic)]
     variance=np.maximum(sq[size:]-sq[:-size]-(sums[size:]-sums[:-size])**2/size,1e-12)
-    for start in np.linspace(0,len(camera)-size,min(25,max(5,len(camera)//size)),dtype=int):
+    for start in np.linspace(0,len(camera)-size,min(25,max(9,len(camera)//size)),dtype=int):
         sample=camera[start:start+size];sample=sample-sample.mean()
         energy=np.sum(sample*sample)
         if energy<.01:continue
@@ -55,15 +55,33 @@ def prepare(camera,microphone,cache,cancel,log):
     if target.exists() and report.exists():return str(target)
     work=root/key;work.mkdir(exist_ok=True)
     log('Сопоставляю микрофон и камеру по всей записи: '+Path(camera).name)
-    result=measure(envelope(camera,work,cancel),envelope(microphone,work,cancel))
+    camera_envelope=envelope(camera,work,cancel)
+    result=measure(camera_envelope,envelope(microphone,work,cancel))
     duration=probe(camera)['duration'];rate=result['rate'];offset=result['offset']
     # Missing microphone lead/tail becomes silence; camera sound is never mixed in.
     trim=max(0,offset);delay=max(0,-offset/rate)
-    filters=f'atrim=start={trim:.9f},asetpts=PTS-STARTPTS,atempo={rate:.12f},adelay={round(delay*48000)}S:all=1,apad,atrim=duration={duration:.9f}'
+    pcm=work/'tempo.wav';aligned=work/'aligned.wav'
+    run(['-y','-i',microphone,'-vn','-af',f'atrim=start={trim:.9f},asetpts=PTS-STARTPTS,atempo={rate:.12f}',
+         '-ac','2','-ar','48000','-c:a','pcm_s16le',pcm],cancel)
+    # Materialize delay as PCM samples, never as an empty timestamp interval.
+    import wave
+    with wave.open(str(pcm),'rb') as inp,wave.open(str(aligned),'wb') as out:
+        out.setparams(inp.getparams());frame_bytes=inp.getnchannels()*inp.getsampwidth()
+        remaining=round(duration*48000);padding=min(remaining,round(delay*48000))
+        while padding:
+            n=min(padding,48000);out.writeframesraw(bytes(n*frame_bytes));padding-=n;remaining-=n
+        while remaining:
+            if cancel and cancel.is_set():raise Cancelled('Отменено.')
+            n=min(remaining,48000);data=inp.readframes(n)
+            out.writeframesraw(data+bytes(n*frame_bytes-len(data)));remaining-=n
     partial=target.with_suffix('.partial.mp4')
     try:
-        run(['-y','-i',camera,'-i',microphone,'-filter_complex',f'[1:a]aresample=48000,{filters}[voice]',
-             '-map','0:v:0','-map','[voice]','-c:v','copy','-c:a','aac','-b:a','192k','-t',duration,'-movflags','+faststart',partial],cancel)
+        run(['-y','-i',camera,'-i',aligned,'-map','0:v:0','-map','1:a:0',
+             '-c:v','copy','-c:a','aac','-b:a','192k','-t',duration,'-movflags','+faststart',partial],cancel)
+        verified=measure(camera_envelope,envelope(partial,work,cancel))
+        if abs(verified['offset'])+abs(verified['rate']-1)*duration>.06:
+            raise ValueError('Проверка готовой аудиодорожки обнаружила рассинхрон. Исходные записи сохранены.')
+        result['encoded_verification']=verified
         partial.replace(target);report.write_text(json.dumps(result,indent=2))
     finally:partial.unlink(missing_ok=True)
     log(f'Микрофон синхронизирован: {result["anchors"]} точек, расхождение до {result["max_error"]*1000:.0f} мс; звук камеры заменён.')

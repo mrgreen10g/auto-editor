@@ -924,6 +924,7 @@ class App(EpisodeMixin,MatchMixin):
             missing.append(Path(path).name);return path
         self.project.host=replace(self.project.host);self.project.music=replace(self.project.music)
         self.project.hosts=[replace(p) for p in self.project.hosts]
+        self.project.microphones={replace(k):replace(v) for k,v in self.project.microphones.items()}
         self.project.assets={k:replace(v) for k,v in self.project.assets.items()}
         for m in self.project.matches:m.path=replace(m.path)
         for b in self.project.blocks:
@@ -946,7 +947,7 @@ class App(EpisodeMixin,MatchMixin):
             self.refresh()
             self.show_page('materials')
             self.status.set('Проект открыт. Проверьте материалы и нажмите «Определить тайминги».')
-            missing=[p for p in self.project.host_paths()+list(self.project.assets.values())+[self.project.music]+[m.path for m in self.project.matches] if p and not Path(p).is_file()]
+            missing=[p for p in self.project.host_paths()+list(self.project.microphones.values())+list(self.project.assets.values())+[self.project.music]+[m.path for m in self.project.matches] if p and not Path(p).is_file()]
             if missing:
                 self.status.set(f'Не найдены исходники: {len(missing)}. Проект хранит ссылки на видео. Нажмите «Восстановить ссылки».')
                 messagebox.showinfo('Не найдены исходные видео','Проект хранит пути к видео, а не копии самих файлов.\n\nНе найдены:\n'+'\n'.join(Path(p).name for p in missing)+'\n\nНажмите «Восстановить ссылки» и выберите папку с исходниками.')

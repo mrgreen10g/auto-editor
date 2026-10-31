@@ -41,3 +41,18 @@ class ScriptSectionTests(unittest.TestCase):
         self.assertIn('Это сравнение',blocks[0].script)
 
 if __name__=='__main__':unittest.main()
+
+class UzbekOutroRegression(unittest.TestCase):
+    def test_demak_inside_analysis_is_not_outro_in_any_uz_profile(self):
+        for profile in ('uz_football','uz_football_shorts','uz_hockey','uz_hockey_shorts','uz_combat','uz_combat_shorts'):
+            text="Salom.\nРазбор1 Alpha — Beta\nBirinchi fikr.\nDemak, bu bahsda himoya muhim.\nMening tanlovim — total 3,5 dan kam!\nYAKUNIY XULOSA\nDemak, bugun tahlil qildik."
+            intro,blocks,outro=parse_episode(text,profile)
+            self.assertIn('Mening tanlovim',blocks[-1].script,profile)
+            self.assertNotIn('himoya muhim',outro.script,profile)
+    def test_repairs_only_explicit_legacy_split_and_only_once(self):
+        from hockey_editor.model import Project,Block
+        from hockey_editor.script_sections import repair_premature_outro
+        p=Project(profile='uz_football',blocks=[Block(script='Analysis.')],outro=Block(script='Demak, bu bahsda himoya muhim.\nTanlovim — total 3,5 dan kam!\nYAKUNIY XULOSA\nBugun uchta uchrashuv.'))
+        self.assertTrue(repair_premature_outro(p));self.assertFalse(repair_premature_outro(p))
+        self.assertEqual(p.outro.script,'Bugun uchta uchrashuv.')
+        self.assertIn('Tanlovim',p.blocks[-1].script)

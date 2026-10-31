@@ -70,7 +70,7 @@ def parse(text, profile, pair_hints=()):
         stop=boundaries[n+1][0] if n+1<len(boundaries) else len(lines)
         body=lines[end+1:stop]
         if n==len(boundaries)-1:
-            split=next((j for j,row in enumerate(body) if key(row) in OUTRO|{'итоги','итог','вывод','заключение'} or re.match(r'^(?:demak\b|итак\b|подвед[её]м итоги\b|повторю\s+(?:\w+\s+)?(?:основны\w*\s+)?прогноз)',key(row))),None)
+            split=next((j for j,row in enumerate(body) if key(row) in OUTRO|{'итоги','итог','вывод','заключение'} or re.match(r'^(?:demak\b.*(?:bugun.*tahlil qildik|tanlovlar.*takror|yakunlaymiz)|итак\b|подвед[её]м итоги\b|повторю\s+(?:\w+\s+)?(?:основны\w*\s+)?прогноз)',key(row))),None)
             if split is not None:
                 outro.script=clean('\n'.join(body[split:])).strip();body=body[:split]
         # Keep spoken announcements, but omit editorial pair headings and markers.
@@ -90,3 +90,18 @@ def parse(text, profile, pair_hints=()):
         blocks.append(block)
     intro.featured_pairs=[b.title for b in blocks]
     return intro,blocks,outro
+
+
+def repair_premature_outro(project):
+    """Recover the old marker parser's early Demak split only with an explicit ending heading."""
+    if not project.profile.startswith('uz_') or not project.blocks:return False
+    from .uz_structure import key,OUTRO
+    rows=project.outro.script.splitlines()
+    if not rows or not re.match(r'^demak\b',key(rows[0])):return False
+    boundary=next((i for i,row in enumerate(rows) if i>0 and key(row) in OUTRO),None)
+    if boundary is None:return False
+    project.blocks[-1].script+='\n'+'\n'.join(rows[:boundary])
+    project.outro.script='\n'.join(rows[boundary+1:])
+    for block in [project.blocks[-1],project.outro]:block.asr_lines=[];block.speech_key='';block.speech_cards={}
+    project.episode_key=''
+    return True

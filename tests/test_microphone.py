@@ -19,7 +19,7 @@ class MicrophoneTests(unittest.TestCase):
         with self.assertRaises(ValueError):measure(rng.normal(size=20000),rng.normal(size=20000))
     def test_optional_and_persisted(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root=Path(tmp);cam=root/'cam.mp4';mic=root/'mic.mov';cam.touch();mic.touch()
+            root=Path(tmp).resolve();cam=root/'cam.mp4';mic=root/'mic.mov';cam.touch();mic.touch()
             p=Project(host=str(cam),microphones={str(cam):str(mic)})
             p.save(root/'project.hockeyproj');q=Project.load(root/'project.hockeyproj')
             self.assertEqual(q.microphones,p.microphones)
@@ -28,3 +28,20 @@ class MicrophoneTests(unittest.TestCase):
                 self.assertEqual(result[0],'synced.mp4');sync.assert_called_once()
                 q.microphones={};sync.reset_mock()
                 self.assertEqual(analysis_source(q,root,threading.Event(),lambda _:None)[0],str(cam));sync.assert_not_called()
+    def test_encoded_video_keeps_audio_delay(self):
+        from hockey_editor.microphone import prepare,envelope
+        from hockey_editor.media import run
+        from scipy.io import wavfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);rate=8000;rng=np.random.default_rng(12)
+            env=np.repeat(rng.uniform(.05,.7,600),800)
+            voice=(rng.normal(size=len(env))*env*10000).astype(np.int16)
+            wavfile.write(root/'camera.wav',rate,voice)
+            wavfile.write(root/'mic.wav',rate,voice[rate*3:])
+            cam=root/'camera.mp4'
+            run(['-y','-f','lavfi','-i','color=c=blue:s=160x90:r=10','-i',root/'camera.wav','-map','0:v','-map','1:a','-c:v','libx264','-preset','ultrafast','-c:a','aac','-shortest',cam])
+            cancel=threading.Event();target=prepare(str(cam),str(root/'mic.wav'),root/'cache',cancel,lambda _:None)
+            work=root/'verify';work.mkdir()
+            result=measure(envelope(cam,work,cancel),envelope(target,work,cancel))
+            self.assertAlmostEqual(result['offset'],0,delta=.04)
+            self.assertAlmostEqual(result['rate'],1,delta=.0005)

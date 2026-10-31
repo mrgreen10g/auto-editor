@@ -170,7 +170,7 @@ class Engine:
         validate_plan(plan)
         target=Path(target).resolve();p=self.project;s=p.settings
         shorts=p.profile.endswith('_shorts');cw,ch=(720,1280) if shorts else (1280,720)
-        protected=p.host_paths()+list(p.assets.values())+[p.music]+[c.path for b in p.blocks for c in b.clips]+[m.path for m in p.matches]+list(p.team_logos.values())
+        protected=p.host_paths()+list(p.microphones.values())+list(p.assets.values())+[p.music]+[c.path for b in p.blocks for c in b.clips]+[m.path for m in p.matches]+list(p.team_logos.values())
         if any(target==Path(f).resolve() for f in protected if f):raise ValueError('Нельзя записывать результат поверх исходного файла.')
         if target.exists():raise ValueError('Файл результата уже существует. Выберите новое имя.')
         target.parent.mkdir(parents=True,exist_ok=True)

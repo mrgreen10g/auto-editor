@@ -89,3 +89,11 @@ class LocalReviewTests(unittest.TestCase):
         new.review_items=[dict(id='id',status='pending')]
         preserve_edits(old.to_dict(),new)
         self.assertEqual(new.cards,[newcard]);self.assertEqual(len(pending(new)),1)
+
+    def test_missing_script_pick_does_not_taint_intro_or_telegram(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            host=Path(tmp)/'host';host.touch();p=project(host)
+            p.blocks[-1].script='Bu uchrashuv haqida fikrlarimiz shunday.'
+            prepare(p,sample(),review=True,duration=204)
+            self.assertFalse(any(line.get('review_reason') for line in p.intro.asr_lines))
+            self.assertFalse(any(c.get('needs_review') for c in p.intro.speech_cards.values()))

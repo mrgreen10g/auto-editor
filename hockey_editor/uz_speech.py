@@ -20,7 +20,7 @@ def recording_key(project):
     return hashlib.sha256(json.dumps([MODEL_REV,'beam5-vocabulary-v2',recognition_prompt(project),project.profile,[b.title for b in project.blocks],data]).encode()).hexdigest()
 
 def speech_key(project):
-    return hashlib.sha256(json.dumps(['uz-local-evidence-v14-spoken-transitions',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['uz-local-evidence-v15-local-forecast-review',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
 
 def model_path(cancel,log):
     folder=Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'Models'/'uzbek-turbo'
@@ -311,7 +311,6 @@ def _prepare(project,segments):
         from .shorts import promo_spans
         tg=promo_spans(project,segments,ranges,tg)
     picks={b.uid:forecast_text(b) for b in project.blocks}
-    if any(not v for v in picks.values()):raise ValueError('Укажите основной прогноз в сценарии каждого разбора: Mening tanlovim — …')
     for index,b in enumerate([project.intro,*project.blocks,project.outro]):
         lo,hi=ranges[index];annotations=[];local=[s for s in segments if lo<=s['start']<hi];forecast_review=[];forecast_owners={};forecast_reasons={}
         if b.kind!='analysis' and not b.script.strip() and hi-lo<.15:
@@ -347,7 +346,7 @@ def _prepare(project,segments):
                 next_start=next((matched[k][0] for k in range(j+1,len(matched)) if matched[k]),hi)
                 z=min(z,next_start)
                 if z-a>=.15:annotations.append((a,z,'РАЗБОР МАТЧА',owner.title))
-        elif b.kind=='analysis':
+        elif b.kind=='analysis' and picks[b.uid]:
             s=match_forecasts(segments,lo,hi,[b],picks,recap=False,partial=True)[0]
             if s is None:
                 s=missing_forecast(segments,lo,hi,b) or dict(start=max(lo,hi-6),end=hi,text='',needs_review=True,review_reason='В этом разделе не найдены слова ставки. Проверьте только эту плашку.')
@@ -369,10 +368,13 @@ def _prepare(project,segments):
                     if re.search(r"ma[g']*lub",t) and 'X2' in picks[b.uid]:
                         body=picks[b.uid].splitlines()[0].replace(' X2',' yutadi yoki durang')+'\n'+body
                     annotations.append((phrase['start'],phrase['end'],'УСЛОВИЯ ПРОГНОЗА',body))
+        elif b.kind=='analysis':
+            pass  # Missing optional pick must not invalidate unrelated speech/cards.
         else:
-            recap=match_forecasts(segments,lo,hi,project.blocks,picks,partial=True)
+            owners=[owner for owner in project.blocks if picks[owner.uid]]
+            recap=match_forecasts(segments,lo,hi,owners,picks,partial=True) if owners else []
             occupied=[(v['start'],v['end']) for v in recap if v]+[(a,z) for a,z in tg if lo<=a<hi]
-            for owner,s in zip(project.blocks,recap):
+            for owner,s in zip(owners,recap):
                 if s is None:
                     s=missing_forecast(segments,lo,hi,owner,occupied)
                     if s is None:continue  # framing_draft supplies only this missing pick
@@ -410,6 +412,8 @@ def _prepare(project,segments):
     return bounds
 
 def synchronize(project,cache,cancel,log):
+    from .script_sections import repair_premature_outro
+    repair_premature_outro(project)
     if project.profile.startswith('uz_hockey'):
         from .uz_hockey import synchronize as hockey_synchronize
         return hockey_synchronize(project,cache,cancel,log)
