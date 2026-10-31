@@ -146,6 +146,7 @@ def check():
                 click('#hostParts > div:first-child button');expect(page.locator('#hostParts > div:first-child')).to_contain_text('second-host.mp4')
                 # Real server file picker, then associate microphone video with the first part.
                 page.locator('#micHost').evaluate('(e)=>e.closest("details").open=true')
+                page.locator('#micHost').select_option(index=0)
                 click('#browseMicFile')
                 page.evaluate('(p)=>browseMaterial(p)',str(Path(original_host).parent))
                 page.locator('#materialFiles button').filter(has_text=Path(original_host).name).first.click()
