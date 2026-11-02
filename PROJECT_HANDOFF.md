@@ -1,3 +1,9 @@
+## Проверенная Windows-сборка 0.8.9rc7
+
+Функциональный SHA: 1ea23feecd9ef565fdc1902f82ae68755a76c73b. Windows CI 41442883493 завершён успешно: core tests, source integration, OCR, desktop GUI (очистка очереди, удаление блоков, закреплённая кнопка и скрытие/возврат панели проекта), Mini App, упаковка и проверка EXE.
+
+Скачать: https://github.com/mrgreen10g/auto-editor/actions/runs/41442883493/artifacts/13141144741 — AutoEditor-Windows, 304084025 байт. Изменения интерфейса rc7 перечислены в конце документа.
+
 ## Проверенная Windows-сборка 0.8.9rc6
 
 Функциональный SHA: 782c99271813a116cbdb6cc632f4bfaa721cc0d6. Windows CI 41192952984 завершён успешно: 566 тестов, source integration, OCR, desktop GUI (независимая очередь скачивания при busy), Mini App (две части, перестановка, файловый браузер и микрофон), упаковка и проверка EXE.
