@@ -298,6 +298,9 @@ class App(EpisodeMixin,MatchMixin):
         self.button(telegram,'Настроить уведомления',lambda:notification_settings(self)).pack(anchor='w')
         from .drive_ui import show as drive_settings
         self.button(telegram,'Google Диск · аккаунт и папки',lambda:drive_settings(self)).pack(anchor='w',pady=8)
+        from .local_ai_ui import show as local_ai_settings
+        ai=ui.card(page,'Локальный ИИ','Лёгкая перепроверка спорного текста без платных API.')
+        self.button(ai,'Настроить локальный ИИ',lambda:local_ai_settings(self)).pack(anchor='w')
         saved=ui.card(page,'Мои настройки','Сохранённые настройки доступны для всех шаблонов ведущего.')
         self.presetbox=ttk.Combobox(saved,state='readonly');self.presetbox.pack(fill='x')
         row=ttk.Frame(saved);row.pack(fill='x',pady=6)

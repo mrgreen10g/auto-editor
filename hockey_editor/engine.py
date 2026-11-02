@@ -151,6 +151,9 @@ class Engine:
         from .review import attach,preserve_edits
         attach(plan,block,p)
         preserve_edits(p.blocks[self.index].edit_plan,plan)
+        from .local_ai import annotate
+        annotate(plan,self.cache,self.cancel,self.log)
+        self.check()
         self.save_plan(plan)
         self.log(f'Разметка готова: {len(lines)} фраз, {len(inserts)} вставок, {duration:.1f} с.')
         return plan

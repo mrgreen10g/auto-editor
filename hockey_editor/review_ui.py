@@ -61,6 +61,7 @@ class ReviewDialog:
         ttk.Button(actions,text='■ Стоп',command=self.stop).grid(row=0,column=1,sticky='ew')
         if project.profile.startswith('uz_'):
             ttk.Button(actions,text='Перевод на русский',command=self.translate).grid(row=1,column=0,columnspan=2,sticky='ew',pady=(4,0))
+        ttk.Button(actions,text='Перепроверить текст локальным ИИ',command=self.ai_review).grid(row=2,column=0,columnspan=2,sticky='ew',pady=4)
         help_label=ttk.Label(right,text='Звук читается из исходников: пересборка видео не нужна. Время плашек указано на монтажной дорожке.',wraplength=550);help_label.pack(fill='x')
         right.bind('<Configure>',lambda e:[label.configure(wraplength=max(150,e.width-20)) for label in (reason_label,help_label)],add='+')
         # A non-expanding grid row reserves action space even when the form is taller
@@ -130,7 +131,8 @@ class ReviewDialog:
         if card is None and task.get('deleted_card'):card=Card(**task['deleted_card'])
         from .review import describe_card
         kind,where=describe_card(card,task,self.project,self.plan)
-        self.reason.set(kind+' · '+where+'\n'+task['reason'])
+        from .local_ai import description
+        self.reason.set(kind+' · '+where+'\n'+task['reason']+description(task))
         from .review import heard_context
         heard=task.get('recognized','') or heard_context(self.plan,task['start'],task['end'])
         for box,value in [(self.script,task['script']),(self.heard,heard),(self.text,card.text if card else '')]:
@@ -157,6 +159,20 @@ class ReviewDialog:
         if not self.selected():return
         from .review_translation import show
         show(self.window, tuple(box.get('1.0','end').strip() for box in (self.script,self.heard,self.text)), self.cache)
+
+    def ai_review(self):
+        if self.busy or not self.selected():return
+        from .local_ai import annotate
+        snapshot=copy.deepcopy(self.plan);selected=self.selected()['id']
+        snapshot.review_items=[t for t in snapshot.review_items if t['id']==selected]
+        self.cancel.clear();self.busy=True;self.status.set('Локальный ИИ проверяет текст…')
+        def work():
+            try:
+                annotate(snapshot,self.cache,self.cancel,lambda text:self.jobs.put(('error',text)),True)
+                if not self.cancel.is_set():self.jobs.put(('ai',snapshot.review_items[0]))
+            except Exception as error:self.jobs.put(('error',str(error)))
+            finally:self.jobs.put(('done',None))
+        threading.Thread(target=work,daemon=True).start()
 
     def listen(self):
         if self.busy:return
@@ -192,6 +208,11 @@ class ReviewDialog:
                         winsound.PlaySound(str(value),winsound.SND_FILENAME|winsound.SND_ASYNC)
                         self.status.set('Воспроизведение исходного звука. Плашка не меняет речь ведущего.')
                     else:self.status.set('Встроенное прослушивание доступно в Windows-сборке.')
+                elif kind=='ai' and not self.cancel.is_set():
+                    from .local_ai import key
+                    task=next((t for t in self.plan.review_items if t['id']==value['id']),None)
+                    if task and task.get('status')=='pending' and key(task)==key(value) and value.get('ai_review'):
+                        task['ai_review']=value['ai_review'];self.on_apply(copy.deepcopy(self.plan));self.select()
                 elif kind=='error':self.status.set(value)
                 elif kind=='done':self.busy=False
         except queue.Empty:pass
