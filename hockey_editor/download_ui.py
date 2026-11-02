@@ -1,11 +1,16 @@
 """Independent desktop YouTube queue with stable row identities."""
-import queue,threading,uuid
+import queue,threading,uuid,unicodedata
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk,filedialog,messagebox
 from .mobile_downloads import canonical,youtube_download
 from .mini_export import filename
 from . import ui
+
+def clean_title(value):
+    # Clipboard titles may contain line separators, bidi controls and zero-width marks.
+    return ''.join(' ' if ch.isspace() else ch for ch in str(value)
+                   if ch.isspace() or unicodedata.category(ch) not in ('Cc','Cf'))
 
 class Cancellation:
     def __init__(self,*events):self.events=events
@@ -31,6 +36,20 @@ class Downloads:
         ttk.Button(frame,text='Удалить блок',command=lambda:self.remove(row)).pack(anchor='e')
         for key,label in [('url','Ссылка YouTube'),('name','Название файла'),('folder','Папка сохранения')]:
             ttk.Label(frame,text=label).pack(anchor='w');entry=ttk.Entry(frame,textvariable=row[key]);entry.pack(fill='x');row['widgets'].append(entry)
+            if key=='name':
+                variable=row[key]
+                def normalize(*_,var=variable):
+                    raw=var.get();clean=clean_title(raw)
+                    if clean!=raw:var.set(clean)
+                variable.trace_add('write',normalize)
+                def paste(event,field=entry):
+                    try:text=clean_title(field.clipboard_get())
+                    except tk.TclError:return 'break'
+                    if field.selection_present():
+                        start=field.index('sel.first');field.delete('sel.first','sel.last');field.icursor(start)
+                    field.insert('insert',text)
+                    return 'break'
+                entry.bind('<<Paste>>',paste)
         def browse():
             path=filedialog.askdirectory(parent=self.app.root,title='Куда скачать видео')
             if path:row['folder'].set(path)
@@ -45,16 +64,17 @@ class Downloads:
         if self.running:return
         jobs=[];targets=set()
         try:
-            for row in self.rows:
+            for number,row in enumerate(self.rows,1):
                 if row['done'] or not row['url'].get().strip():continue
                 source,url=canonical(row['url'].get())
                 if source!='youtube':raise ValueError('В этой вкладке нужны ссылки YouTube.')
                 folder=Path(row['folder'].get())
                 if not row['folder'].get().strip() or not folder.is_dir():raise ValueError('Выберите папку сохранения.')
+                row['name'].set(clean_title(row['name'].get()))
                 target=folder/filename(row['name'].get())
                 if target.exists() or str(target.resolve()).casefold() in targets:raise ValueError('Имя уже занято: '+str(target))
                 targets.add(str(target.resolve()).casefold());jobs.append((row['id'],url,target,row['cancel']))
-        except Exception as e:messagebox.showerror('Скачивание',str(e));return
+        except Exception as e:messagebox.showerror('Скачивание',f'Видео {number}: {e}',parent=self.app.root);return
         if not jobs:return
         self.running=True;self.cancel.clear();self.summary.set('Идёт скачивание…')
         ids={j[0] for j in jobs}
