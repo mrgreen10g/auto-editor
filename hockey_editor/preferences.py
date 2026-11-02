@@ -32,6 +32,21 @@ def presets(profile,path=None):
     return result
 
 
+def delete_preset(profile,name,path=None):
+    data=read(path);seen=set(data.get('shared_presets',{}))
+    if name in seen:
+        del data['shared_presets'][name];write(data,path);return
+    for source,entry in data.items():
+        if source=='shared_presets' or not isinstance(entry,dict):continue
+        for original in list(entry.get('presets',{})):
+            key=original if original not in seen else original+' ['+source+']'
+            while key in seen:key+=' legacy'
+            seen.add(key)
+            if key==name:
+                del entry['presets'][original];write(data,path);return
+    raise ValueError('Выберите сохранённый шаблон настроек.')
+
+
 def save_preset(project,name,path=None):
     if not name.strip():raise ValueError('Введите название шаблона.')
     data=read(path)

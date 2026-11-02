@@ -98,9 +98,19 @@ def check():
         with patch('hockey_editor.download_ui.youtube_download',side_effect=fake_download):
             app.downloads.start();deadline=time.monotonic()+10
             while app.downloads.running and time.monotonic()<deadline:root.update();time.sleep(.02)
-        assert all(row['done'] for row in app.downloads.rows)
+        assert len(app.downloads.rows)==1
+        assert all(app.downloads.rows[0][k].get()=='' for k in ('url','name','folder'))
+        assert all(not w.winfo_ismapped() for w in app.project_header_widgets)
+        assert not app.heading.winfo_ismapped()
+        for _ in range(6):app.downloads.add()
+        root.update();y=app.downloads.add_button.winfo_rooty()
+        app.downloads.scroller.canvas.yview_moveto(1);root.update()
+        assert app.downloads.add_button.winfo_rooty()==y and app.downloads.add_button.winfo_viewable()
+        for row in app.downloads.rows[1:]:app.downloads.remove(row)
+        app.downloads.remove(app.downloads.rows[0]);assert len(app.downloads.rows)==1
         assert app.busy and (tmp/'queued-0.mp4').read_bytes()==b'test-video'
-        app.show_page('materials')
+        app.show_page('materials');root.update()
+        assert all(w.winfo_ismapped() for w in app.project_header_widgets)
         app.set_busy(False)
         assert str(app.blockbox.cget('state')) == 'readonly'
         assert str(app.script.cget('state')) == 'normal'

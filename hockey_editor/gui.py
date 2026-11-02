@@ -122,7 +122,7 @@ class App(EpisodeMixin,MatchMixin):
         tk.Label(rail, text='ВАШ ВЫПУСК', bg=ui.NAV, fg=ui.NAV_MUTED,
                  font=('Segoe UI', 8, 'bold')).pack(anchor='w', padx=22, pady=(6, 12))
         self.nav = {}
-        for key, title in [('materials', '1   Материалы'), ('review', '2   Проверка'), ('export', '3   Экспорт'), ('downloads', 'YouTube · скачивание')]:
+        for key, title in [('materials', '1   Материалы'), ('review', '2   Проверка'), ('export', '3   Экспорт')]:
             b = tk.Button(rail, text=title, command=lambda k=key: self.show_page(k),
                           bg=ui.NAV, fg=ui.NAV_MUTED, activebackground='#244452',
                           activeforeground='white', bd=0, relief='flat', anchor='w',
@@ -136,6 +136,8 @@ class App(EpisodeMixin,MatchMixin):
                                       bg=ui.NAV, fg='white', activebackground='#244452', activeforeground='white',
                                       bd=0, anchor='w', pady=10, cursor='hand2', font=('Segoe UI', 10))
         self.settings_nav.pack(fill='x')
+        self.downloads_nav=tk.Button(bottom,text='YouTube · скачивание',command=lambda:self.show_page('downloads'),bg=ui.NAV,fg='white',activebackground='#244452',activeforeground='white',bd=0,anchor='w',pady=10,cursor='hand2',font=('Segoe UI',10))
+        self.downloads_nav.pack(fill='x')
         tk.Frame(bottom, bg='#2C4350', height=1).pack(fill='x', pady=12)
         tk.Label(bottom, text='Всё на вашем компьютере', bg=ui.NAV, fg=ui.NAV_MUTED,
                  font=('Segoe UI', 8)).pack(anchor='w')
@@ -166,6 +168,7 @@ class App(EpisodeMixin,MatchMixin):
         self.scopebox=ttk.Combobox(context,textvariable=self.scope,values=['Текущий разбор','Все разборы'],state='readonly',width=20)
         self.scopebox.pack(side='left');self.controls.append(self.scopebox)
         ui.Tooltip(self.scopebox,'Определяет поиск эпизодов, анализ речи, общий список и экспорт. В режиме «Все разборы» каждый блок использует свои матчи.')
+        self.project_header_widgets=[bar,profilebar,context]
         self.heading = ttk.Label(main, style='Heading.TLabel')
         self.heading.pack(anchor='w')
         self.subtitle = ttk.Label(main, style='Muted.TLabel', wraplength=800)
@@ -295,11 +298,12 @@ class App(EpisodeMixin,MatchMixin):
         self.button(telegram,'Настроить уведомления',lambda:notification_settings(self)).pack(anchor='w')
         from .drive_ui import show as drive_settings
         self.button(telegram,'Google Диск · аккаунт и папки',lambda:drive_settings(self)).pack(anchor='w',pady=8)
-        saved=ui.card(page,'Мои настройки','Шаблоны хранятся отдельно для русского хоккея, узбекского футбола и боёв.')
+        saved=ui.card(page,'Мои настройки','Сохранённые настройки доступны для всех шаблонов ведущего.')
         self.presetbox=ttk.Combobox(saved,state='readonly');self.presetbox.pack(fill='x')
         row=ttk.Frame(saved);row.pack(fill='x',pady=6)
         self.button(row,'Сохранить как шаблон',self.save_settings_preset).pack(side='left')
         self.button(row,'Применить шаблон',self.load_settings_preset).pack(side='left',padx=6)
+        self.button(row,'Удалить шаблон',self.delete_settings_preset).pack(side='left')
         look = ui.card(page, 'Изображение и динамика', 'Проверенные настройки уже включены. Их можно менять для конкретного выпуска.')
         self.rotate = tk.StringVar(value='Автоматически')
         self.option(look, 'Поворот ведущего', self.rotate, ['Автоматически', 'Без поворота', '90°', '180°', '270°'])
@@ -402,7 +406,7 @@ class App(EpisodeMixin,MatchMixin):
 
     def scroll_page(self, event):
         page = self.pages.get(self.page)
-        if not isinstance(page, ui.ScrollPage):
+        if not hasattr(page,'scroll'):
             return
         # Text fields and tables retain their own wheel behaviour. Dialogs are independent.
         if event.widget.winfo_toplevel() != self.root or event.widget.winfo_class() in ('Text', 'Treeview', 'TCombobox'):
@@ -412,6 +416,12 @@ class App(EpisodeMixin,MatchMixin):
 
     def show_page(self, key):
         self.page = key
+        if key=='downloads':
+            for widget in self.project_header_widgets+[self.heading,self.subtitle]:widget.pack_forget()
+        elif not self.heading.winfo_manager():
+            for widget,pady in zip(self.project_header_widgets,[(0,18),(0,8),(0,12)]):widget.pack(fill='x',pady=pady,before=self.deck)
+            self.heading.pack(anchor='w',before=self.deck)
+            self.subtitle.pack(fill='x',pady=(6,18),before=self.deck)
         if key=='downloads':self.footer.pack_forget()
         elif not self.footer.winfo_manager():self.footer.pack(side='bottom',fill='x',pady=(12,0),before=self.deck)
         self.pages[key].tkraise()
@@ -428,6 +438,7 @@ class App(EpisodeMixin,MatchMixin):
             button.configure(bg='#245160' if name == key else ui.NAV,
                              fg='white' if name == key else ui.NAV_MUTED,
                              font=('Segoe UI', 11, 'bold' if name == key else 'normal'))
+        self.downloads_nav.configure(fg='#65E4C0' if key=='downloads' else 'white')
         self.settings_nav.configure(fg='#65E4C0' if key == 'settings' else 'white')
         self.update_summary()
 
@@ -788,6 +799,17 @@ class App(EpisodeMixin,MatchMixin):
             save_preset(self.project,name);self.refresh();self.presetbox.set(name.strip())
             self.status.set('Шаблон настроек сохранён.')
         except (OSError,ValueError) as e:messagebox.showerror('Шаблон',str(e),parent=self.root)
+
+    def delete_settings_preset(self):
+        if self.busy:return
+        name=self.presetbox.get()
+        if not name:return messagebox.showinfo('Шаблон','Выберите сохранённый шаблон.',parent=self.root)
+        if not messagebox.askyesno('Удалить шаблон',f'Удалить «{name}» из сохранённых настроек? Настройки текущего проекта останутся прежними.',parent=self.root):return
+        try:
+            from .preferences import delete_preset
+            delete_preset(self.project.profile,name);self.presetbox.set('');self.refresh()
+            self.status.set('Шаблон удалён.')
+        except (OSError,ValueError) as error:messagebox.showerror('Шаблон',str(error),parent=self.root)
 
     def load_settings_preset(self):
         if self.busy:return
