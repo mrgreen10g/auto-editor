@@ -118,6 +118,11 @@ def check():
         for row in app.downloads.rows[1:]:app.downloads.remove(row)
         app.downloads.remove(app.downloads.rows[0]);assert len(app.downloads.rows)==1
         assert app.busy and (tmp/'queued-0.mp4').read_bytes()==b'test-video'
+        app.show_page('settings');root.update()
+        assert not app.services_panel.winfo_ismapped()
+        app.services_toggle.invoke();root.update();assert app.services_panel.winfo_ismapped()
+        app.services_toggle.invoke();root.update();assert not app.services_panel.winfo_ismapped()
+        assert app.downloads_nav.winfo_rooty()<app.settings_nav.winfo_rooty()
         app.show_page('materials');root.update()
         assert all(w.winfo_ismapped() for w in app.project_header_widgets)
         app.set_busy(False)

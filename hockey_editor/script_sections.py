@@ -70,7 +70,7 @@ def parse(text, profile, pair_hints=()):
         stop=boundaries[n+1][0] if n+1<len(boundaries) else len(lines)
         body=lines[end+1:stop]
         if n==len(boundaries)-1:
-            split=next((j for j,row in enumerate(body) if key(row) in OUTRO|{'итоги','итог','вывод','заключение'} or re.match(r'^(?:demak\b.*(?:bugun.*tahlil qildik|tanlovlar.*takror|yakunlaymiz)|итак\b|подвед[её]м итоги\b|повторю\s+(?:\w+\s+)?(?:основны\w*\s+)?прогноз)',key(row))),None)
+            split=next((j for j,row in enumerate(body) if key(row) in OUTRO|{'итоги','итог','вывод','заключение'} or re.match(r'^(?:demak\b.*(?:bugun.*tahlil qildik|tanlovlar.*takror|yakunlaymiz)|demak\s*[,,:—–-]?\s*(?:mening\s+|bizning\s+)?tanlovlar(?:im|imiz)?\s*[:.!]?$|итак\b|подвед[её]м итоги\b|повторю\s+(?:\w+\s+)?(?:основны\w*\s+)?прогноз)',key(row))),None)
             if split is not None:
                 outro.script=clean('\n'.join(body[split:])).strip();body=body[:split]
         # Keep spoken announcements, but omit editorial pair headings and markers.
@@ -96,6 +96,15 @@ def repair_premature_outro(project):
     """Recover the old marker parser's early Demak split only with an explicit ending heading."""
     if not project.profile.startswith('uz_') or not project.blocks:return False
     from .uz_structure import key,OUTRO
+    if not project.outro.script.strip():
+        rows=project.blocks[-1].script.splitlines()
+        boundary=next((i for i,row in enumerate(rows) if i>0 and (key(row) in OUTRO or re.fullmatch(r'demak\s*[,,:—–-]?\s*(?:mening\s+|bizning\s+)?tanlovlar(?:im|imiz)?\s*[:.!]?',key(row)))),None)
+        if boundary is not None:
+            project.blocks[-1].script='\n'.join(rows[:boundary])
+            project.outro.script='\n'.join(rows[boundary:])
+            for block in [project.blocks[-1],project.outro]:block.asr_lines=[];block.speech_key='';block.speech_cards={}
+            project.episode_key=''
+            return True
     rows=project.outro.script.splitlines()
     if not rows or not re.match(r'^demak\b',key(rows[0])):return False
     boundary=next((i for i,row in enumerate(rows) if i>0 and key(row) in OUTRO),None)

@@ -137,7 +137,7 @@ class App(EpisodeMixin,MatchMixin):
                                       bd=0, anchor='w', pady=10, cursor='hand2', font=('Segoe UI', 10))
         self.settings_nav.pack(fill='x')
         self.downloads_nav=tk.Button(bottom,text='YouTube · скачивание',command=lambda:self.show_page('downloads'),bg=ui.NAV,fg='white',activebackground='#244452',activeforeground='white',bd=0,anchor='w',pady=10,cursor='hand2',font=('Segoe UI',10))
-        self.downloads_nav.pack(fill='x')
+        self.downloads_nav.pack(fill='x',before=self.settings_nav)
         tk.Frame(bottom, bg='#2C4350', height=1).pack(fill='x', pady=12)
         tk.Label(bottom, text='Всё на вашем компьютере', bg=ui.NAV, fg=ui.NAV_MUTED,
                  font=('Segoe UI', 8)).pack(anchor='w')
@@ -293,14 +293,19 @@ class App(EpisodeMixin,MatchMixin):
 
     def build_settings(self):
         page = self.scrollable('settings')
-        telegram=ui.card(page,'Telegram и автоматизация','Общие уведомления для всех шаблонов. Автопереход к таймингам без спорных фрагментов.')
+        extra=ttk.Frame(page);extra.pack(fill='x',pady=(0,12))
+        services=ttk.Frame(extra)
+        def toggle_services():
+            if services.winfo_manager():services.pack_forget();service_button.configure(text='▶ Telegram, Google Диск и ИИ')
+            else:services.pack(fill='x');service_button.configure(text='▼ Telegram, Google Диск и ИИ')
+        service_button=ttk.Button(extra,text='▶ Telegram, Google Диск и ИИ',command=toggle_services);service_button.pack(anchor='w')
         from .notification_ui import show as notification_settings
-        self.button(telegram,'Настроить уведомления',lambda:notification_settings(self)).pack(anchor='w')
         from .drive_ui import show as drive_settings
-        self.button(telegram,'Google Диск · аккаунт и папки',lambda:drive_settings(self)).pack(anchor='w',pady=8)
         from .local_ai_ui import show as local_ai_settings
-        ai=ui.card(page,'Локальный ИИ','Лёгкая перепроверка спорного текста без платных API.')
-        self.button(ai,'Настроить локальный ИИ',lambda:local_ai_settings(self)).pack(anchor='w')
+        self.button(services,'Telegram · уведомления',lambda:notification_settings(self)).pack(anchor='w',pady=4)
+        self.button(services,'Google Диск · аккаунт и папки',lambda:drive_settings(self)).pack(anchor='w',pady=4)
+        self.button(services,'Локальный ИИ',lambda:local_ai_settings(self)).pack(anchor='w',pady=4)
+        self.services_panel=services;self.services_toggle=service_button
         saved=ui.card(page,'Мои настройки','Сохранённые настройки доступны для всех шаблонов ведущего.')
         self.presetbox=ttk.Combobox(saved,state='readonly');self.presetbox.pack(fill='x')
         row=ttk.Frame(saved);row.pack(fill='x',pady=6)
