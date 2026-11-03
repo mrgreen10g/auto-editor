@@ -3,7 +3,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk,filedialog,messagebox
 from . import ui
-from .folder_import import root_files,build_import,unresolved_sources,presenter_folder
+from .folder_import import root_files,build_import,unresolved_sources,presenter_folder,microphone_files
 
 
 def choose_file(parent,title,files):
@@ -29,6 +29,7 @@ def import_folder(app):
         if app.project.profile.endswith('_shorts'):
             preferred=[p for p in scripts if p.name.casefold()=='text.txt']
             if preferred:scripts=preferred
+        hosts.sort(key=lambda p:(not p.stem.upper().startswith('IMG_'),p.name.casefold()))
         host=choose_file(app.root,'Запись ведущего · MOV / MP4',hosts)
         if not host:return
         script=choose_file(app.root,'Полный сценарий · TXT / DOCX',scripts)
@@ -41,6 +42,12 @@ def import_folder(app):
     ttk.Label(w,text=f'Папка: {root}\nВедущий: {host.name}\nСценарий: {script.name}',wraplength=840,padding=12).pack(fill='x')
     hint='Ведущий и сценарий взяты из shorts, матчи — из папок лонга.' if host.parent.name.casefold()=='shorts' else 'Ведущий и сценарий взяты из выбранной папки, матчи — из вложенных папок.'
     ttk.Label(w,text='Проверьте сопоставление. Настройки голоса, музыки и оформления сохранятся.\n'+hint,wraplength=840,padding=12).pack(fill='x')
+    mic_paths=microphone_files(host.parent,host)
+    mic_choice=tk.StringVar(value='Оставить звук камеры')
+    micbar=ttk.Frame(w,padding=12);micbar.pack(fill='x')
+    ttk.Label(micbar,text='Звук ведущего:').pack(anchor='w')
+    micbox=ttk.Combobox(micbar,state='readonly',textvariable=mic_choice,values=['Оставить звук камеры']+[p.name for p in mic_paths],width=65);micbox.current(0);micbox.pack(fill='x')
+    if len(mic_paths)==1:ttk.Label(micbar,text='Рядом найдена возможная запись микрофона: '+mic_paths[0].name,wraplength=800).pack(anchor='w')
     table=ui.table(w,[('kind','Разбор / запись',330),('source','Папка / файл',280),('state','Состояние',220)],10)
     notice=tk.StringVar();ttk.Label(w,textvariable=notice,wraplength=840,padding=12).pack(fill='x')
     footer=ttk.Frame(w,padding=12);footer.pack(side='bottom',fill='x',before=table.master)
@@ -95,6 +102,15 @@ def import_folder(app):
             if m.path in custom:m.home,m.away,m.date,m.fighter=custom[m.path]
         refresh()
     def apply():
+        chosen=micbox.current()
+        if chosen>0:
+            from .media import probe
+            try:
+                path=mic_paths[chosen-1];info=probe(path)
+                if not info.get('audio') or info.get('duration',0)<=0:raise ValueError('В записи микрофона нет звука.')
+                draft.microphones={str(host):str(path)}
+            except Exception as error:messagebox.showerror('Микрофон',str(error),parent=w);return
+        else:draft.microphones={}
         if unresolved_sources(draft):
             messagebox.showinfo('Уточните записи','У некоторых файлов не определены команды или боец. Уточните их двойным щелчком или исключите файл.',parent=w);return
         from .material_folder import resolve

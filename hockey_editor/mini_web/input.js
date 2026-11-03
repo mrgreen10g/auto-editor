@@ -77,11 +77,19 @@ async function inputBrowse(path='',offset=0){
 $('inputTab').onclick=()=>guard(()=>switchPage('input'));
 function serverPayload(){return {folder:$('serverFolder').value,profile:$('inputProfile').value,preset:$('inputPreset').value}}
 $('chooseServerFolder').onclick=()=>guard(async()=>{inputFolderTarget='serverFolder';await inputBrowse($('serverFolder').value)});
-$('scanServerFolder').onclick=()=>guard(async()=>{const r=await api('input-server-files',serverPayload());for(const [id,key] of [['serverHost','hosts'],['serverScript','scripts']]){$(id).replaceChildren();for(const p of r[key])$(id).add(new Option(p.split(/[\\/]/).pop(),p));$(id).add(new Option('Добавлю позже / сохранить уже добавленное',''));}notice('Выберите доступные материалы. Недостающие можно добавить позже.');});
+let serverMicFiles=[];
+function updateServerMicrophones(){
+ const box=$('serverMicrophone');box.replaceChildren(new Option('Оставить звук камеры',''));
+ const candidates=serverMicFiles.filter(p=>p!==$('serverHost').value);
+ for(const p of candidates)box.add(new Option(p.split(/[\\/]/).pop(),p));
+ $('serverMicHint').textContent=candidates.length===1?'Рядом найдена возможная запись микрофона: '+candidates[0].split(/[\\/]/).pop()+'. Выберите её выше, если это микрофон.':'Выберите отдельную запись микрофона или оставьте звук камеры.';
+}
+$('serverHost').onchange=updateServerMicrophones;
+$('scanServerFolder').onclick=()=>guard(async()=>{const r=await api('input-server-files',serverPayload());for(const [id,key] of [['serverHost','hosts'],['serverScript','scripts']]){$(id).replaceChildren();for(const p of r[key])$(id).add(new Option(p.split(/[\\/]/).pop(),p));$(id).add(new Option('Добавлю позже / сохранить уже добавленное',''));}serverMicFiles=r.microphones||[];updateServerMicrophones();notice('Выберите камеру, звук и сценарий.');});
 async function importServerFresh(attach=false){
  if(attach&&!draftId)throw Error('Сначала создайте или выберите черновик.');
  $('serverScriptStatus').textContent='Читаю сохранённый файл и заново определяю разборы…';
- const r=await api('input-server-import',{...serverPayload(),id:attach?draftId:undefined,host:$('serverHost').value,script:$('serverScript').value,refresh:true});
+ const r=await api('input-server-import',{...serverPayload(),id:attach?draftId:undefined,host:$('serverHost').value,microphone:$('serverMicrophone').value,script:$('serverScript').value,refresh:true});
  draftId=r.id;draftLoaded='';await refreshInputs();inputStepTo('summary');
  const message='Файл перечитан · '+new Date(r.updated*1000).toLocaleTimeString()+' · разборов: '+r.count+'. Проверьте сводку и откройте обновлённый проект.';
  $('serverScriptStatus').textContent=message;notice(message);

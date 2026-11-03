@@ -60,7 +60,7 @@ class Inputs:
 
     def server_files(self,data):
         from .mini_export import folder
-        from .folder_import import root_files
+        from .folder_import import root_files,microphone_files
         from .profiles import PROFILES
         profile=data.get('profile')
         if profile not in {p for rows in PROFILES.values() for p,_ in rows}:raise RemoteError('Выберите шаблон.')
@@ -72,7 +72,8 @@ class Inputs:
             if choices:target=choices[0]
         if target.is_symlink():raise RemoteError('Выберите обычную папку материалов, не символическую ссылку.')
         hosts,scripts=root_files(target) if target.is_dir() else ([],[])
-        return dict(hosts=[str(p) for p in hosts],scripts=[str(p) for p in scripts],target=str(target))
+        hosts.sort(key=lambda p:(not p.stem.upper().startswith('IMG_'),p.name.casefold()))
+        return dict(microphones=[str(p) for p in microphone_files(target)] if target.is_dir() else [],hosts=[str(p) for p in hosts],scripts=[str(p) for p in scripts],target=str(target))
 
     def server_import(self,data):
         from .mini_export import folder
@@ -83,6 +84,13 @@ class Inputs:
         host=str(data.get('host',''));script=str(data.get('script',''))
         if host and Path(host).resolve() not in {Path(p).resolve() for p in found['hosts']}:raise ValueError('Выберите запись ведущего из списка файлов.')
         if script and Path(script).resolve() not in {Path(p).resolve() for p in found['scripts']}:raise ValueError('Выберите сценарий из списка файлов.')
+        microphone=data.get('microphone')
+        if microphone:
+            if not host:raise ValueError('Сначала выберите запись камеры.')
+            if microphone not in found['microphones'] or Path(microphone).resolve()==Path(host).resolve():raise ValueError('Выберите отдельный файл микрофона из папки.')
+            from .media import probe
+            info=probe(microphone)
+            if not info.get('audio') or info.get('duration',0)<=0:raise ValueError('В записи микрофона нет звука.')
         with self.lock:
             previous=next((r for r in self.catalog() if Path(r['folder'])==target and r['profile']==data['profile']),None)
             if data.get('id'):
@@ -103,7 +111,13 @@ class Inputs:
                 # Refresh hints and discover additional headings from a newly attached root.
                 d=parse(d,d['script']);reconcile_files(d)
             d['preset']=str(data.get('preset',d.get('preset','')))
-            if host:ready(self,d,host,'host',explicit=True)
+            if host:
+                ready(self,d,host,'host',explicit=True)
+                if microphone is not None:
+                    camera=next(r for r in d['files'] if r['role']=='host' and r['status']=='ready' and Path(r['path']).resolve()==Path(host).resolve())
+                    for r in d['files']:
+                        if r['role']=='mic' and r['block']==camera['id']:r['status']='removed'
+                    if microphone:ready(self,d,microphone,'mic',camera['id'],explicit=True)
             added=reconcile(self,d)
             target=Path(d['folder']);target.mkdir(parents=True,exist_ok=True)
             for section in ('Ведущий','Матчи','Сценарий','Результат'):(target/section).mkdir(exist_ok=True)

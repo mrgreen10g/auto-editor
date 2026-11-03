@@ -145,7 +145,7 @@ def check():
                 expect(page.locator('#hostParts > div')).to_have_count(2,timeout=60000)
                 click('#hostParts > div:first-child button');expect(page.locator('#hostParts > div:first-child')).to_contain_text('second-host.mp4')
                 # Real server file picker, then associate microphone video with the first part.
-                page.locator('#micHost').evaluate('(e)=>e.closest("details").open=true')
+                expect(page.locator('#micHost')).to_be_visible()
                 page.locator('#micHost').select_option(index=0)
                 click('#browseMicFile')
                 page.evaluate('(p)=>browseMaterial(p)',str(Path(original_host).parent))
@@ -253,7 +253,7 @@ def check():
                 existing=root/'existing';existing.mkdir();setup(existing)
                 click('#inputTab');page.locator('#draftChoice').select_option('');click('#inputSteps [data-step="setup"]')
                 click('#serverImportPanel summary');page.locator('#serverFolder').evaluate('(e,p)=>{e.value=p}',str(existing))
-                click('#scanServerFolder');click('#openServerScript');expect(page.locator('#serverScriptText')).to_have_value(SCRIPT);click('#saveServerScript')
+                click('#scanServerFolder');expect(page.locator('#serverMicrophone')).to_be_visible();expect(page.locator('#serverMicrophone')).to_have_value('');click('#openServerScript');expect(page.locator('#serverScriptText')).to_have_value(SCRIPT);click('#saveServerScript')
                 expect(page.locator('#inputSummary')).to_contain_text('АМУР')
                 expect(page.locator('#activateInput')).to_be_enabled()
                 source=existing/'text.txt';source.write_text(SCRIPT.replace('Амур играет дома.','Амур играет дома. Свежая правка сценария.'),encoding='utf-8')

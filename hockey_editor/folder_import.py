@@ -22,6 +22,11 @@ def root_files(folder):
     return ([p for p in files if p.suffix.lower() in {'.mov','.mp4'}],
             [p for p in files if p.suffix.lower() in {'.txt','.docx'} and not p.name.startswith('~$')])
 
+def microphone_files(folder,host=None):
+    root=Path(folder).resolve()
+    extensions=VIDEO|{'.mp3','.wav','.m4a','.aac','.flac'}
+    return sorted((p.resolve() for p in root.iterdir() if p.is_file() and not p.is_symlink() and p.suffix.lower() in extensions and (not host or p.resolve()!=Path(host).resolve())),key=lambda p:p.name.casefold())
+
 def parse_episode(text,profile,pair_hints=()):
     from .script_sections import parse
     result=parse(text,profile,pair_hints) or _parse_episode(text,profile)
@@ -116,7 +121,7 @@ def build_import(project,folder,host,script,overrides=None):
     draft=copy.deepcopy(project)
     hints=folder_pair_hints(root,draft.profile)
     draft.intro,draft.blocks,draft.outro=parse_episode(read_script(script),draft.profile,hints)
-    draft.host=str(host);draft.hosts=[str(host)];draft.matches=[]
+    draft.host=str(host);draft.hosts=[str(host)];draft.microphones={};draft.matches=[]
     draft.full_video=True;draft.whole_episode=True;draft.recording_times=''
     draft.episode_plan=None;draft.episode_key='';draft.settings.use_manual_clips=False
     draft.matches,mapping,notes=discover_matches(draft.blocks,draft.profile,root,overrides)
