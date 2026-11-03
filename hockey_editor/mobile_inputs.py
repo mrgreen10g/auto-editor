@@ -87,7 +87,7 @@ class Inputs:
         microphone=data.get('microphone')
         if microphone:
             if not host:raise ValueError('Сначала выберите запись камеры.')
-            if microphone not in found['microphones'] or Path(microphone).resolve()==Path(host).resolve():raise ValueError('Выберите отдельный файл микрофона из папки.')
+            if Path(microphone).resolve() not in {Path(p).resolve() for p in found['microphones']} or Path(microphone).resolve()==Path(host).resolve():raise ValueError('Выберите отдельный файл микрофона из папки.')
             from .media import probe
             info=probe(microphone)
             if not info.get('audio') or info.get('duration',0)<=0:raise ValueError('В записи микрофона нет звука.')

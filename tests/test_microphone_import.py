@@ -14,7 +14,7 @@ class MicrophoneImportTests(unittest.TestCase):
    mic=folder/'microphone.mkv';mic.write_bytes(b'audio')
    inputs=Inputs(Bridge(app_fixture(root)),root/'catalog.json')
    payload=dict(folder=str(folder),host=str(host),script=str(script),profile='ru_hockey',refresh=True)
-   self.assertIn(str(mic),inputs.server_files(payload)['microphones'])
+   self.assertIn(mic.resolve(),[Path(p).resolve() for p in inputs.server_files(payload)['microphones']])
    self.assertNotIn(host.resolve(),microphone_files(folder,host))
    with patch('hockey_editor.media.probe',return_value={'audio':True,'duration':10}):
     result=inputs.server_import(dict(payload,microphone=str(mic)))
