@@ -20,7 +20,7 @@ def recording_key(project):
     return hashlib.sha256(json.dumps([MODEL_REV,'beam5-vocabulary-v2',recognition_prompt(project),project.profile,[b.title for b in project.blocks],data]).encode()).hexdigest()
 
 def speech_key(project):
-    return hashlib.sha256(json.dumps(['uz-local-evidence-v15-local-forecast-review',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['uz-local-evidence-v16-corpus-boundaries',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
 
 def model_path(cancel,log):
     folder=Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'Models'/'uzbek-turbo'
@@ -100,6 +100,8 @@ def similar(a,b):
 def name_hits(name,words,context=()):
     names=[token(v) for v in football_aliases(name,context)];hits=[]
     club=football_identity(name)
+    # Uzbek letter-by-letter pronunciation; these are acoustic aliases only.
+    if club=='OKMK':names.extend(token(v) for v in ('okimaka','okimaki','okimak','o ka em ka'))
     for i in range(len(words)):
         for count in (1,2,3):
             if i+count>len(words):break
@@ -202,7 +204,7 @@ def recap_cue(text):
     # A club having finished a season (yakunlab) is not an episode recap.
     return bool(re.search(r'\b(?:qaytar\w*|takror\w*|xulosa|jaml\w*)\b',t) or
                 re.search(r'\byakun(?:laymiz|lasak|ida|iy)?\b',t) or
-                re.search(r'\b(?:demak|deming|demir)\b.*bugun.*(?:tanlo|tahlil\s+qildik)',t) or
+                re.search(r'\b(?:demak|deming|demir|demi)\b.*bugun.*(?:tanlo|tahlil\s+qildik)',t) or
                 (re.search(r'eslat|isatib',t) and re.search(r'tanlovlar|variantlar',t) and re.search(r'yana|oxir|qisqacha',t)))
 
 
@@ -221,7 +223,7 @@ def section_segments(project,segments):
                 # An ordinal alone at the preceding ASR edge belongs to its pair.
                 for edge in list(cuts):
                     if w['start']<edge<=words[min(i+1,len(words)-1)]['start']:cuts.discard(edge)
-        if token(w['word']) in ('demak','deming','demir') and recap_cue(' '.join(v['word'] for v in words[i:i+22])):
+        if token(w['word']) in ('demak','deming','demir','demi') and recap_cue(' '.join(v['word'] for v in words[i:i+22])):
             cuts.add(w['start'])
     result=[];edges=sorted(cuts)
     for a,z in zip(edges,edges[1:]):

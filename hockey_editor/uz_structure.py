@@ -124,7 +124,12 @@ def parse(text, sport):
         # Prefer names from the initial fixture list to ordinal labels such as
         # 'IKKINCHI UCHRASHUV — TEAM VA TEAM'. These labels are not team names.
         declared=next((p for p in index if p and spoken and key(p)==key(spoken)),None)
-        oral_title = declared or (spoken if not explicit_pairs else None)
+        if title and spoken:
+            # Mixed Cyrillic/Latin ordinal labels can look like literal pairs.
+            title=declared or spoken
+        # An index match must not promote the fixture list in KIRISH into
+        # analysis blocks when the body already supplies explicit headings.
+        oral_title = (declared or spoken) if not explicit_pairs else None
         if oral_title:
             if current.kind=='analysis' and key(current.title)==key(oral_title):
                 if line.isupper():continue
