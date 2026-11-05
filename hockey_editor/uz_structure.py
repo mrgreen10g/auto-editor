@@ -51,6 +51,7 @@ def fixture(line, sport):
 
 
 def spoken_fixture(line, sport):
+    line=line.translate(str.maketrans({c:"'" for c in '’‘ʻʼ`'}))
     # Editorial ordinal labels sometimes mix Cyrillic and Latin lookalikes.
     parts=line.split(maxsplit=1)
     if len(parts)==2 and re.search('[A-Za-z]',parts[0]):
@@ -58,7 +59,10 @@ def spoken_fixture(line, sport):
     match = re.match(r"(?:birinchi|ikkinchi|uchinchi|to'rtinchi|beshinchi)\s+(?:uchrashuv|o'yin|jang)\s*[—–:-]?\s+(.+)", line, re.I)
     if not match:
         return None
-    return fixture(re.sub(r'\s+va\s+', ' — ', match[1].rstrip('.!'), count=1, flags=re.I), sport)
+    body=match[1].rstrip('.!')
+    if sport=='combat':
+        body=re.sub(r'^\d+(?:[,.]\d+)?\s*(?:kilogramm|kg)(?:gacha)?\s+vaznda\s+','',body,flags=re.I)
+    return fixture(re.sub(r'\s+va\s+', ' — ', body, count=1, flags=re.I), sport)
 
 
 def rows(text):
@@ -93,7 +97,14 @@ def parse(text, sport):
             index=declared;single=declared;first=pos
     single = single[0] if len(single) == 1 else None
     body_rows = values[first if first is not None else 0:]
-    explicit_pairs = any(fixture(r.split('|')[0].strip(), sport) for r in body_rows)
+    from .folder_import import pair_key
+    explicit_pairs=set()
+    for row in body_rows:
+        if label(row) in OUTRO:break
+        heading=row.split('|')[0].strip()
+        title=fixture(heading,sport)
+        if title:
+            explicit_pairs.add(pair_key(spoken_fixture(heading,sport) or title,'uz_'+sport))
     intro = Block(title='Boshlanish', uid='intro', kind='intro', language='uz', sport=sport)
     outro = Block(title='Yakun', uid='outro', kind='outro', language='uz', sport=sport)
     blocks = []
@@ -129,9 +140,24 @@ def parse(text, sport):
             title=declared or spoken
         # An index match must not promote the fixture list in KIRISH into
         # analysis blocks when the body already supplies explicit headings.
-        oral_title = (declared or spoken) if not explicit_pairs else None
+        oral_title = declared or spoken
+        if oral_title and pair_key(oral_title,'uz_'+sport) in explicit_pairs:
+            oral_title=None
         if oral_title:
-            if current.kind=='analysis' and key(current.title)==key(oral_title):
+            same=pair_key(current.title,'uz_'+sport)==pair_key(oral_title,'uz_'+sport)
+            heading_only=not current.script.strip() or (current.script.isupper() and '\n' not in current.script)
+            if current.kind=='analysis' and not same and heading_only and sport=='football':
+                from .graphics import block_teams
+                from .team_names import football_identity,compact
+                from difflib import SequenceMatcher
+                def compatible(left,right):
+                    a,b=football_identity(left),football_identity(right)
+                    if a and b:return a==b
+                    x,y=compact(left),compact(right)
+                    prefix=(key(right).startswith(key(left)+' ') or key(left).startswith(key(right)+' '))
+                    return min(len(x),len(y))>=3 and (prefix or SequenceMatcher(None,x,y).ratio()>=.85)
+                same=all(compatible(a,b) for a,b in zip(block_teams(current.title),block_teams(oral_title)))
+            if current.kind=='analysis' and same:
                 if line.isupper():continue
                 title=None;oral_title=None  # Keep the actual spoken introduction.
             else:title=oral_title

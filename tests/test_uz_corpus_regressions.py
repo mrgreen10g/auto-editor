@@ -28,6 +28,42 @@ class CorpusRegressions(unittest.TestCase):
             self.assertFalse(name_hits('Nasaf',words),text)
         self.assertTrue(pair_hits("Mash'al — OKMK",[{'word':w} for w in 'Mashal Okimaka'.split()]))
 
+    def test_mixed_body_headings_keep_oral_only_match(self):
+        intro,blocks,outro=parse('ARSENAL — CHELSEA\nROMA — MILAN\nKIRISH\nSalom.\n'
+            'ARSENAL — CHELSEA\nBirinchi tahlil.\nIkkinchi uchrashuv — Roma va Milan.\n'
+            'Ikkinchi tahlil.\nYAKUN\nXayr.','football')
+        self.assertEqual(len(blocks),2)
+        self.assertIn('Ikkinchi tahlil.',blocks[1].script)
+
+    def test_recap_pair_heading_does_not_disable_spoken_body(self):
+        intro,blocks,outro=parse('ARSENAL — CHELSEA\nKIRISH\nSalom.\n'
+            'Birinchi uchrashuv — Arsenal va Chelsea.\nTahlil.\nYAKUN\n'
+            'ARSENAL — CHELSEA\nXayr.','football')
+        self.assertEqual(len(blocks),1)
+        self.assertIn('Tahlil.',blocks[0].script)
+        self.assertIn('Xayr.',outro.script)
+
+    def test_curly_apostrophe_ordinal_is_not_a_literal_team(self):
+        _,blocks,_=parse('ARSENAL — CHELSEA\nKIRISH\nSalom.\n'
+            'BIRINCHI O’YIN — ARSENAL VA CHELSEA\n'
+            'Birinchi uchrashuv — Arsenal va Chelsea.\nTahlil.','football')
+        self.assertEqual(len(blocks),1)
+        self.assertEqual(blocks[0].title.casefold(),'arsenal — chelsea')
+
+    def test_weight_announcement_does_not_create_another_fight(self):
+        _,blocks,_=parse('KIRISH\nSalom.\nALPHA FIGHTER — BETA FIGHTER\n'
+            'Birinchi jang — 64 kilogrammgacha vaznda Alpha Fighter va Beta Fighter.\n'
+            'Bu jang haqida tahlil.','combat')
+        self.assertEqual(len(blocks),1)
+        self.assertIn('64 kilogrammgacha vaznda',blocks[0].script)
+
+    def test_adjacent_short_unknown_name_and_full_announcement_are_one_block(self):
+        _,blocks,_=parse('LEX — BAYER\nKIRISH\nSalom.\n'
+            'IKKINCHI O’YIN — LEX VA BAYER\n'
+            'Ikkinchi uchrashuv — Lex Poznan va Bayer Leverkuzen.\nTahlil.','football')
+        self.assertEqual(len(blocks),1)
+        self.assertIn('Lex Poznan',blocks[0].script)
+
     def test_shortened_recap_cue_needs_recap_context(self):
         for cue in ('Demi', 'Demek', 'Demak'):
             self.assertTrue(recap_cue(cue+' bugungi tanlovimiz uchta uchrashuv uchun.'))
