@@ -204,7 +204,7 @@ def recap_cue(text):
     # A club having finished a season (yakunlab) is not an episode recap.
     return bool(re.search(r'\b(?:qaytar\w*|takror\w*|xulosa|jaml\w*)\b',t) or
                 re.search(r'\byakun(?:laymiz|lasak|ida|iy)?\b',t) or
-                re.search(r'\b(?:demak|deming|demir|demi)\b.*bugun.*(?:tanlo|tahlil\s+qildik)',t) or
+                re.search(r'\b(?:demak|demek|deming|demir|demi)\b.*bugun.*(?:tanlo|tahlil\s+qildik)',t) or
                 (re.search(r'eslat|isatib',t) and re.search(r'tanlovlar|variantlar',t) and re.search(r'yana|oxir|qisqacha',t)))
 
 
@@ -223,7 +223,7 @@ def section_segments(project,segments):
                 # An ordinal alone at the preceding ASR edge belongs to its pair.
                 for edge in list(cuts):
                     if w['start']<edge<=words[min(i+1,len(words)-1)]['start']:cuts.discard(edge)
-        if token(w['word']) in ('demak','deming','demir','demi') and recap_cue(' '.join(v['word'] for v in words[i:i+22])):
+        if token(w['word']) in ('demak','demek','deming','demir','demi') and recap_cue(' '.join(v['word'] for v in words[i:i+22])):
             cuts.add(w['start'])
     result=[];edges=sorted(cuts)
     for a,z in zip(edges,edges[1:]):

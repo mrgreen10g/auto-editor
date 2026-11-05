@@ -29,9 +29,27 @@ class CorpusRegressions(unittest.TestCase):
         self.assertTrue(pair_hits("Mash'al — OKMK",[{'word':w} for w in 'Mashal Okimaka'.split()]))
 
     def test_shortened_recap_cue_needs_recap_context(self):
-        self.assertTrue(recap_cue('Demi bugungi tanlovimiz uchta uchrashuv uchun.'))
+        for cue in ('Demi', 'Demek', 'Demak'):
+            self.assertTrue(recap_cue(cue+' bugungi tanlovimiz uchta uchrashuv uchun.'))
         self.assertFalse(recap_cue('Demi kuchli jamoa.'))
         self.assertFalse(recap_cue('Bugun jamoa uyda oynaydi.'))
+
+    def test_acronym_and_recap_do_not_force_whole_episode_draft(self):
+        from hockey_editor.model import Project,Block
+        from hockey_editor.uz_speech import sections
+        from test_uz_speech import segment
+        p=Project(profile='uz_football',blocks=[
+            Block(title='Andijon — Qizilqum',language='uz',script='Birinchi tahlil.'),
+            Block(title="Mash'al — OKMK",language='uz',script='Ikkinchi tahlil.')])
+        p.intro.script='Salom.';p.outro.script='Xayr.'
+        data=[segment(0,8,'Andijon Qizilqum Mashal Okimaka.'),
+              segment(12,16,'Birinchi oyin Andijon Qizilqum.'),
+              segment(20,35,'Bu uyin haqida tahlil.'),
+              segment(43,48,'Ikinchi Mashal Okimaka oyini.'),
+              segment(60,80,'Bu ikkinchi tahlil.'),
+              segment(90,100,'Demi bugungi tanlovimiz ikkita uyin uchun.'),
+              segment(110,120,'Xayr.')]
+        self.assertEqual(sections(p,data)[0],[0,12,43,90,120])
 
 
 if __name__=='__main__':unittest.main()
