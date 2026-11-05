@@ -5,6 +5,37 @@ from .hockey_names import mentioned, pair_in
 from .uzbek import norm
 
 
+def spoken_pair_in(title, text):
+    """Scoped decoder spellings, requiring the other team to be exact.
+
+    These are not club identities or replacements for displayed script text.
+    In particular, Akbar alone must never be interpreted as Ak Bars.
+    """
+    if pair_in(title, text):
+        return True
+    text = ' '.join(text.split()[:18])
+    from .graphics import block_teams
+    from .hockey_names import identity
+    expected = {identity(n) for n in block_teams(title)}
+    if None in expected or len(expected) != 2:
+        return False
+    exact = set(mentioned(text)) & expected
+    if len(exact) != 1:
+        return False
+    missing = next(iter(expected - exact))
+    variants = {
+        'Локомотив': r"o'?lakomay|lakomatsiv|lahkamaysi",
+        'Автомобилист': r'avtomobiliz',
+        'Ак Барс': r'akbars|akbar',
+    }
+    pattern = variants.get(missing)
+    if not pattern:
+        return False
+    # Only a short pair announcement, not a vague resemblance deep in prose.
+    return bool(re.search(
+        r'(?<!\w)(?:' + pattern + r")(?:ning|ni|ga|da|dan)?(?!\w)", norm(text)))
+
+
 def check_script(project,segments):
     if not segments or segments[-1]['end']<45:return
     expected={n for b in project.blocks for n in mentioned(b.title)}

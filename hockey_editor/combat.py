@@ -114,7 +114,7 @@ def active_blocks(project):return [b for b in [project.intro,*project.blocks,pro
 
 def speech_key(project):
     from .uz_speech import recording_key
-    return hashlib.sha256(json.dumps(['combat-shorts-v1' if project.profile=='uz_combat_shorts' else 'combat-speech-v6-body-anchors',recording_key(project),project.recording_times,[(b.uid,b.title,b.script,b.forecast,b.featured_pairs) for b in active_blocks(project)]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['combat-shorts-v2-content-guard' if project.profile=='uz_combat_shorts' else 'combat-speech-v7-content-guard',recording_key(project),project.recording_times,[(b.uid,b.title,b.script,b.forecast,b.featured_pairs) for b in active_blocks(project)]],ensure_ascii=False).encode()).hexdigest()
 
 
 def spoken_segments(segments):
@@ -151,6 +151,8 @@ def intro_annotations(project,segments,lo,hi):
 
 
 def prepare(project,segments,duration):
+    from .uz_content_guard import check_combat_recording
+    check_combat_recording(project,segments)
     from .review import draft_alignment
     from .speech_boundaries import slice_segments,intro_floor
     blocks=active_blocks(project);aligned=copy.deepcopy(blocks)

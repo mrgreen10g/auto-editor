@@ -43,6 +43,37 @@ def project(host=''):
     return Project(host=host,profile='uz_hockey',intro=a,blocks=b,outro=z,full_video=True)
 
 class UzbekHockeyTests(unittest.TestCase):
+    def test_missing_outro_does_not_discard_confirmed_analysis_prefix(self):
+        with tempfile.TemporaryDirectory() as d:
+            host=Path(d)/'host';host.touch();p=project(str(host))
+            data=[segment(0,10,'Toronto Montreal Boston Rangers. Boshladik!'),
+                  segment(40,45,'Toronto Montreal.'),
+                  segment(50,80,'Birinchi tahlil haqida boshqa gaplar.'),
+                  segment(90,95,'Boston Rangers.'),
+                  segment(100,135,'Ikkinchi tahlil va oxirgi boshqa gaplar.')]
+            with patch('hockey_editor.uz_anchors.script_ranges',return_value=None):
+                ranges=prepare(p,data,140)
+            self.assertEqual(ranges[:2],[(0.,40),(40,90)])
+            self.assertEqual(ranges[2][0],90)
+            self.assertFalse(p.intro.asr_lines[0].get('review_reason'))
+            self.assertFalse(p.blocks[0].asr_lines[0].get('review_reason'))
+            self.assertIn('границу',p.blocks[1].asr_lines[0]['review_reason'])
+            self.assertEqual(ranges[-1][1],140)
+
+    def test_contextual_spoken_recap_is_used_for_hockey_outro(self):
+        with tempfile.TemporaryDirectory() as d:
+            host=Path(d)/'host';host.touch();p=project(str(host))
+            data=[segment(0,10,'Toronto Montreal Boston Rangers. Boshladik!'),
+                  segment(40,45,'Toronto Montreal.'),
+                  segment(50,80,'Birinchi tahlil haqida boshqa gaplar.'),
+                  segment(90,95,'Boston Rangers.'),
+                  segment(100,130,'Ikkinchi tahlil haqida boshqa gaplar.'),
+                  segment(140,150,'Endi tanlovlamizni yana bir bor eslatib otaman.'),
+                  segment(151,160,'Xayr.')]
+            with patch('hockey_editor.uz_anchors.script_ranges',return_value=None):
+                ranges=prepare(p,data,160)
+            self.assertEqual(ranges,[(0.,40),(40,90),(90,140),(140,160)])
+
     def test_import_ignores_index_notes_urls_and_citation_tokens(self):
         p=project();self.assertEqual(len(p.blocks),2)
         text='\n'.join(b.script for b in [p.intro,*p.blocks,p.outro])

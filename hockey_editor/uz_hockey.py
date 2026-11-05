@@ -157,7 +157,7 @@ def events(block,matches,use_manual=True):
 
 def speech_key(project):
     from .uz_speech import recording_key
-    return hashlib.sha256(json.dumps(['uz-hockey-v3-body-anchors',recording_key(project),project.recording_times,[(b.uid,b.script,b.title) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['uz-hockey-v4-local-boundary-fallback',recording_key(project),project.recording_times,[(b.uid,b.script,b.title) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
 
 def intro_annotations(project,segments,lo,hi):
     from .hockey_names import hits
@@ -197,7 +197,7 @@ def prepare(project,segments,duration):
     if project.settings.cut_pauses:
         from .speech_cleanup import remove_retakes
         segments,cuts=remove_retakes(aligned,segments)
-    from .uz_hockey_support import check_script
+    from .uz_hockey_support import check_script,spoken_pair_in
     check_script(project,segments)
     rough=draft_alignment(aligned,segments,duration,'Проверьте границы хоккейного раздела.')
     words=[w for s in segments for w in s.get('words',[])]
@@ -205,9 +205,11 @@ def prepare(project,segments,duration):
     for b in blocks[1:]:
         approximate=rough[b.uid][0][0].start
         if b.kind=='analysis':
-            choices=[s['start'] for s in segments if s['start']>=max(floor,bounds[-1]+1,approximate-8)-.01 and pair_in(b.title,s['text'])]
+            choices=[s['start'] for s in segments if s['start']>=max(floor,bounds[-1]+1,approximate-8)-.01 and spoken_pair_in(b.title,s['text'])]
         else:
-            choices=[s['start'] for s in segments if s['start']>=max(bounds[-1]+10,approximate-10) and re.search(r'xullas|qull?as|xulosa|demak|yakun|takror|ko.rib chiqdik',norm(s['text']))]
+            from .uz_speech import recap_cue
+            choices=[s['start'] for s in segments if s['start']>=max(bounds[-1]+10,approximate-10)
+                     and (recap_cue(s['text']) or re.search(r'\b(?:xullas|qull?as)\b|ko.rib chiqdik',norm(s['text'])))]
         if not choices:reliable=False;break
         bounds.append(min(choices,key=lambda x:abs(x-approximate)));floor=bounds[-1]+5
     ranges=list(zip(bounds,bounds[1:]+[duration]))
@@ -229,14 +231,29 @@ def prepare(project,segments,duration):
             if len(ranges)==len(blocks)+1:ranges=ranges[:-2]+[(ranges[-2][0],ranges[-1][1])]
         if len(ranges)!=len(blocks) or ranges[-1][1]>duration+.1:raise ValueError('Проверьте границы таймкодов записи.')
         reliable=True
-    if not reliable or len(ranges)!=len(blocks):ranges=[(rough[b.uid][0][0].start,rough[b.uid][0][-1].end) for b in blocks]
+    uncertain_from=len(blocks)
+    if not reliable or len(ranges)!=len(blocks):
+        # Keep the independently confirmed prefix. A missing later transition
+        # must not move earlier analyses back into the introductory fixture list.
+        uncertain_from=len(bounds)-1 if not shorts else 0
+        lo=bounds[uncertain_from] if uncertain_from else 0.
+        tail=copy.deepcopy(slice_segments(segments,lo,duration))
+        for s in tail:
+            s['start']-=lo;s['end']-=lo
+            for w in s['words']:w['start']-=lo;w['end']-=lo
+        remaining=draft_alignment(aligned[uncertain_from:],tail,duration-lo,'Проверьте границы хоккейного раздела.')
+        for lines,_ in remaining.values():
+            for line in lines:line.start+=lo;line.end+=lo
+        rough.update(remaining)
+        ranges=list(zip(bounds[:uncertain_from],bounds[1:uncertain_from+1]))+[
+            (rough[b.uid][0][0].start,rough[b.uid][0][-1].end) for b in blocks[uncertain_from:]]
     promos=[]
     if shorts:
         from .shorts import promo_spans
         from .uz_speech import telegram_spans
         promos=promo_spans(project,segments,ranges,telegram_spans(words))
     key=speech_key(project)
-    for b,(lo,hi) in zip(blocks,ranges):
+    for block_index,(b,(lo,hi)) in enumerate(zip(blocks,ranges)):
         local=spoken_segments(slice_segments(segments,lo,hi))
         timed=intro_annotations(project,segments,lo,hi) if b.kind=='intro' and not shorts else []
         from .uz_hockey_support import forecast_span
@@ -252,7 +269,7 @@ def prepare(project,segments,duration):
                 rows=[dict(vars(l),start=l.start+lo,end=l.end+lo) for l in fallback[b.uid][0]]
             else:rows=[vars(l) for l in rough[b.uid][0]]
             for row in rows:row['review_reason']='Речь не распознана. Проверьте время и текст выбранной плашки.'
-        if not reliable and rows:rows[0]['review_reason']='Проверьте границу раздела.'
+        if block_index>=uncertain_from and rows:rows[0]['review_reason']='Проверьте границу раздела.'
         # Script-backed forecasts; prose is never turned into subtitle cards.
         if rows:rows[0]['omit']=list(cuts)
         annotations=dict(timed_cards)

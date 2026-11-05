@@ -5,6 +5,17 @@ from hockey_editor.uz_speech import name_hits,recap_cue,pair_hits
 
 
 class CorpusRegressions(unittest.TestCase):
+    def test_hockey_decoder_spellings_require_the_exact_other_team(self):
+        from hockey_editor.uz_hockey_support import spoken_pair_in
+        for title,text in [('Lokomotiv — Traktor', 'O’lakomay sub-traktor'),
+                           ('Avtomobilist — Dinamo Moskva', 'Keyingi oyinda avtomobiliz Dinamo Moskva oyini bor.'),
+                           ('Ak Bars — Sibir', 'Akbar Sibir oyini.'),
+                           ('Ak Bars — Sibir', 'Oxirgi oyinda Akbars Sibir oyniga yetib keldik.')]:
+            self.assertTrue(spoken_pair_in(title,text),text)
+        self.assertFalse(spoken_pair_in('Ak Bars — Sibir','Akbar bugun gapiradi.'))
+        self.assertFalse(spoken_pair_in('Ak Bars — Lada','Akbar Sibir oyini.'))
+        self.assertFalse(spoken_pair_in('Avtomobilist — Dinamo Minsk','avtomobiliz Dinamo Moskva'))
+
     def test_index_announcements_do_not_create_analysis_blocks(self):
         for sport,pairs in (
             ('football',['Arsenal — Chelsea','Roma — Real Madrid']),

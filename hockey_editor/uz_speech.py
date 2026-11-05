@@ -20,7 +20,7 @@ def recording_key(project):
     return hashlib.sha256(json.dumps([MODEL_REV,'beam5-vocabulary-v2',recognition_prompt(project),project.profile,[b.title for b in project.blocks],data]).encode()).hexdigest()
 
 def speech_key(project):
-    return hashlib.sha256(json.dumps(['uz-local-evidence-v16-corpus-boundaries',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['uz-local-evidence-v17-contextual-recap',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
 
 def model_path(cancel,log):
     folder=Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'Models'/'uzbek-turbo'
@@ -205,7 +205,7 @@ def recap_cue(text):
     return bool(re.search(r'\b(?:qaytar\w*|takror\w*|xulosa|jaml\w*)\b',t) or
                 re.search(r'\byakun(?:laymiz|lasak|ida|iy)?\b',t) or
                 re.search(r'\b(?:demak|demek|deming|demir|demi)\b.*bugun.*(?:tanlo|tahlil\s+qildik)',t) or
-                (re.search(r'eslat|isatib',t) and re.search(r'tanlovlar|variantlar',t) and re.search(r'yana|oxir|qisqacha',t)))
+                (re.search(r'eslat|isatib',t) and re.search(r'tanlovla(?:r|miz)|variantlar',t) and re.search(r'yana|oxir|qisqacha',t)))
 
 
 def section_segments(project,segments):
