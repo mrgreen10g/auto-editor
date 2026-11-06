@@ -6,7 +6,7 @@ from .uzbek import norm
 
 
 def spoken_pair_in(title, text):
-    """Scoped decoder spellings, requiring the other team to be exact.
+    """Scoped decoder spellings and corroborated two-name announcements.
 
     These are not club identities or replacements for displayed script text.
     In particular, Akbar alone must never be interpreted as Ak Bars.
@@ -20,20 +20,19 @@ def spoken_pair_in(title, text):
     if None in expected or len(expected) != 2:
         return False
     exact = set(mentioned(text)) & expected
-    if len(exact) != 1:
-        return False
-    missing = next(iter(expected - exact))
+    missing = next(iter(expected - exact)) if len(exact) == 1 else None
     variants = {
         'Локомотив': r"o'?lakomay|lakomatsiv|lahkamaysi",
         'Автомобилист': r'avtomobiliz',
         'Ак Барс': r'akbars|akbar',
+        'СКА': r'skai',
     }
     pattern = variants.get(missing)
-    if not pattern:
-        return False
     # Only a short pair announcement, not a vague resemblance deep in prose.
-    return bool(re.search(
-        r'(?<!\w)(?:' + pattern + r")(?:ning|ni|ga|da|dan)?(?!\w)", norm(text)))
+    if pattern and re.search(r'(?<!\w)(?:' + pattern + r")(?:ning|ni|ga|da|dan)?(?!\w)", norm(text)):
+        return True
+    from .uz_hockey_boundaries import contextual_pair
+    return contextual_pair(expected, text)
 
 
 def check_script(project,segments):
