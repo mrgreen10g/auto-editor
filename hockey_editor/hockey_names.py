@@ -10,7 +10,7 @@ from .team_names import RU,ru_identity
 
 KHL={
  'СКА':'SKA', 'ЦСКА':'CSKA|TsSKA|SSKA', 'Лада':'Lada|Tolyatti',
- 'Динамо Москва':'Dinamo Moskva|Dynamo Moscow|Moskva Dinamo',
+ 'Динамо Москва':'Dinamo Moskva|Dynamo Moskva|Dynamo Moscow|Moskva Dinamo',
  'Динамо Минск':'Dinamo Minsk|Dynamo Minsk|Minsk Dinamo',
  'Северсталь':'Severstal|Cherepovets', 'Адмирал':'Admiral|Vladivostok',
  'Торпедо':'Torpedo|Nizhny Novgorod|Nijniy Novgorod', 'Спартак':'Spartak|Spartak Moskva|Spartak Moscow',

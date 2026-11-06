@@ -157,7 +157,7 @@ def events(block,matches,use_manual=True):
 
 def speech_key(project):
     from .uz_speech import recording_key
-    return hashlib.sha256(json.dumps(['uz-hockey-v4-local-boundary-fallback',recording_key(project),project.recording_times,[(b.uid,b.script,b.title) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['uz-hockey-v5-contextual-boundaries',recording_key(project),project.recording_times,[(b.uid,b.script,b.title) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
 
 def intro_annotations(project,segments,lo,hi):
     from .hockey_names import hits
@@ -198,20 +198,23 @@ def prepare(project,segments,duration):
         from .speech_cleanup import remove_retakes
         segments,cuts=remove_retakes(aligned,segments)
     from .uz_hockey_support import check_script,spoken_pair_in
+    from .uz_hockey_boundaries import ordinal_starts,episode_recap
     check_script(project,segments)
     rough=draft_alignment(aligned,segments,duration,'Проверьте границы хоккейного раздела.')
     words=[w for s in segments for w in s.get('words',[])]
     bounds=[0.];floor=intro_floor(words,'uz') if blocks[0].kind=='intro' else 0.;reliable=True
+    analysis_index=0
     for b in blocks[1:]:
         approximate=rough[b.uid][0][0].start
         if b.kind=='analysis':
-            choices=[s['start'] for s in segments if s['start']>=max(floor,bounds[-1]+1,approximate-8)-.01 and spoken_pair_in(b.title,s['text'])]
+            analysis_index+=1
+            minimum=max(floor,bounds[-1]+1,approximate-8 if floor<=0 else 0)-.01
+            choices=[s['start'] for s in segments if s['start']>=minimum and spoken_pair_in(b.title,s['text'])]
+            choices+=ordinal_starts(b.title,segments,analysis_index,minimum)
         else:
-            from .uz_speech import recap_cue
-            choices=[s['start'] for s in segments if s['start']>=max(bounds[-1]+10,approximate-10)
-                     and (recap_cue(s['text']) or re.search(r'\b(?:xullas|qull?as)\b|ko.rib chiqdik',norm(s['text'])))]
+            choices=[s['start'] for i,s in enumerate(segments) if s['start']>=bounds[-1]+10 and episode_recap(segments,i)]
         if not choices:reliable=False;break
-        bounds.append(min(choices,key=lambda x:abs(x-approximate)));floor=bounds[-1]+5
+        bounds.append(min(choices));floor=bounds[-1]+5
     ranges=list(zip(bounds,bounds[1:]+[duration]))
     if not project.recording_times.strip() and not project.profile.endswith('_shorts'):
         from .uz_anchors import script_ranges

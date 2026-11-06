@@ -103,7 +103,8 @@ class UzbekUpdateTests(unittest.TestCase):
     self.assertEqual(transcribe(p,d,threading.Event(),lambda x:None),first)
    self.assertEqual(decoder.transcribe.call_count,1)
    args=decoder.transcribe.call_args.kwargs
-   self.assertEqual(args['beam_size'],5);self.assertIn('Erling Haaland',args['initial_prompt'])
+   self.assertEqual(args['beam_size'],5);self.assertIn('Erling Haaland',args['hotwords'])
+   self.assertIsNone(args['initial_prompt'])
 
  def test_mismatched_hockey_script_rejected_only_on_positive_evidence(self):
   p=hockey_project()
