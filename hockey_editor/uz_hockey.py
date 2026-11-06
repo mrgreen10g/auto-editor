@@ -157,7 +157,7 @@ def events(block,matches,use_manual=True):
 
 def speech_key(project):
     from .uz_speech import recording_key
-    return hashlib.sha256(json.dumps(['uz-hockey-v5-contextual-boundaries',recording_key(project),project.recording_times,[(b.uid,b.script,b.title) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(['uz-hockey-v6-first-take-boundary',recording_key(project),project.recording_times,[(b.uid,b.script,b.title) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
 
 def intro_annotations(project,segments,lo,hi):
     from .hockey_names import hits
@@ -198,7 +198,7 @@ def prepare(project,segments,duration):
         from .speech_cleanup import remove_retakes
         segments,cuts=remove_retakes(aligned,segments)
     from .uz_hockey_support import check_script,spoken_pair_in
-    from .uz_hockey_boundaries import ordinal_starts,episode_recap
+    from .uz_hockey_boundaries import ordinal_starts,episode_recap,first_body_after_pause
     check_script(project,segments)
     rough=draft_alignment(aligned,segments,duration,'Проверьте границы хоккейного раздела.')
     words=[w for s in segments for w in s.get('words',[])]
@@ -211,6 +211,8 @@ def prepare(project,segments,duration):
             minimum=max(floor,bounds[-1]+1,approximate-8 if floor<=0 else 0)-.01
             choices=[s['start'] for s in segments if s['start']>=minimum and spoken_pair_in(b.title,s['text'])]
             choices+=ordinal_starts(b.title,segments,analysis_index,minimum)
+            if analysis_index==1 and blocks[0].kind=='intro':
+                choices+=first_body_after_pause(b.title,segments,floor)
         else:
             choices=[s['start'] for i,s in enumerate(segments) if s['start']>=bounds[-1]+10 and episode_recap(segments,i)]
         if not choices:reliable=False;break

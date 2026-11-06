@@ -47,19 +47,22 @@ def prepared_audio(project, folder, cancel, log):
     return target
 
 
-def recognize(model, audio, checkpoint, language, prompt, cancel, log):
+def recognize(model, audio, checkpoint, language, prompt, cancel, log, *, hotwords=None):
     """Retain only windows closed by a subsequent seek; resume at that seek.
 
     faster-whisper 1.1.1 exposes Segment.seek in 10 ms frames. With
     condition_on_previous_text=False, a completed decoder window does not need
     the preceding text. On resume initial_prompt is omitted as on later windows
-    in an uninterrupted pass. Word timestamps remain in original audio time.
+    in an uninterrupted pass. Optional hotwords are retained in every decoder
+    window and fingerprinted separately. Word timestamps stay in original time.
     """
     if cancel.is_set():
         raise Cancelled('Отменено.')
     checkpoint = Path(checkpoint)
     saved = read_json(checkpoint, {})
-    if saved.get('version') != 1:
+    hotwords = hotwords.strip() if hotwords else None
+    vocabulary_key = hashlib.sha256(hotwords.encode()).hexdigest() if hotwords else None
+    if saved.get('version') != 1 or saved.get('vocabulary_key') != vocabulary_key:
         saved = {}
     rows = saved.get('rows', [])
     if saved.get('complete'):
@@ -70,7 +73,11 @@ def recognize(model, audio, checkpoint, language, prompt, cancel, log):
         log(f'Продолжаю распознавание речи с {seek/100:.1f} с.')
     options = dict(language=language, word_timestamps=True, beam_size=5,
                    vad_filter=False, condition_on_previous_text=False,
-                   initial_prompt=prompt if not seek else None)
+                   initial_prompt=prompt if not seek and not hotwords else None)
+    if hotwords:
+        # faster-whisper reapplies hotwords in every decoder window, including
+        # resumed windows. Never duplicate them in the first initial_prompt.
+        options['hotwords'] = hotwords
     if seek:
         options['clip_timestamps'] = str(seek/100)
     pending = []
@@ -85,7 +92,7 @@ def recognize(model, audio, checkpoint, language, prompt, cancel, log):
                 rows.extend(pending)
                 pending = []
                 current_seek = window
-                write_json(checkpoint, {'version':1, 'seek':window, 'rows':rows, 'complete':False})
+                write_json(checkpoint, {'version':1, 'vocabulary_key':vocabulary_key, 'seek':window, 'rows':rows, 'complete':False})
             words = [dict(word=w.word, start=w.start, end=w.end, probability=w.probability)
                      for w in segment.words or [] if w.end > w.start]
             if words:
@@ -94,7 +101,7 @@ def recognize(model, audio, checkpoint, language, prompt, cancel, log):
         if cancel.is_set():
             raise Cancelled('Отменено.')
         rows.extend(pending)
-        write_json(checkpoint, {'version':1, 'seek':current_seek, 'rows':rows, 'complete':True})
+        write_json(checkpoint, {'version':1, 'vocabulary_key':vocabulary_key, 'seek':current_seek, 'rows':rows, 'complete':True})
     return rows
 
 

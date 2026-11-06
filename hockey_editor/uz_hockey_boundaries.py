@@ -56,11 +56,47 @@ def ordinal_starts(title, segments, index, floor):
     for i, s in enumerate(segments):
         if s['start'] < floor:
             continue
-        if not re.match(r'(?:endi\s+)?' + ordinal + r"\s+(?:o.yin|uchrashuv|bahs)\w*\b", norm(s['text'])):
+        text=' '.join(norm(s['text']).split())
+        if not re.match(r'(?:endi\s+)?' + ordinal + r"\s+(?:o.yin|uchrashuv|bahs)\w*\b", text):
             continue
         nearby = [v['text'] for v in segments[i:] if v['start'] <= s['start']+30]
         if expected & set(mentioned(' '.join(nearby))):
             result.append(s['start'])
+    return result
+
+
+def first_body_after_pause(title, segments, floor):
+    """An early new take after the intro, corroborated by a distinctive club.
+
+    Only the first analysis may use this fallback. Short acronyms alone and
+    silent gaps alone are insufficient. No script or card text is rewritten.
+    """
+    if floor<=0:return []
+    expected=set(mentioned(title))
+    if len(expected)!=2:return []
+    result=[]
+    for previous,segment in zip(segments,segments[1:]):
+        start=segment['start']
+        if not floor<=start<=floor+90 or start-previous['end']<8:continue
+        words=re.findall(r'\w+',norm(segment['text']))[:8]
+        if set(mentioned(' '.join(words)))-expected:continue
+        found=False
+        for club in expected:
+            for alias in ALIASES.get(club,()):
+                target=''.join(re.findall(r'\w+',norm(alias)))
+                if len(target)<6:continue
+                for i in range(len(words)):
+                    for n in range(1,min(4,len(words)-i)+1):
+                        text=' '.join(words[i:i+n])
+                        if set(mentioned(text))-{club}:continue
+                        value=''.join(words[i:i+n])
+                        variants=[value]+[value[:-len(s)] for s in ('ning','dan','ga','da','ni') if value.endswith(s)]
+                        if any(SequenceMatcher(None,target,v,autojunk=False).ratio()>=.9 for v in variants):
+                            found=True;break
+                    if found:break
+                if found:break
+            if found:break
+        if found:result.append(start)
     return result
 
 

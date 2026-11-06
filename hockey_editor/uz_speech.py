@@ -10,6 +10,7 @@ from .team_names import football_aliases, football_identity, normalize, compact,
 
 MODEL_REPO='hostmepanda/whisper-large-v3-turbo-uzbek-ct2'
 MODEL_REV='c1122214fcea840e8fab399df10d22ad7c56919f'
+ASR_RECIPE='beam5-vocabulary-v3-every-window'
 TOKENIZER_REV='41f01f3fe87f28c78e2fbf8b568835947dd65ed9'
 DIGESTS={'config.json':'0bda718f9243009dfbd4163c1890ff1981c90108fe26c615cd698a49625442ec','preprocessor_config.json':'9322fbdbbb58e826043422e8bb6b23fe7976fde192d655f67547d1afdaead82d','vocabulary.json':'c69260f2ab26d659b7c398f9a2b2b48ed0df16c3b47d7326782fd9cba71690c1','model.bin':'3e3aa474997013533099d8fe7d3e1c0ed0d64d96c36466c78e0edd7490889ea5','tokenizer.json':'297b13372ac43916285644fb9687add3cc62ee2a1adb60da3dc25cc94c1871fd'}
 
@@ -17,7 +18,7 @@ def recording_key(project):
     data=[]
     for name in project.host_paths()+[project.microphones[p] for p in project.host_paths() if project.microphones.get(p)]:
         p=Path(name).resolve();s=p.stat();data.append([str(p),s.st_size,s.st_mtime_ns])
-    return hashlib.sha256(json.dumps([MODEL_REV,'beam5-vocabulary-v2',recognition_prompt(project),project.profile,[b.title for b in project.blocks],data]).encode()).hexdigest()
+    return hashlib.sha256(json.dumps([MODEL_REV,ASR_RECIPE,recognition_prompt(project),project.profile,[b.title for b in project.blocks],data]).encode()).hexdigest()
 
 def speech_key(project):
     return hashlib.sha256(json.dumps(['uz-local-evidence-v17-contextual-recap',CATALOG_VERSION,recording_key(project),project.recording_times,[(b.uid,b.title,b.script) for b in [project.intro,*project.blocks,project.outro]]],ensure_ascii=False).encode()).hexdigest()
@@ -75,7 +76,8 @@ def transcribe(project,cache,cancel,log):
     audio=prepared_audio(project,folder,cancel,log)
     from .speech_cache import with_model
     def work(model):
-        result=recognize(model,audio,saved.with_suffix('.raw.json'),'uz',recognition_prompt(project),cancel,log)
+        vocabulary=recognition_prompt(project)
+        result=recognize(model,audio,saved.with_suffix('.raw.json'),'uz',vocabulary,cancel,log,hotwords=vocabulary)
         from .uz_refine import refine
         with stage(folder,'Уточнение узбекской речи',log):
             result=refine(model,audio,result,project,cancel,log)

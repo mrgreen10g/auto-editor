@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from hockey_editor.folder_import import parse_episode
 from hockey_editor.model import Project
 from hockey_editor.processing_cache import write_json
-from hockey_editor.uz_speech import MODEL_REV, recognition_prompt
+from hockey_editor.uz_speech import MODEL_REV, ASR_RECIPE, recognition_prompt
 
 
 def inventory(root):
@@ -104,7 +104,7 @@ def main():
                 import av
                 with av.open(row['audio']) as source:duration=source.duration/1e6
                 record['duration']=duration
-                identity=hashlib.sha256(json.dumps([digest(Path(row['audio'])),MODEL_REV,recognition_prompt(project)],ensure_ascii=False).encode()).hexdigest()
+                identity=hashlib.sha256(json.dumps([digest(Path(row['audio'])),MODEL_REV,ASR_RECIPE,recognition_prompt(project)],ensure_ascii=False).encode()).hexdigest()
                 cache=folder/identity;cache.mkdir(exist_ok=True)
                 refined=cache/'refined.json'
                 if not refined.exists() and args.recognize and (args.limit is None or done<args.limit):
@@ -117,13 +117,14 @@ def main():
                     wav=cache/'voice.wav'
                     if not wav.exists():pcm(Path(row['audio']),wav)
                     started=time.monotonic()
-                    raw=recognize(model,wav,cache/'raw.json','uz',recognition_prompt(project),cancel,log)
+                    vocabulary=recognition_prompt(project)
+                    raw=recognize(model,wav,cache/'raw.json','uz',vocabulary,cancel,log,hotwords=vocabulary)
                     result=refine(model,wav,raw,project,cancel,log)
                     if project.profile.startswith('uz_combat'):
                         from hockey_editor.combat import recover_gaps
                         result=recover_gaps(model,wav,result,cancel,log)
                     write_json(refined,result)
-                    write_json(cache/'complete.json',dict(elapsed=time.monotonic()-started,model=MODEL_REV))
+                    write_json(cache/'complete.json',dict(elapsed=time.monotonic()-started,model=MODEL_REV,recipe=ASR_RECIPE))
                     done+=1
                 if refined.exists():
                     segments=json.loads(refined.read_text(encoding='utf-8'))

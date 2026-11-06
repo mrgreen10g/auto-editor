@@ -7,7 +7,7 @@ from hockey_editor.model import Project, Block
 from hockey_editor.timeline import Line
 from hockey_editor.uz_hockey import prepare
 from hockey_editor.uz_hockey_support import spoken_pair_in
-from hockey_editor.uz_hockey_boundaries import ordinal_starts, episode_recap
+from hockey_editor.uz_hockey_boundaries import ordinal_starts, episode_recap,first_body_after_pause
 from test_uz_speech import segment
 
 
@@ -29,7 +29,7 @@ class HockeyBoundaryTests(unittest.TestCase):
             self.assertFalse(spoken_pair_in(title, text), (title, text))
 
     def test_ordinal_needs_correct_number_and_nearby_team(self):
-        data = [segment(100, 105, 'Ikkinchi uchrashuvga otamiz.'),
+        data = [segment(100, 105, '  Ikkinchi  uchrashuvga otamiz.'),
                 segment(120, 125, 'Spartak haqida gaplashamiz.')]
         self.assertEqual(ordinal_starts('CSKA — Spartak', data, 2, 80), [100])
         self.assertEqual(ordinal_starts('CSKA — Spartak', data, 1, 80), [])
@@ -39,6 +39,16 @@ class HockeyBoundaryTests(unittest.TestCase):
         self.assertEqual(ordinal_starts('CSKA — Spartak', distant, 2, 80), [])
         for text in ('Ikkinchi bolimda gol uradi.', 'Ikkinchi ssenariy haqida.'):
             self.assertEqual(ordinal_starts('CSKA — Spartak', [segment(100,105,text),data[1]],2,80), [])
+
+    def test_first_take_requires_intro_pause_and_distinctive_club(self):
+        title='Severstal — Salavat Yulaev'
+        data=[segment(25,34,'Kirish tugadi.'),segment(53,61,'Sevisida Salovat Yulaev oyinini koramiz.')]
+        self.assertEqual(first_body_after_pause(title,data,24),[53])
+        self.assertEqual(first_body_after_pause(title,data,0),[])
+        self.assertEqual(first_body_after_pause(title,[data[0],segment(38,45,data[1]['text'])],24),[])
+        self.assertEqual(first_body_after_pause(title,[data[0],segment(150,155,data[1]['text'])],24),[])
+        for text in ('Boshqa jamoa haqida gapiramiz.', 'SKA haqida.', 'Salavat Yulaev va Traktor.'):
+            self.assertEqual(first_body_after_pause(title,[data[0],segment(53,61,text)],24),[])
 
     def test_recap_requires_episode_context(self):
         for text in ('Xullas bu jamoa gol uradi.', 'Demak bu uchrashuv qiziqarli.',
