@@ -24,7 +24,7 @@ async function refreshInputs(){
  if(draftLoaded!==d.id){
   draftLoaded=d.id;$('inputSpeaker').value=d.profile.startsWith('uz_')?'uz':'ru';inputProfiles();$('inputProfile').value=d.profile;$('inputScript').value=d.script;$('inputAssets').value=d.asset_folder||inputState.kits[d.profile]||'';
   for(const id of ['inputPreset','draftPreset']){$(id).replaceChildren(new Option('Стандартные',''));for(const p of inputState.presets)$(id).add(new Option(p,p));} $('draftPreset').value=d.preset;
-  renderInputBlocks(d);inputStepTo(d.project?'summary':d.blocks.length?'files':'script');
+  renderDraftSettings(d);renderInputBlocks(d);inputStepTo(d.project?'summary':d.blocks.length?'files':'script');
  }
  if(!$('inputPreset').options.length||$('inputPreset').options.length===1){for(const p of inputState.presets)if(![...$('inputPreset').options].some(o=>o.value===p))$('inputPreset').add(new Option(p,p));}
  $('hostParts').replaceChildren();
@@ -121,7 +121,7 @@ function matchData(){return {block:$('inputBlock').value,home:$('matchHome').val
 $('addMatchLink').onclick=()=>guard(async()=>{await api('input-link',{id:draftId,role:'match',url:$('matchUrl').value,...matchData()});await refreshInputs()});
 $('reuseInput').onclick=()=>guard(async()=>{const [from_draft,file]=$('reuseChoice').value.split(':');if(!file)throw Error('Нет ранее добавленных записей.');await api('input-reuse',{id:draftId,from_draft,file,block:$('inputBlock').value});await refreshInputs()});
 $('pauseInput').onclick=()=>guard(async()=>{await api('input-pause');notice('Скачивание остановится после текущего запроса.')});
-$('saveInputSettings').onclick=()=>guard(async()=>{await api('input-settings',{id:draftId,preset:$('draftPreset').value,asset_folder:$('inputAssets').value});await refreshInputs();notice('Настройки сохранены.')});
+$('saveInputSettings').onclick=()=>guard(async()=>{await api('input-settings',{id:draftId,settings:readDraftSettings(),preset:$('draftPreset').value,asset_folder:$('inputAssets').value});await refreshInputs();notice('Настройки сохранены.')});
 $('activateInput').onclick=()=>guard(async()=>{if(!confirm('Сохранить текущий проект редактора и открыть этот выпуск?'))return;await refresh();await api('input-activate',{id:draftId,revision:state.revision});await switchPage('process')});
 async function uploadDevice(file,role,extra={}){
  const id=draftId;if(!id)throw Error('Сначала создайте выпуск.');
@@ -179,3 +179,16 @@ $('materialClose').onclick=()=>{$('materialBrowser').hidden=true};
 
 $('micFile').onchange=()=>filesSelected($('micFile'),'mic');
 $('addMicServer').onclick=()=>guard(async()=>{await api('input-local',{id:draftId,role:'mic',block:$('micHost').value,path:$('micServerPath').value});await refreshInputs()});
+
+function renderDraftSettings(d){
+ const box=$('draftSettings');box.replaceChildren();
+ const bools=['auto_rotate','mirror_host','use_manual_clips','allow_other_matches','zoom','transitions','animate_cards','subtitles','wobble','denoise','cut_pauses','color'];
+ for(const key of Object.keys(settingLabels)){
+  const label=line(box,settingLabels[key],'label');let e;
+  const choices=bools.includes(key)?[['true','Включено'],['false','Выключено']]:key==='insert_frequency'?[['low','Реже'],['normal','Обычно'],['high','Чаще']]:key==='rotate'?[[0,'0°'],[90,'90°'],[180,'180°'],[270,'270°']]:null;
+  e=document.createElement(choices?'select':'input');e.dataset.draftSetting=key;
+  if(choices){e.add(new Option('Из набора',''));for(const [v,t] of choices)e.add(new Option(t,v));}else{e.type='number';e.step='any';e.placeholder='Из набора';}
+  e.value=d.settings?.[key]??'';label.append(e);
+ }
+}
+function readDraftSettings(){const result={};for(const e of $('draftSettings').querySelectorAll('[data-draft-setting]')){if(e.value==='')continue;result[e.dataset.draftSetting]=e.value==='true'?true:e.value==='false'?false:e.dataset.draftSetting==='insert_frequency'?e.value:Number(e.value);}return result;}

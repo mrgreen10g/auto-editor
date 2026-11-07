@@ -187,6 +187,8 @@ class Engine:
             video="select='"+'+'.join(f'between(n,{round(a*30)},{round(b*30)-1})' for a,b in plan.keep)+"',setpts=N/(30*TB)"
             # Normalize VFR sources before frame-index selection.
             video='fps=30,'+video
+            from .video_color import sdr_filter
+            video=sdr_filter(p.host)+video
             from .orientation import detect_rotation
             rotation=(plan.rotation if plan.rotation is not None else detect_rotation(p.host,self.cache,self.cancel,self.log)) if s.auto_rotate else s.rotate
             if rotation==180:video+=',hflip,vflip'
