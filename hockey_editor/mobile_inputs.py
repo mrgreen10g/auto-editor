@@ -176,6 +176,10 @@ class Inputs:
         with self.lock:
             d=self.load(data['id']);self.mutable(d)
             for key in ('preset','asset_folder'):d[key]=str(data.get(key,d.get(key,'')))
+            if 'settings' in data:
+                from .mobile_settings import validate
+                try:d['settings']=validate(data['settings'])
+                except ValueError as e:raise RemoteError(str(e)) from e
             titles=data.get('titles')
             if titles is not None:
                 if len(titles)!=len(d['blocks']):raise RemoteError('Обновите список разборов.')
@@ -407,6 +411,9 @@ class Inputs:
                     if r['role']!='match':continue
                     m=MatchSource(r['path'],r['fighter'] if sport=='combat' else r['home'],r['away'],sport=sport,fighter=r['fighter']);project.matches.append(m)
                     next(b for b in project.blocks if b.uid==r['block']).match_ids.append(m.id)
+                from .mobile_settings import apply
+                try:project.settings=apply(project.settings,d.get('settings',{}),project.profile)
+                except ValueError as e:raise RemoteError(str(e)) from e
                 assign(project);target=Path(d['folder'])/d.get('project_target','Выпуск.hockeyproj')
                 if target.exists():raise RemoteError('Файл проекта уже существует. Создайте новый черновик.')
                 project.save(target);d['project']=str(target);self.save(d)

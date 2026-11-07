@@ -84,8 +84,9 @@ class PreviewPlayer:
                         segment=accelerated
                 if generation!=self.generation:return
                 flags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0
+                from .video_color import sdr_filter
                 args=[ffmpeg(),'-hide_banner','-loglevel','error','-nostdin','-ss',str(position),'-i',str(path),
-                      '-an','-vf',f'fps=15,scale={fw}:{fh}','-pix_fmt','rgb24','-f','rawvideo','pipe:1']
+                      '-an','-vf',sdr_filter(path)+f'fps=15,scale={fw}:{fh}','-pix_fmt','rgb24','-f','rawvideo','pipe:1']
                 proc=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,creationflags=flags)
                 if generation!=self.generation:proc.terminate();return
                 self.proc=proc

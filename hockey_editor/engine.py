@@ -2,7 +2,7 @@
 from pathlib import Path
 import hashlib,json,re,math,os,shutil
 from . import __version__
-from .media import probe,run,audio_extract,Cancelled
+from .media import probe,run,audio_extract,Cancelled,audio_stream
 from .alignment import align,AlignmentError,SpeechIssue,BoundaryReviewRequired
 from .timeline import Plan,Line,Card,keep_ranges,map_time,placements,zoom_windows,frame
 from .graphics import card_image
@@ -187,6 +187,8 @@ class Engine:
             video="select='"+'+'.join(f'between(n,{round(a*30)},{round(b*30)-1})' for a,b in plan.keep)+"',setpts=N/(30*TB)"
             # Normalize VFR sources before frame-index selection.
             video='fps=30,'+video
+            from .video_color import sdr_filter
+            video=sdr_filter(p.host)+video
             from .orientation import detect_rotation
             rotation=(plan.rotation if plan.rotation is not None else detect_rotation(p.host,self.cache,self.cancel,self.log)) if s.auto_rotate else s.rotate
             if rotation==180:video+=',hflip,vflip'
@@ -195,7 +197,7 @@ class Engine:
             if s.mirror_host:video+=',hflip'
             video+=f',scale={cw}:{ch}:force_original_aspect_ratio=decrease,pad={cw}:{ch}:(ow-iw)/2:(oh-ih)/2,setsar=1'
             if s.color:video+=',eq=contrast=1.045:saturation=1.035:brightness=-0.004'
-            fl=[f'[0:v]{video}[video]','[0:a]asplit='+str(n)+''.join(f'[s{i}]' for i in range(n))]
+            fl=[f'[0:v]{video}[video]',f'[{audio_stream(p.host)}]asplit='+str(n)+''.join(f'[s{i}]' for i in range(n))]
             for i,(a,b) in enumerate(plan.keep):fl.append(f'[s{i}]atrim=start={a:.6f}:end={b:.6f},asetpts=PTS-STARTPTS[a{i}]')
             voice=f'concat=n={n}:v=0:a=1,highpass=f=70'
             if s.denoise:voice+=f',afftdn=nr={s.noise_reduction}:nf=-40:tn=1'

@@ -1,3 +1,5 @@
+from .video_color import sdr_filter
+from .media import audio_stream
 """Bounded montage previews using the same compositor as the final export.
 
 Work on detached snapshots only. Decode short source spans before invoking the
@@ -71,8 +73,8 @@ def render(spec,cache,ident):
             path=root/f'host-{i}.mp4';duration=span['end']-span['start']
             # Input seeking bounds decoding. FFmpeg applies container rotation;
             # the compositor subsequently applies the recorded manual correction.
-            run(['-y','-threads','2','-ss',span['start'],'-t',duration,'-i',span['path'],'-map','0:v:0','-map','0:a:0?',
-                 '-vf','scale=1280:1280:force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1','-r','30',
+            run(['-y','-threads','2','-ss',span['start'],'-t',duration,'-i',span['path'],'-map','0:v:0','-map',audio_stream(span['path'])+ '?',
+                 '-vf',sdr_filter(span['path'])+'scale=1280:1280:force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1','-r','30',
                  '-c:v','libx264','-preset','ultrafast','-crf','23','-threads','2','-c:a','aac',path])
             span.update(path=str(path),start=0,end=duration)
         output=root/'preview.mp4'

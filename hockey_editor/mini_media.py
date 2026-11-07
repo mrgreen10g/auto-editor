@@ -1,3 +1,5 @@
+from .video_color import sdr_filter
+from .media import audio_stream
 """Small on-demand previews; original files are never served by the gateway."""
 import threading,time
 from .media import run
@@ -17,12 +19,12 @@ def generate(spec,cache,ident):
         from .graphics import card_image
         card_image(spec['card'],target,logos=spec['logos'],profile=spec['profile'])
     elif mode=='clip':
-        run(['-y','-ss',spec['start'],'-i',spec['path'],'-t',spec['end']-spec['start'],'-map','0:v:0','-map','0:a:0?','-vf','scale=640:640:force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1','-r','24','-c:v','libx264','-preset','veryfast','-crf','28','-pix_fmt','yuv420p','-c:a','aac','-b:a','80k','-movflags','+faststart',target])
+        run(['-y','-ss',spec['start'],'-i',spec['path'],'-t',spec['end']-spec['start'],'-map','0:v:0','-map',audio_stream(spec['path'])+ '?','-vf',sdr_filter(spec['path'])+'scale=640:640:force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1','-r','24','-c:v','libx264','-preset','veryfast','-crf','28','-pix_fmt','yuv420p','-c:a','aac','-b:a','80k','-movflags','+faststart',target])
     elif mode=='voice':
         args=['-y'];filters=[]
         for i,span in enumerate(spec['spans']):
             args+=['-ss',span['start'],'-t',span['end']-span['start'],'-i',span['path']]
-            filters.append(f'[{i}:a]aresample=16000,aformat=sample_fmts=fltp:channel_layouts=mono,asetpts=PTS-STARTPTS[a{i}]')
+            filters.append(f'[{audio_stream(span["path"],i)}]aresample=16000,aformat=sample_fmts=fltp:channel_layouts=mono,asetpts=PTS-STARTPTS[a{i}]')
         filters.append(''.join(f'[a{i}]' for i in range(len(spec['spans'])))+f'concat=n={len(spec["spans"])}:v=0:a=1[out]')
         run(args+['-filter_complex',';'.join(filters),'-map','[out]','-c:a','aac','-b:a','64k',target])
     return dict(file=str(target))

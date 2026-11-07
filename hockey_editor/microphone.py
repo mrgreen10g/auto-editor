@@ -3,13 +3,13 @@ import hashlib,json,subprocess,threading
 from pathlib import Path
 import numpy as np
 from scipy.signal import correlate
-from .media import run,probe,Cancelled
+from .media import run,probe,Cancelled,audio_stream
 
 REVISION='mic-sync-v4'
 
 def envelope(path,work,cancel):
     target=work/(hashlib.sha256(str(path).encode()).hexdigest()[:16]+'.wav')
-    run(['-y','-i',path,'-vn','-ac','1','-ar','8000','-c:a','pcm_s16le',target],cancel)
+    run(['-y','-i',path,'-map',audio_stream(path),'-vn','-ac','1','-ar','8000','-c:a','pcm_s16le',target],cancel)
     from scipy.io import wavfile
     rate,data=wavfile.read(target);data=data.astype(np.float64)/32768
     n=len(data)//80

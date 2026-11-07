@@ -89,14 +89,20 @@ def _probe_cached(path, size, modified):
     if not duration: raise ValueError(f'Не удалось прочитать длительность: {Path(path).name}')
     rotation=re.search(r'displaymatrix:\s*rotation of\s*([-+\d.]+)',text)
     sar=re.search(r'\bSAR\s+(\d+):(\d+)',video)
-    return {'rotation':float(rotation[1]) if rotation else 0.,
+    audio_rows=re.findall(r'Stream #0:(\d+)[^\n]*Audio:\s*([^ ,]+)',text)
+    audio_index=next((int(i) for i,codec in audio_rows if codec not in ('none','unknown')),None)
+    return {'audio_stream':audio_index,'color_transfer':next((v for v in ('arib-std-b67','smpte2084','bt709') if v in video),''),'rotation':float(rotation[1]) if rotation else 0.,
             'sample_aspect_ratio':[int(sar[1]),int(sar[2])] if sar else [1,1],
             'duration':int(duration[1])*3600+int(duration[2])*60+float(duration[3]),
             'video':bool(video),'audio':'Audio:' in text,
             'width':int(size[1]) if size else 0,'height':int(size[2]) if size else 0}
 
+def audio_stream(path, input_index=0):
+    index=probe(path).get('audio_stream')
+    return f'{input_index}:{index}' if index is not None else f'{input_index}:a:0'
+
 def audio_extract(path,target,cancel=None):
-    run(['-y','-i',path,'-vn','-ac','1','-ar','16000','-c:a','pcm_s16le',target],cancel)
+    run(['-y','-i',path,'-map',audio_stream(path),'-vn','-ac','1','-ar','16000','-c:a','pcm_s16le',target],cancel)
 
 
 def normalize_encoded_orientation(path,cancel=None):

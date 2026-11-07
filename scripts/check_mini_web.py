@@ -137,7 +137,13 @@ def check():
                 from test_folder_import import SCRIPT
                 page.locator('#inputScript').fill(SCRIPT);click('#parseInput')
                 assert page.locator('#inputBlocks input').count()==2
-                click('#saveTitles');page.locator('#hostMethod').select_option('device')
+                click('#saveTitles')
+                page.locator('#draftSettings').locator('..').locator('summary').click()
+                page.locator('[data-draft-setting=mirror_host]').select_option('true')
+                page.locator('[data-draft-setting=subtitles]').select_option('true')
+                page.locator('[data-draft-setting=insert_frequency]').select_option('high')
+                click('#saveInputSettings')
+                page.locator('#hostMethod').select_option('device')
                 second_host=root/'second-host.mp4'
                 run(['-y','-i',original_host,'-map','0','-c','copy','-metadata','title=Second part',second_host],threading.Event())
                 page.locator('#hostFile').set_input_files([original_host,str(second_host)])
@@ -159,6 +165,8 @@ def check():
                 assert Path(app.project_path).name=='Выпуск.hockeyproj'
                 assert len(app.project.blocks)==2 and Path(app.project.host).is_file()
                 assert app.project.full_video and app.project.whole_episode
+                assert app.project.settings.mirror_host and app.project.settings.subtitles
+                assert app.project.settings.insert_frequency=='high'
                 assert app.project.microphones.get(app.project.hosts[0])==str(Path(original_host).resolve())
                 assert len(app.project.hosts)==2 and Path(app.project.hosts[0]).read_bytes()==second_host.read_bytes()
                 # Mobile montage: readable times, edit type, persisted undo/redo.

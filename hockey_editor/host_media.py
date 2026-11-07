@@ -1,7 +1,7 @@
 """Ordered source recordings: concatenate PCM for analysis, retain original video."""
 from pathlib import Path
 import hashlib,json,math
-from .media import probe,run
+from .media import probe,run,audio_stream
 from .timeline import frame
 
 
@@ -36,7 +36,7 @@ def analysis_source(project,cache,cancel,log):
         args=['-y'];filters=[]
         for i,p in enumerate(parts):
             args+=['-i',p['path']]
-            filters.append(f'[{i}:a]aresample=16000,aformat=sample_fmts=s16:channel_layouts=mono,apad,atrim=duration={p["duration"]:.6f},asetpts=PTS-STARTPTS[a{i}]')
+            filters.append(f'[{audio_stream(p["path"],i)}]aresample=16000,aformat=sample_fmts=s16:channel_layouts=mono,apad,atrim=duration={p["duration"]:.6f},asetpts=PTS-STARTPTS[a{i}]')
         filters.append(''.join(f'[a{i}]' for i in range(len(parts)))+f'concat=n={len(parts)}:v=0:a=1[audio]')
         partial=path.with_suffix('.partial.wav')
         try:
@@ -86,6 +86,8 @@ def prepare_base(engine,plan,base):
         select='+'.join(f'between(n,{round(v["start"]*30)},{round(v["end"]*30)-1})' for v in group)
         video="fps=30,select='"+select+"',setpts=N/(30*TB)"
         rot=m.get('rotation',0)
+        from .video_color import sdr_filter
+        video=sdr_filter(path)+video
         if rot==180:video+=',hflip,vflip'
         elif rot==90:video+=',transpose=clock'
         elif rot==270:video+=',transpose=cclock'
@@ -97,7 +99,7 @@ def prepare_base(engine,plan,base):
         video+=f',tpad=stop_mode=clone:stop_duration=0.05,trim=duration={duration:.6f}'
         fl.append(f'[{j}:v]{video}[v{j}]')
         if probe(path)['audio']:
-            fl.append(f'[{j}:a]asplit={len(group)}'+''.join(f'[raw{j}_{k}]' for k in range(len(group))))
+            fl.append(f'[{audio_stream(path,j)}]asplit={len(group)}'+''.join(f'[raw{j}_{k}]' for k in range(len(group))))
             for k,v in enumerate(group):
                 fl.append(f'[raw{j}_{k}]atrim=start={v["start"]:.6f}:end={v["end"]:.6f},asetpts=PTS-STARTPTS,aresample=48000,aformat=channel_layouts=stereo,apad,atrim=duration={v["end"]-v["start"]:.6f}[cut{j}_{k}]')
             fl.append(''.join(f'[cut{j}_{k}]' for k in range(len(group)))+f'concat=n={len(group)}:v=0:a=1[a{j}]')
