@@ -88,7 +88,7 @@ class Engine:
             self.log('Извлекаю голос ведущего…')
             audio=self.cache/'host.wav'
             limit=['-t',min(120,info['duration'])] if block.kind=='intro' else []
-            run(['-y','-ss',source_floor,'-i',audio_source,*limit,'-vn','-ac','1','-ar','16000','-c:a','pcm_s16le',audio],self.cancel)
+            run(['-y','-ss',source_floor,'-i',audio_source,*limit,'-map',audio_stream(audio_source),'-vn','-ac','1','-ar','16000','-c:a','pcm_s16le',audio],self.cancel)
             from .framing import prepared_script
             source,warnings=align(audio,prepared_script(block),self.cache,self.cancel,self.log,language=block.language)
             for line in source:line.start+=source_floor;line.end+=source_floor
@@ -111,7 +111,7 @@ class Engine:
         spans=read_json(silence_file)
         if spans is None:
             with stage(self.cache,'Поиск пауз',self.log):
-                silence_log=run(['-ss',start,'-t',end-start,'-i',audio_source,'-vn','-af','silencedetect=noise=-35dB:d=0.30','-f','null','-'],self.cancel)
+                silence_log=run(['-ss',start,'-t',end-start,'-i',audio_source,'-map',audio_stream(audio_source),'-vn','-af','silencedetect=noise=-35dB:d=0.30','-f','null','-'],self.cancel)
                 spans=[(float(a),float(b)) for a,b in re.findall(r'silence_start: ([\d.]+).*?silence_end: ([\d.]+)',silence_log,re.S)]
                 write_json(silence_file,spans)
         else:

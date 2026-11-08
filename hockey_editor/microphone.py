@@ -61,7 +61,7 @@ def prepare(camera,microphone,cache,cancel,log):
     # Missing microphone lead/tail becomes silence; camera sound is never mixed in.
     trim=max(0,offset);delay=max(0,-offset/rate)
     pcm=work/'tempo.wav';aligned=work/'aligned.wav'
-    run(['-y','-i',microphone,'-vn','-af',f'atrim=start={trim:.9f},asetpts=PTS-STARTPTS,atempo={rate:.12f}',
+    run(['-y','-i',microphone,'-map',audio_stream(microphone),'-vn','-af',f'atrim=start={trim:.9f},asetpts=PTS-STARTPTS,atempo={rate:.12f}',
          '-ac','2','-ar','48000','-c:a','pcm_s16le',pcm],cancel)
     # Materialize delay as PCM samples, never as an empty timestamp interval.
     import wave

@@ -19,7 +19,7 @@ class HDRRenderTests(unittest.TestCase):
   from hockey_editor.media import run,probe
   with tempfile.TemporaryDirectory() as d:
    source=Path(d)/'hdr.mov';target=Path(d)/'sdr.mp4'
-   run(['-y','-f','lavfi','-i','testsrc2=s=160x90:r=30:d=1','-c:v','libx264','-pix_fmt','yuv420p10le','-color_primaries','bt2020','-color_trc','arib-std-b67','-colorspace','bt2020nc',source])
+   run(['-y','-f','lavfi','-i','testsrc2=s=160x90:r=30:d=1','-c:v','libx265','-x265-params','pools=1:frame-threads=1:colorprim=9:transfer=18:colormatrix=9:log-level=error','-pix_fmt','yuv420p10le','-color_primaries','bt2020','-color_trc','arib-std-b67','-colorspace','bt2020nc',source])
    import subprocess
    from hockey_editor.media import ffmpeg
    diagnostic=subprocess.run([ffmpeg(),'-hide_banner','-i',str(source)],capture_output=True,text=True).stderr

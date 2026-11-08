@@ -30,7 +30,7 @@ def key(project,plan):
     settings=asdict(project.settings)
     # Animation of text is evaluated live; transitions also affect video.
     settings.pop('animate_cards',None)
-    content=['live-bed-v1',project.profile,settings,base_key(plan,project),[identity(p) for p in sorted(paths)]]
+    content=['live-bed-v2-hdr-sdr',project.profile,settings,base_key(plan,project),[identity(p) for p in sorted(paths)]]
     return hashlib.sha256(json.dumps(content,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
 
 

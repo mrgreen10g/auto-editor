@@ -4,7 +4,7 @@ import hashlib
 import json
 import os
 import wave
-from .media import run, Cancelled
+from .media import run, Cancelled, audio_stream
 from .processing_cache import read_json, write_json, stage
 
 
@@ -37,7 +37,7 @@ def prepared_audio(project, folder, cancel, log):
         source, _, _ = analysis_source(project, folder, cancel, log)
         partial = folder/'voice.partial.wav'
         try:
-            run(['-y','-i',source,'-vn','-ac','1','-ar','16000','-c:a','pcm_s16le',partial],cancel)
+            run(['-y','-i',source,'-map',audio_stream(source),'-vn','-ac','1','-ar','16000','-c:a','pcm_s16le',partial],cancel)
             with wave.open(str(partial), 'rb') as wav:
                 frames = wav.getnframes()
             partial.replace(target)
