@@ -84,7 +84,7 @@ def _probe_cached(path, size, modified):
                      encoding='utf-8',errors='replace',creationflags=flags,timeout=25)
     text=r.stderr
     duration=re.search(r'Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)',text)
-    video=next((l for l in text.splitlines() if 'Video:' in l),'')
+    video=next((l for l in text.splitlines() if re.search(r'Stream #0:\d+.*Video:',l)),'')
     size=re.search(r'\b(\d{2,5})x(\d{2,5})\b',video)
     if not duration: raise ValueError(f'Не удалось прочитать длительность: {Path(path).name}')
     rotation=re.search(r'displaymatrix:\s*rotation of\s*([-+\d.]+)',text)
