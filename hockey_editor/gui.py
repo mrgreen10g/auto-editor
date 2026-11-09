@@ -293,6 +293,13 @@ class App(EpisodeMixin,MatchMixin):
 
     def build_settings(self):
         page = self.scrollable('settings')
+        from .performance import LABELS,mode,save
+        machine=ui.card(page,'Производительность','Режим этого компьютера. Применяется к следующим операциям; качество видео и точность поиска не меняются.')
+        choice=tk.StringVar(value=LABELS[mode()])
+        selector=ttk.Combobox(machine,textvariable=choice,values=list(LABELS.values()),state='readonly')
+        selector.pack(fill='x')
+        selector.bind('<<ComboboxSelected>>',lambda event:save(next(k for k,v in LABELS.items() if v==choice.get())))
+        self.controls.append(selector)
         extra=ttk.Frame(page);extra.pack(fill='x',pady=(0,12))
         services=ttk.Frame(extra)
         def toggle_services():

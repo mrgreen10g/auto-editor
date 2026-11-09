@@ -32,6 +32,8 @@ def command_args(args):
 
 
 def run(args, cancel=None, log_path=None, progress=None):
+    from .performance import ffmpeg_args
+    args=ffmpeg_args(args)
     flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
     command = [ffmpeg(), '-hide_banner','-nostdin', *command_args(args)]
     proc = subprocess.Popen(command,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,

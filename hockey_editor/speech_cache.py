@@ -9,9 +9,8 @@ from .processing_cache import read_json, write_json, stage
 
 
 def cpu_threads():
-    # Leave two logical CPUs for Windows, FFmpeg and the interface on an 8-vCPU VPS.
-    count = os.cpu_count() or 2
-    return max(1, min(6, count - 2 if count > 4 else count - 1))
+    from .performance import budget
+    return budget('speech')
 
 
 def prepared_audio(project, folder, cancel, log):
