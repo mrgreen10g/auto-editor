@@ -10,6 +10,7 @@ from .timeline import Plan
 
 def project_edit_key(project, index):
     block = asdict(project.blocks[index]); block.pop('edit_plan',None);block.pop('edit_key',None)
+    if project.settings.cut_pauses:block['voice_safety_revision']='v1'
     if project.profile.startswith('ru_') and project.settings.cut_pauses:block['retake_version']='script-thought-v3'
     if project.profile.startswith('uz_'):block['review_context_version']='heard-v2'
     if not block.get('archive_pool'):block.pop('archive_pool',None)

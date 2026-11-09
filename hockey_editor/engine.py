@@ -106,19 +106,21 @@ class Engine:
         self.log(f'Найден разбор в исходнике: {start:.2f}–{end:.2f} с.')
         from .host_media import identity
         from .processing_cache import read_json, write_json, stage
-        silence_key=hashlib.sha256(json.dumps([identity(audio_source),start,end,'-35dB:.30']).encode()).hexdigest()
+        from .voice_safety import REVISION,detect,protect_spoken
+        silence_key=hashlib.sha256(json.dumps([identity(audio_source),start,end,REVISION]).encode()).hexdigest()
         silence_file=self.cache/'silence'/f'{silence_key}.json'
         spans=read_json(silence_file)
         if spans is None:
             with stage(self.cache,'Поиск пауз',self.log):
-                silence_log=run(['-ss',start,'-t',end-start,'-i',audio_source,'-map',audio_stream(audio_source),'-vn','-af','silencedetect=noise=-35dB:d=0.30','-f','null','-'],self.cancel)
-                spans=[(float(a),float(b)) for a,b in re.findall(r'silence_start: ([\d.]+).*?silence_end: ([\d.]+)',silence_log,re.S)]
+                spans,threshold=detect(audio_source,start,end,self.cache,self.cancel)
+                self.log(f'Паузы: безопасный порог {threshold:.1f} дБ; защищаю распознанные слова.')
                 write_json(silence_file,spans)
         else:
             self.log('Использую сохранённые границы пауз.')
         if protected_tail is not None:
             limit=protected_tail-start
             spans=[(a,min(b,limit)) for a,b in spans if a<limit and min(b,limit)>a]
+        spans=protect_spoken(spans,source,start)
         keep=keep_ranges(end-start,spans,enabled=p.settings.cut_pauses)
         if p.settings.cut_pauses:
             from .speech_cleanup import subtract_ranges
@@ -199,9 +201,8 @@ class Engine:
             if s.color:video+=',eq=contrast=1.045:saturation=1.035:brightness=-0.004'
             fl=[f'[0:v]{video}[video]',f'[{audio_stream(p.host)}]asplit='+str(n)+''.join(f'[s{i}]' for i in range(n))]
             for i,(a,b) in enumerate(plan.keep):fl.append(f'[s{i}]atrim=start={a:.6f}:end={b:.6f},asetpts=PTS-STARTPTS[a{i}]')
-            voice=f'concat=n={n}:v=0:a=1,highpass=f=70'
-            if s.denoise:voice+=f',afftdn=nr={s.noise_reduction}:nf=-40:tn=1'
-            voice+=',loudnorm=I=-16:TP=-2:LRA=9,aresample=48000'
+            from .voice_safety import voice_filters
+            voice=f'concat=n={n}:v=0:a=1,'+voice_filters(s)
             fl.append(''.join(f'[a{i}]' for i in range(n))+voice+'[voice]')
             args=['-y','-threads','2','-ss',plan.source_start,'-t',plan.source_end-plan.source_start,'-i',p.host]
             if p.music:

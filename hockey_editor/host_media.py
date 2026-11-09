@@ -108,12 +108,12 @@ def prepare_base(engine,plan,base):
     fl.append(''.join(f'[v{j}][a{j}]' for j in range(n))+f'concat=n={n}:v=1:a=1[video][joined]')
     # Apply continuous voice processing once, not independently per word/kept span.
     head=next((m['end']-m['start'] for m in plan.media if m.get('kind')=='disclaimer'),0)
+    from .voice_safety import voice_filters
     if head:
         fl+=['[joined]asplit=2[rawhead][rawvoice]',f'[rawhead]atrim=duration={head:.6f},asetpts=PTS-STARTPTS[head]']
-        voice=f'[rawvoice]atrim=start={head:.6f},asetpts=PTS-STARTPTS,highpass=f=70'
-    else:voice='[joined]highpass=f=70'
-    if s.denoise:voice+=f',afftdn=nr={s.noise_reduction}:nf=-40:tn=1'
-    voice+=',loudnorm=I=-16:TP=-2:LRA=9,aresample=48000[processed]';fl.append(voice)
+        voice=f'[rawvoice]atrim=start={head:.6f},asetpts=PTS-STARTPTS,'+voice_filters(s)
+    else:voice='[joined]'+voice_filters(s)
+    voice+='[processed]';fl.append(voice)
     if head:fl.append('[head][processed]concat=n=2:v=0:a=1[voice]')
     else:fl.append('[processed]anull[voice]')
     if p.music:
