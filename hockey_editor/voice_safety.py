@@ -46,5 +46,8 @@ def voice_filters(settings):
     # Normalize before suppression: a fixed -40 dB floor on quiet raw voice
     # can remove syllables. Never learn an adaptive noise profile from speech.
     result='highpass=f=70,loudnorm=I=-16:TP=-2:LRA=9,aresample=48000'
-    if settings.denoise:result+=f',afftdn=nr={settings.noise_reduction}:nf=-55:tn=0'
+    if settings.denoise:
+        # afftdn buffers two 12.5 ms blocks. Flush the tail and remove its
+        # 25 ms latency so audio remains aligned with camera frames.
+        result+=f',apad=pad_dur=0.025,afftdn=nr={settings.noise_reduction}:nf=-55:tn=0,atrim=start=0.025,asetpts=PTS-STARTPTS'
     return result

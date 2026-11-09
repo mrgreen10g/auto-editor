@@ -36,9 +36,21 @@ class VoiceSafetyTests(unittest.TestCase):
    baseline=Path(d)/'baseline.wav'
    run(['-y','-i',source,'-af',voice_filters(Settings(denoise=False)),'-c:a','pcm_f32le',baseline])
    _,reference=wavfile.read(baseline)
-   self.assertGreater(np.corrcoef(reference[rate:-rate],out[rate:-rate])[0,1],.98)
-   # Measure complete 1/3-second modulation periods; short windows are
-   # sensitive to the FFT filter's small group delay, not speech loss.
-   for i in range(rate,2*rate,rate//3):
-    ratio=np.sqrt(np.mean(out[i:i+rate//3]**2)/np.mean(reference[i:i+rate//3]**2))
+   self.assertGreater(np.corrcoef(reference[rate:-rate],out[rate:-rate])[0,1],.999)
+   for i in range(rate,2*rate,rate//10):
+    ratio=np.sqrt(np.mean(out[i:i+rate//10]**2)/np.mean(reference[i:i+rate//10]**2))
     self.assertGreater(ratio,.85)
+
+ def test_noise_filter_preserves_broadband_timing(self):
+  from scipy.io import wavfile
+  from hockey_editor.media import run
+  rate=48000;rng=np.random.default_rng(7)
+  signal=(rng.standard_normal(rate*2)*.02).astype(np.float32)
+  with tempfile.TemporaryDirectory() as d:
+   source=Path(d)/'source.wav';wavfile.write(source,rate,signal);results=[]
+   for enabled in (False,True):
+    target=Path(d)/f'{enabled}.wav'
+    run(['-y','-i',source,'-af',voice_filters(Settings(denoise=enabled)),'-c:a','pcm_f32le',target])
+    _,out=wavfile.read(target);results.append(out)
+   self.assertEqual(len(results[0]),len(results[1]))
+   self.assertGreater(np.corrcoef(results[0][rate//2:-rate//2],results[1][rate//2:-rate//2])[0,1],.999)
