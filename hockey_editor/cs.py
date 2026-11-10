@@ -19,6 +19,8 @@ def aliases(name):
 TEAM_NAMES=[r['name'] for r in TEAMS]+['3DMAX']
 PLAYERS=list(dict.fromkeys(p for r in TEAMS for p in r['players']))
 DICTIONARY={n:aliases(n) for n in dict.fromkeys(TEAM_NAMES+PLAYERS)}
+MAPS={'Mirage':['мираж','миража','мираже'],'Dust2':['даст два','даст 2','даст2','даст'],'Nuke':['нюк','нюке','нюка'],'Ancient':['эншент','эншенте','аншент'],'Inferno':['инферно'],'Anubis':['анубис','анубисе'],'Cache':['кэш','кэше'],'Train':['трейн','трейне'],'Overpass':['оверпасс','оверпассе']}
+DICTIONARY.update({name:[name,*variants] for name,variants in MAPS.items()})
 LOOKUP={key(a):n for n in TEAM_NAMES for a in DICTIONARY[n]}
 def identity(name):return LOOKUP.get(key(name),name.strip(' «»".'))
 def pattern(alias):return r'[\s\-—–]*'.join(re.escape(v) for v in re.split(r'[\s\-—–]+',alias) if v)
@@ -59,7 +61,8 @@ def events(block,matches):
  rows=[l['text'] for l in block.asr_lines] if block.asr_lines else split_script(block.script);result=[]
  for row in rows:
   title,_=classify(row)
-  if len(row.split())<6 or title in ('ТЕЛЕГРАМ','ПРОГНОЗ') or re.search(r'подпис|ссылк|лайк',row,re.I):continue
+  if title=='ПРОГНОЗ':break
+  if len(row.split())<6 or title=='ТЕЛЕГРАМ' or re.search(r'подпис|ссылк|лайк',row,re.I):continue
   source=sources[len(result)%len(sources)];result.append(EventRequest(source.id,row,kind='play',strict_source=True))
  return result
 
