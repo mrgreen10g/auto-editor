@@ -19,7 +19,7 @@ def draft_alignment(blocks, segments, duration, reason):
     from .ru_speech import tokens
     from .uzbek import norm, spoken_uz
     def tokenize(text, language):
-        if language=='ru':return tokens(text)
+        if language=='ru':return tokens(text,cs=bool(blocks and blocks[0].sport=='cs'))
         return re.findall(r"[a-z0-9']+",spoken_uz(norm(text)))
     language=blocks[0].language
     if blocks[0].language=='ru' and len(blocks)>1 and blocks[0].kind=='intro':
@@ -45,7 +45,7 @@ def draft_alignment(blocks, segments, duration, reason):
     source_words=words
     if language=='ru':
         from .ru_speech import speech_word_units
-        source_words=speech_word_units(words)
+        source_words=speech_word_units(words,cs=bool(blocks and blocks[0].sport=="cs"))
     for w in source_words:
         ts=tokenize(w['word'],language)
         for k,t in enumerate(ts):
@@ -92,6 +92,9 @@ def fallback_cards(project, block, lines, duration, reason):
     cards=[];seen=set()
     for i,line in enumerate(lines):
         low=norm(line.text);title,body=classify(line.text) if block.language=='uz' else (classify_card(line.text),'')
+        if block.sport=='cs':
+            from .cs import classify as cs_classify
+            title,body=cs_classify(line.text)
         if title and not body:body=summarize_card(title,line.text)
         pairs=[b for b in owners if (mentions(b.title,line.text) if block.language=='uz' else pair_matches(line.text,b))]
         if block.kind=='intro' and pairs and not project.profile.endswith('_shorts'):

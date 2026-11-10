@@ -202,8 +202,8 @@ class Engine:
             if s.color:video+=',eq=contrast=1.045:saturation=1.035:brightness=-0.004'
             fl=[f'[0:v]{video}[video]',f'[{audio_stream(p.host)}]asplit='+str(n)+''.join(f'[s{i}]' for i in range(n))]
             for i,(a,b) in enumerate(plan.keep):fl.append(f'[s{i}]atrim=start={a:.6f}:end={b:.6f},asetpts=PTS-STARTPTS[a{i}]')
-            from .voice_safety import voice_filters
-            voice=f'concat=n={n}:v=0:a=1,'+voice_filters(s)
+            from .voice_safety import voice_filters,measured_gain
+            voice=f'concat=n={n}:v=0:a=1,'+voice_filters(s,measured_gain([p.host],self.cache,self.cancel))
             fl.append(''.join(f'[a{i}]' for i in range(n))+voice+'[voice]')
             args=['-y','-threads','2','-ss',plan.source_start,'-t',plan.source_end-plan.source_start,'-i',p.host]
             if p.music:

@@ -10,6 +10,9 @@ from .media import probe,ffmpeg
 
 
 def prepared_script(block):
+    if block.sport=="cs":
+        from .cs import prepare_script
+        return prepare_script(block)
     if block.sport=='combat' and block.language=='ru':return block.script
     if block.language=='uz' and block.sport=='hockey':
         from .uz_hockey import clean_script
@@ -42,6 +45,9 @@ def prepared_script(block):
 
 
 def pair_matches(text,block):
+    if block.sport=="cs":
+        from .cs import mentioned
+        return set(block_teams(block.title)) <= set(mentioned(text))
     names=block_teams(block.title)
     if block.sport=='football':
         from .team_names import football_positions
@@ -51,6 +57,9 @@ def pair_matches(text,block):
 
 
 def forecast_text(block):
+    if block.sport=="cs":
+        from .cs import forecast
+        return block.forecast or forecast(block.script)
     if block.edit_plan:
         card=next((c for c in reversed(block.edit_plan.get('cards',[])) if c['title']=='ПРОГНОЗ'),None)
         if card:return card['text']
@@ -123,6 +132,10 @@ def framing_cards(project,block,lines,duration):
             # A city can identify a single fixture in this episode. Ambiguous
             # cities never choose between multiple fixtures on their own.
             candidates=[b for b in analyses if any(team_position(n,line.text,block_teams(b.title)) is not None for n in block_teams(b.title))]
+            if block.sport=='cs':
+                from .cs import mentioned
+                named=set(mentioned(line.text))
+                candidates=[b for b in analyses if named.intersection(block_teams(b.title))]
             if re.search(r'зел[её]н\w*\s+дерби',low):
                 candidates=[b for b in analyses if pair_matches('Салават Юлаев — Ак Барс',b)]
             if len(candidates)==1:pairs=candidates
@@ -158,9 +171,13 @@ def framing_cards(project,block,lines,duration):
         if re.match(r'(?:всем привет|сегодня разбер)',low):continue
         if 'фаворит' in low and 'букмекер' in low:
             cards.append(Card(line.start,line.end,'ЛИНИЯ БУКМЕКЕРОВ','Хозяева — фавориты',i));continue
-        title=classify_card(line.text)
+        if block.sport=="cs":
+            from .cs import classify
+            title,text=classify(line.text)
+        else:
+            title=classify_card(line.text)
+            text=summarize_card(title,line.text) if title else ""
         if title:
-            text=summarize_card(title,line.text)
             if text:cards.append(Card(line.start,line.end,title,text,i))
     if block.kind=='outro':
         for b in analyses:

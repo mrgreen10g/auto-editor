@@ -2,13 +2,13 @@
 import json,os
 from pathlib import Path
 
-PROFILES={'ru':[('ru_hockey','Хоккей · лонг'),('ru_combat','Бои · лонг'),('ru_combat_shorts','Бои · Shorts'),('ru_football','Футбол · лонг'),('ru_hockey_shorts','Хоккей · Shorts'),('ru_football_shorts','Футбол · Shorts'),('ru_hockey_top5_shorts','Хоккей · Shorts ТОП‑5'),('ru_football_top5_shorts','Футбол · Shorts ТОП‑5')],
+PROFILES={'ru':[('ru_hockey','Хоккей · лонг'),('ru_cs','Counter-Strike · лонг'),('ru_combat','Бои · лонг'),('ru_combat_shorts','Бои · Shorts'),('ru_football','Футбол · лонг'),('ru_hockey_shorts','Хоккей · Shorts'),('ru_football_shorts','Футбол · Shorts'),('ru_hockey_top5_shorts','Хоккей · Shorts ТОП‑5'),('ru_football_top5_shorts','Футбол · Shorts ТОП‑5')],
           'uz':[('uz_football','Футбол · лонг'),('uz_hockey','Хоккей · лонг'),('uz_combat','Бои · лонг'),('uz_combat_shorts','Бои · Shorts'),('uz_football_shorts','Футбол · Shorts'),('uz_hockey_shorts','Хоккей · Shorts')]}
 
 
 def kit_path(profile='ru_hockey'):
     if profile in ('ru_hockey_top5_shorts','ru_football_top5_shorts'):profile='ru_hockey_shorts'
-    if profile in ('ru_football_shorts','uz_combat_shorts','ru_combat','ru_combat_shorts'):return Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/('asset-kit-'+profile.replace('_','-')+'.json')
+    if profile in ('ru_cs','ru_football_shorts','uz_combat_shorts','ru_combat','ru_combat_shorts'):return Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/('asset-kit-'+profile.replace('_','-')+'.json')
     if profile=='ru_football':return Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'asset-kit-ru-football.json'
     if profile=='ru_hockey_shorts':return Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'asset-kit-ru-shorts.json'
     if profile=='uz_hockey_shorts':return Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/'asset-kit-uz-hockey-shorts.json'
@@ -19,6 +19,7 @@ def kit_path(profile='ru_hockey'):
 def apply_profile(project,profile):
     if profile not in {p for values in PROFILES.values() for p,_ in values}:raise ValueError('Неизвестный шаблон.')
     if project.profile==profile:return
+    previous_profile=project.profile
     was_short=project.profile.endswith('_shorts')
     if profile.endswith('_shorts'):
         project.settings.width,project.settings.height=1080,1920
@@ -30,13 +31,13 @@ def apply_profile(project,profile):
     language='uz' if profile.startswith('uz_') else 'ru'
     for block in [project.intro,*project.blocks,project.outro]:
         block.top5_rank=0
-        block.sport='combat' if profile.startswith(('uz_combat','ru_combat')) else 'football' if 'football' in profile else 'hockey';block.forecast='';block.featured_pairs=[]
+        block.sport='combat' if profile.startswith(('uz_combat','ru_combat')) else 'football' if 'football' in profile else 'cs' if profile=='ru_cs' else 'hockey';block.forecast='';block.featured_pairs=[]
         block.archive_pool=[]
         block.language=language;block.events=[];block.edit_plan=None;block.edit_key='';block.card_overrides={};block.source_hint=[];block.asr_lines=[];block.speech_key='';block.speech_cards={}
-    if profile.startswith(('uz_combat','ru_combat')) or any(s.sport=='combat' for s in project.matches):
+    if profile=='ru_cs' or previous_profile=='ru_cs' or profile.startswith(('uz_combat','ru_combat')) or any(s.sport=='combat' for s in project.matches):
         for block in project.blocks:block.match_ids=[]
     else:
-        for source in project.matches:source.sport='football' if 'football' in profile else 'hockey'
+        for source in project.matches:source.sport='football' if 'football' in profile else 'cs' if profile=='ru_cs' else 'hockey'
     project.assets={}
     project.asset_folder=''
     try:

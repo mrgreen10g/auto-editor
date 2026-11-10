@@ -44,6 +44,7 @@ class Candidate:
 def source_signature(source):
     p = Path(source.path).resolve(); st = p.stat()
     data = [SCAN_VERSION, str(p), st.st_size, st.st_mtime_ns, source.score_box]
+    if source.sport=='cs':data.append('cs-archive-v1')
     if source.sport=='football':data.append('football-wide-play-v2')
     if source.sport=='combat':data.append('combat-clock-action-v3')
     return hashlib.sha256(json.dumps(data).encode()).hexdigest()
@@ -149,6 +150,9 @@ class GoalScanner:
             raise Cancelled('Отменено.')
 
     def scan(self, source):
+        if source.sport=="cs":
+            from .cs_scan import scan
+            return scan(source,self)
         if source.sport=='combat':
             from .combat_scan import scan
             return scan(source,self)
@@ -329,7 +333,7 @@ def propose(requests, scans, sources=(), allow_other=False):
         source = source_map.get(event.source_id)
         archive = event.source_id != original_id
         title = source.title if source else 'другой матч'
-        label = ('Архивные кадры · '+title) if archive else ('Кадры матча' if fallback and event.kind != 'play' else '')
+        label = ('Архивные кадры CS · '+title) if source and source.sport=='cs' else ('Архивные кадры · '+title) if archive else ('Кадры матча' if fallback and event.kind != 'play' else '')
         event.selection = EventSelection(c.id, c.start, c.end, c.time, data['signature'],
                                          fallback or c.confidence >= .65, label)
         if archive:
@@ -343,7 +347,7 @@ def propose(requests, scans, sources=(), allow_other=False):
     missing=set();result=[]
     for event in requests:
         source=source_map.get(event.source_id)
-        if source and source.sport=='football' and event.kind=='play' and not event.skipped and event.selection is None:
+        if source and source.sport in ('football','cs') and event.kind=='play' and not event.skipped and event.selection is None:
             if event.source_id in missing:continue
             missing.add(event.source_id)
         result.append(event)

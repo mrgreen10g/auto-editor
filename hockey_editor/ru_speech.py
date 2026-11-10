@@ -42,6 +42,13 @@ def recording_key(project):
     return hashlib.sha256(json.dumps([MODEL_REV,'nhl-names-v1',recognition_prompt(project),[identity(p) for p in project.host_paths()]+[identity(project.microphones[p]) for p in project.host_paths() if project.microphones.get(p)]]).encode()).hexdigest()
 
 def recognition_prompt(project):
+    if project.profile=='ru_cs':
+        from .cs import mentioned,DICTIONARY,PLAYERS,aliases
+        text=' '.join(b.script for b in project.blocks)
+        names=list(dict.fromkeys(n for b in project.blocks for n in mentioned(b.title)))
+        names+=[p for p in PLAYERS if any(a.lower() in text.lower() for a in aliases(p))]
+        return ('Counter-Strike 2; Mirage; Dust2; Nuke; Ancient; Inferno; Anubis; Cache; '+ '; '.join(' / '.join(DICTIONARY[n]) for n in dict.fromkeys(names)))[:1500]
+
     if project.profile.startswith('ru_combat'):
         from .graphics import block_teams
         from .fighters import name_spellings
@@ -71,7 +78,10 @@ def transcribe(project,cache,cancel,log):
     temp=saved.with_suffix('.tmp');temp.write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8');temp.replace(saved)
     return result
 
-def tokens(text):
+def tokens(text,cs=False):
+    if cs:
+        from .cs import normalize_speech as cs_speech
+        text=cs_speech(text)
     from .nhl import speech_names
     from .nhl_players import normalize_speech
     text=speech_names(normalize_speech(text.lower().replace('ё','е')))
@@ -93,14 +103,16 @@ def _align_episode(blocks,segments):
     """One monotone mapping for the whole script, not independent phrase searches."""
     from .framing import prepared_script
     from .team_names import normalize
+    from functools import partial
+    tokenize=partial(tokens,cs=bool(blocks and blocks[0].sport=="cs"))
     rows=[];script=[];source=[];stamps=[]
     for block in blocks:
         for index,text in enumerate(split_script(prepared_script(block))):
-            ts=tokens(text);lo=len(script);script+=ts
+            ts=tokenize(text);lo=len(script);script+=ts
             heading=block.kind=='analysis' and index==0 and normalize(text).strip('. ') == normalize(block.title).strip('. ')
             rows.append((block.uid,text,lo,len(script),heading))
-    for w in speech_word_units([w for s in segments for w in s['words']]):
-        ts=tokens(w['word'])
+    for w in speech_word_units([w for s in segments for w in s['words']],cs=bool(blocks and blocks[0].sport=='cs')):
+        ts=tokenize(w['word'])
         for i,token in enumerate(ts):
             source.append(token)
             span=(w['end']-w['start'])/len(ts)
@@ -209,7 +221,7 @@ def prepare(project,blocks,cache,cancel,log):
 
 
 
-def speech_word_units(words):
+def speech_word_units(words,cs=False):
     """Keep multiword club names/decimals intact across ASR word boundaries."""
     from .nhl import NHL
     from .nhl_players import vocabulary,plain
@@ -222,7 +234,8 @@ def speech_word_units(words):
             window=words[i:i+size]
             if any(b['start']-a['end']>.8 for a,b in zip(window,window[1:])):continue
             value=' '.join(w['word'].strip() for w in window).strip(' .,!?:;«»').replace('ё','е')
-            if any(p.fullmatch(value) for p in patterns) or player_pattern.fullmatch(plain(value)) or re.fullmatch(r'\d+\s*[,.]\s*\d+',value):
+            from .cs import speech_name
+            if (cs and speech_name(value)) or any(p.fullmatch(value) for p in patterns) or player_pattern.fullmatch(plain(value)) or re.fullmatch(r'\d+\s*[,.]\s*\d+',value):
                 count=size;break
         window=words[i:i+count]
         result.append(dict(words[i],word=' '.join(w['word'].strip() for w in window),end=window[-1]['end']))

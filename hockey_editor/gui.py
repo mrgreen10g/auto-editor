@@ -644,7 +644,7 @@ class App(EpisodeMixin,MatchMixin):
     def add_block(self):
         self.collect()
         self.project.whole_episode=True
-        self.project.blocks.append(Block(title=f'Разбор {len(self.project.blocks) + 1}',language='uz' if self.project.profile.startswith('uz_') else 'ru',sport='combat' if self.project.profile.startswith(('uz_combat','ru_combat')) else 'football' if 'football' in self.project.profile else 'hockey'))
+        self.project.blocks.append(Block(title=f'Разбор {len(self.project.blocks) + 1}',language='uz' if self.project.profile.startswith('uz_') else 'ru',sport='combat' if self.project.profile.startswith(('uz_combat','ru_combat')) else 'football' if 'football' in self.project.profile else 'cs' if self.project.profile=='ru_cs' else 'hockey'))
         self.index = len(self.project.blocks) - 1
         self.invalidate()
         self.refresh()

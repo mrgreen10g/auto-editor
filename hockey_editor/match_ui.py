@@ -128,7 +128,10 @@ class MatchMixin:
                     from .team_names import football_names
                     found=football_names(Path(path).stem)
                     names=found if len(found)==2 else block_teams(Path(path).stem)
-                source = MatchSource(path, names[0], names[1],sport='football' if 'football' in self.project.profile else 'hockey')
+                if self.project.profile=="ru_cs":
+                    from .cs import mentioned
+                    names=mentioned(Path(path).stem)+["",""]
+                source = MatchSource(path, names[0], names[1],sport='football' if 'football' in self.project.profile else 'cs' if self.project.profile=='ru_cs' else 'hockey')
                 if self.project.profile.startswith(('uz_combat','ru_combat')):source.sport='combat'
                 from .graphics import block_teams
                 dialog = SourceDialog(self.root, source,block_teams(self.project.blocks[self.index].title))

@@ -406,7 +406,7 @@ class Inputs:
                 host_ids={r['id']:r['path'] for r in ready if r['role']=='host'}
                 project.microphones={host_ids[r['block']]:r['path'] for r in ready if r['role']=='mic'}
                 project.full_video=True;project.whole_episode=True;project.settings.use_manual_clips=False
-                sport='combat' if d['profile'].startswith(('uz_combat','ru_combat')) else 'football' if 'football' in d['profile'] else 'hockey'
+                sport='combat' if d['profile'].startswith(('uz_combat','ru_combat')) else 'football' if 'football' in d['profile'] else 'cs' if d['profile']=='ru_cs' else 'hockey'
                 for r in ready:
                     if r['role']!='match':continue
                     m=MatchSource(r['path'],r['fighter'] if sport=='combat' else r['home'],r['away'],sport=sport,fighter=r['fighter']);project.matches.append(m)

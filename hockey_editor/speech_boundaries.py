@@ -26,8 +26,10 @@ def first_analysis_start(blocks,segments):
     first=next((b for b in blocks if b.kind=='analysis'),None)
     if first is None:return None
     from .ru_speech import speech_word_units
-    words=speech_word_units([w for s in segments for w in s.get('words',[])]);floor=intro_floor(words)
+    words=speech_word_units([w for s in segments for w in s.get('words',[])],cs=bool(blocks and blocks[0].sport=='cs'));floor=intro_floor(words)
     from .ru_speech import tokens
+    from functools import partial
+    tokens=partial(tokens,cs=bool(blocks and blocks[0].sport=="cs"))
     from .graphics import block_teams
     targets=[tokens(n) for n in block_teams(first.title) if n]
     if floor<=0:return script_analysis_start(blocks,segments)
@@ -71,6 +73,8 @@ def script_analysis_start(blocks,segments):
     """
     from .alignment import split_script
     from .ru_speech import tokens
+    from functools import partial
+    tokens=partial(tokens,cs=bool(blocks and blocks[0].sport=="cs"))
     from .framing import prepared_script
     first=next((b for b in blocks if b.kind=='analysis'),None)
     if first is None or not first.script.strip():return None
@@ -79,7 +83,7 @@ def script_analysis_start(blocks,segments):
     target=tokens(' '.join(body[:2]))[:24]
     if len(target)<6:return None
     from .ru_speech import speech_word_units
-    words=speech_word_units([w for s in segments for w in s.get('words',[])]);flat=[];owners=[]
+    words=speech_word_units([w for s in segments for w in s.get('words',[])],cs=bool(blocks and blocks[0].sport=='cs'));flat=[];owners=[]
     for i,w in enumerate(words):
         ts=tokens(w['word']);flat+=ts;owners += [i]*len(ts)
     intro=tokens(prepared_script(blocks[0]));matches=[]

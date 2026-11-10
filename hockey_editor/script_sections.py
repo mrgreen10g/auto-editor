@@ -12,14 +12,17 @@ def clean(text):
 def parse(text, profile, pair_hints=()):
     from .uz_structure import fixture, spoken_fixture, key, OUTRO
     from .framing import ru_fixture_heading
-    sport='combat' if 'combat' in profile else 'football' if 'football' in profile else 'hockey'
+    sport='combat' if 'combat' in profile else 'football' if 'football' in profile else 'cs' if profile=='ru_cs' else 'hockey'
     language='uz' if profile.startswith('uz_') else 'ru'
     lines=text.splitlines()
     def heading(value, explicit=False):
         value=value.strip(' #*[]():').strip()
         matches=[h for h in pair_hints if key(h)==key(value)]
         if len(set(matches))==1:return matches[0]
-        if profile.startswith('ru_combat'):
+        if profile=='ru_cs':
+            from .cs import pair_heading
+            title=pair_heading(value)
+        elif profile.startswith('ru_combat'):
             from .ru_combat import pair_heading
             title=pair_heading(value)
         else:title=(spoken_fixture(value,sport) or fixture(value,sport)) if language=='uz' else ru_fixture_heading(value,sport)
@@ -56,6 +59,9 @@ def parse(text, profile, pair_hints=()):
         except ValueError:pass
         # Include ordinary headings too when dictionary coverage is incomplete.
         boundaries=[(i,i,heading(row)) for i,row in enumerate(lines) if heading(row)]
+    elif sport=='cs':
+        boundaries=[(i,i,heading(row)) for i,row in enumerate(lines) if heading(row)]
+        if not boundaries:return None
     else:return None
     if '_top5_' in profile:
         # Ranking format retains its own rank validation; markers are editorial only.

@@ -183,7 +183,10 @@ def placements(block,lines,clip_meta,duration,frequency='normal',shorts=False):
                 named=[n for n in names if name_position(n,tail) is not None]
                 combat_owner=named[0] if len(named)==1 and re.search(r'misol|esa|rekord|statistik|tanish|bazasi',norm(tail)) else None
         if norm(l.text).rstrip('.')==norm(block.title):continue
-        if block.language=='ru' and block.sport=='combat':
+        if block.sport=='cs':
+            from .cs import classify
+            title,body=classify(l.text)
+        elif block.language=='ru' and block.sport=='combat':
             from .ru_combat import classify,named
             from .graphics import block_teams
             owners=named(block_teams(block.title),l.text)
@@ -220,7 +223,7 @@ def placements(block,lines,clip_meta,duration,frequency='normal',shorts=False):
     if block.sport=='football':
         from .football_players import cards as player_cards
         cards.extend(player_cards(block,lines,cards))
-    elif block.sport!='combat' and (block.language=='ru' or block.sport=='hockey'):
+    elif block.sport not in ('combat','cs') and (block.language=='ru' or block.sport=='hockey'):
         from .nhl_players import cards as player_cards
         cards.extend(player_cards(block,lines,cards))
     return inserts,cards,warnings

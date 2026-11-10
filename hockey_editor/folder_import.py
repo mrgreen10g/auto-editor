@@ -41,7 +41,7 @@ def _parse_episode(text,profile):
         return parse_script(text,shorts=profile.endswith('_shorts'))
     if '_top5_' in profile:
         from .top5 import parse_script
-        return parse_script(text,'football' if 'football' in profile else 'hockey')
+        return parse_script(text,'football' if 'football' in profile else 'cs' if profile=='ru_cs' else 'hockey')
     if profile=='ru_football_shorts':
         from .shorts import parse_ru_script
         return parse_ru_script(text,sport='football')
@@ -69,6 +69,9 @@ def _parse_episode(text,profile):
     return parse(text)
 
 def identity(name,profile):
+    if profile=="ru_cs":
+        from .cs import identity as canonical
+        return canonical(name)
     if 'football' in profile:
         from .team_names import football_identity
         return football_identity(name) or compact(name)
@@ -81,7 +84,7 @@ def identity(name,profile):
 def pair_key(title,profile):
     if '_top5_' in profile:
         from .top5 import members
-        return tuple(sorted(members(title,'football' if 'football' in profile else 'hockey')))
+        return tuple(sorted(members(title,'football' if 'football' in profile else 'cs' if profile=='ru_cs' else 'hockey')))
     names=block_teams(title)
     return tuple(sorted(identity(n,profile) for n in names)) if all(names) else ()
 
@@ -96,7 +99,10 @@ def source_names(path,profile):
     """Infer only from the recording filename, never the forecast folder."""
     text=Path(path).stem.replace('_',' ')
     if profile.startswith(('uz_combat','ru_combat')):return '',''
-    if 'football' in profile:
+    if profile=='ru_cs':
+        from .cs import mentioned
+        found=mentioned(text)
+    elif 'football' in profile:
         from .team_names import football_names
         found=football_names(text)
     elif profile.startswith('uz_hockey'):
@@ -149,7 +155,7 @@ def discover_matches(blocks,profile,folder,overrides=None):
             if path in seen:
                 notes.append('Повтор файла пропущен: '+str(path));continue
             a,b=source_names(path,profile)
-            source=MatchSource(str(path),a,b,sport='combat' if profile.startswith(('uz_combat','ru_combat')) else 'football' if 'football' in profile else 'hockey')
+            source=MatchSource(str(path),a,b,sport='combat' if profile.startswith(('uz_combat','ru_combat')) else 'football' if 'football' in profile else 'cs' if profile=='ru_cs' else 'hockey')
             if source.sport=='combat':
                 candidates=[n for n in block_teams(block.title) if identity(n,profile) in (identity(path.stem,profile),identity(path.parent.name,profile))]
                 if len(candidates)==1:source.fighter=source.home=candidates[0]

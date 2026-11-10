@@ -5,6 +5,10 @@ from .graphics import block_teams
 
 
 def identity(name,profile):
+    if profile=="ru_cs":
+        from .cs import identity as canonical,TEAM_NAMES
+        result=canonical(name)
+        return result if result in TEAM_NAMES else None
     if 'football' in profile:return football_identity(name)
     if profile.startswith('uz_hockey'):
         from .hockey_names import identity as hockey_identity

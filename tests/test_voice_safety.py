@@ -22,7 +22,7 @@ class VoiceSafetyTests(unittest.TestCase):
   self.assertEqual(len(spans),1);self.assertAlmostEqual(spans[0][0],1.08);self.assertAlmostEqual(spans[0][1],1.92)
   self.assertEqual(protect_spoken([(0,4)],[Line('Legacy phrase',10,14)],10),[])
  def test_normalize_before_denoise_and_respect_disabled_setting(self):
-  f=voice_filters(Settings());self.assertLess(f.index('loudnorm'),f.index('afftdn'));self.assertIn('nf=-55:tn=0',f)
+  f=voice_filters(Settings());self.assertLess(f.index('volume='),f.index('afftdn'));self.assertIn('nf=-55:tn=0',f)
   self.assertNotIn('afftdn',voice_filters(Settings(denoise=False)))
  def test_real_ffmpeg_keeps_quiet_modulated_voice_continuous(self):
   from scipy.io import wavfile
@@ -54,3 +54,26 @@ class VoiceSafetyTests(unittest.TestCase):
     _,out=wavfile.read(target);results.append(out)
    self.assertEqual(len(results[0]),len(results[1]))
    self.assertGreater(np.corrcoef(results[0][rate//2:-rate//2],results[1][rate//2:-rate//2])[0,1],.999)
+
+ def test_room_noise_and_click_do_not_keep_ten_seconds(self):
+  rate=8000;rng=np.random.default_rng(12)
+  noise=rng.normal(0,.001,rate*10);noise[rate:rate+80]=.05
+  t=np.arange(rate*4)/rate;voice=.1*np.sin(2*np.pi*220*t)
+  spans,_=quiet_spans(np.r_[noise,voice],rate)
+  self.assertTrue(any(a==0 and 9.7<b<10.1 for a,b in spans))
+  protected=protect_spoken(spans,[Line('Старт речи',10,14,words=[dict(word='Старт',start=0,end=1)])],0)
+  self.assertTrue(all(b<=9.92 or a>=11.08 for a,b in protected))
+
+ def test_measured_gain_has_no_thirty_second_ramp(self):
+  from scipy.io import wavfile
+  from hockey_editor.voice_safety import measured_gain
+  from hockey_editor.media import run
+  import threading
+  rate=48000;t=np.arange(rate*40)/rate;x=(.02*np.sin(2*np.pi*220*t)).astype(np.float32)
+  with tempfile.TemporaryDirectory() as d:
+   source=Path(d)/'voice.wav';target=Path(d)/'out.wav';wavfile.write(source,rate,x)
+   gain=measured_gain([source],d,threading.Event());self.assertGreater(gain,0)
+   run(['-y','-i',source,'-af',voice_filters(Settings(denoise=False),gain),'-c:a','pcm_f32le',target])
+   _,out=wavfile.read(target)
+   early=np.sqrt(np.mean(out[rate:rate*3]**2));late=np.sqrt(np.mean(out[rate*32:rate*34]**2))
+   self.assertLess(abs(20*np.log10(early/late)),.05)

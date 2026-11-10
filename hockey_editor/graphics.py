@@ -39,6 +39,9 @@ def block_teams(title):
 
 
 def panel(width, height, accent=(70,211,215,255), profile='ru_hockey'):
+    if profile=="ru_cs":
+        from .cs_graphics import panel as cyber_panel
+        return cyber_panel(width,height)
     margin=12
     image=Image.new('RGBA',(width+24,height+24))
     d=ImageDraw.Draw(image)
@@ -119,6 +122,9 @@ def section_card(card,path,profile='ru_hockey'):
     im=Image.new('RGBA',(1280,720),'#0c1b2b');d=ImageDraw.Draw(im)
     d.polygon([(920,0),(1140,0),(640,720),(420,720)],fill='#14334a')
     d.polygon([(1160,0),(1200,0),(700,720),(660,720)],fill='#43ccd0')
+    if profile=="ru_cs":
+        from .cs_graphics import backdrop
+        backdrop(d,1280,720)
     d.text((100,220),(('YAKUNIY TANLOVLAR' if card.title=='ИТОГИ ВЫПУСКА' else 'KEYINGI O‘YIN') if profile in ('uz_football','uz_hockey') else ('ИТОГИ ВЫПУСКА' if card.title=='ИТОГИ ВЫПУСКА' else 'СЛЕДУЮЩИЙ МАТЧ')),font=font(22,True),fill='#69dbd3')
     size=52
     while size>28:
