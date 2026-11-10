@@ -6,7 +6,7 @@ from difflib import SequenceMatcher
 def token_similarity(a,b):
     # NHL identity tokens differ by only one letter. Fuzzy comparison would
     # treat Boston, Rangers and Tampa as the same club.
-    if a.startswith('nhl') or b.startswith('nhl'):return float(a==b)
+    if a.startswith('nhl') or b.startswith('nhl') or re.fullmatch(r'cs[a-z]{3}',a) or re.fullmatch(r'cs[a-z]{3}',b):return float(a==b)
     return SequenceMatcher(None,a,b).ratio()
 
 

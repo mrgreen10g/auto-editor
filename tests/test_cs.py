@@ -17,6 +17,8 @@ class CSTests(unittest.TestCase):
   from hockey_editor.ru_speech import tokens
   self.assertEqual(tokens('G2',cs=True),tokens('Джи-ту',cs=True))
   self.assertEqual(tokens('GamerLegion',cs=True),tokens('Геймер Легион',cs=True))
+  from hockey_editor.speech_boundaries import token_similarity
+  self.assertEqual(token_similarity(tokens('G2',cs=True)[0],tokens('MOUZ',cs=True)[0]),0)
  def test_import(self):
   from hockey_editor.folder_import import parse_episode
   a,b,c=parse_episode('Привет!\nРазбор1 Джи Ту — Астралис\nДжи-ту выиграли карту 16:14. Мой выбор — победа G2.\nИтак, повторю прогноз. До встречи!','ru_cs')
