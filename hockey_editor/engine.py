@@ -190,7 +190,8 @@ class Engine:
             # Normalize VFR sources before frame-index selection.
             video='fps=30,'+video
             from .video_color import sdr_filter
-            video=sdr_filter(p.host)+video
+            color=sdr_filter(p.host)
+            if color:video+=','+color.rstrip(',')
             from .orientation import detect_rotation
             rotation=(plan.rotation if plan.rotation is not None else detect_rotation(p.host,self.cache,self.cancel,self.log)) if s.auto_rotate else s.rotate
             if rotation==180:video+=',hflip,vflip'
@@ -235,11 +236,8 @@ class Engine:
         intro_head=next((m['end']-m['start'] for m in plan.media if m.get('kind')=='disclaimer'),0)
         windows=[w for w in windows if w[0]>=intro_head]
         if windows:
-            parts=[]
-            for a,b,c,d in windows:
-                a,b,c,d=[round(t*30) for t in (a,b,c,d)]
-                parts.append(f'if(between(on,{a},{b}),(1-cos(PI*(on-{a})/{b-a}))/2,if(between(on,{b},{c}),1,if(between(on,{c},{d}),(1+cos(PI*(on-{c})/{d-c}))/2,0)))')
-            z='1+'+str(s.zoom_max-1)+'*('+'+'.join(parts)+')'
+            from .zoom_expression import expression
+            z=expression(windows,s.zoom_max-1)
             fl.append(f"[0:v]scale={cw*2}:{ch*2},zoompan=z='{z}':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s={cw}x{ch}:fps=30[zv]");v='zv'
         from .timeline import game_transitions
         from .shorts import panel_intervals,panel_motion

@@ -87,7 +87,8 @@ def prepare_base(engine,plan,base):
         video="fps=30,select='"+select+"',setpts=N/(30*TB)"
         rot=m.get('rotation',0)
         from .video_color import sdr_filter
-        video=sdr_filter(path)+video
+        color=sdr_filter(path)
+        if color:video+=','+color.rstrip(',')
         if rot==180:video+=',hflip,vflip'
         elif rot==90:video+=',transpose=clock'
         elif rot==270:video+=',transpose=cclock'

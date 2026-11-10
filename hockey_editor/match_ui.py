@@ -225,14 +225,8 @@ class MatchMixin:
         self.invalidate(); self.show_page('review'); self.reviewtabs.select(self.events_page)
         self.review_summary.set('Ищем эпизоды идущего боя…' if self.project.profile.startswith(('uz_combat','ru_combat')) else 'Ищем голы в исходных матчах…')
         def work():
-            scans = {}; errors = []
-            for source in sources:
-                if self.cancel.is_set(): raise Cancelled()
-                self.jobs.put(('log', 'Матч: '+source.title))
-                try:
-                    scans[source.id] = GoalScanner(cancel=self.cancel, log=lambda m: self.jobs.put(('log', m))).scan(source)
-                except Cancelled: raise
-                except Exception as e: errors.append(source.title+': '+str(e))
+            from .parallel_scan import scan_many
+            scans,errors=scan_many(sources,self.cancel,lambda m:self.jobs.put(('log',m)),GoalScanner)
             self.jobs.put(('goals', (propose_events(events, scans, sources, allow_other), scans, errors)))
         self.match_job('goals', work)
 
@@ -258,13 +252,9 @@ class MatchMixin:
         self.invalidate();self.show_page('review');self.reviewtabs.select(self.events_page)
         self.review_summary.set('Ищем эпизоды для всех разборов…')
         def work():
-            scans={};errors=[];output={}
-            for source in sources:
-                if self.cancel.is_set():raise Cancelled()
-                self.jobs.put(('log','Матч: '+source.title))
-                try:scans[source.id]=GoalScanner(cancel=self.cancel,log=lambda m:self.jobs.put(('log',m))).scan(source)
-                except Cancelled:raise
-                except Exception as error:errors.append(source.title+': '+str(error))
+            from .parallel_scan import scan_many
+            scans,errors=scan_many(sources,self.cancel,lambda m:self.jobs.put(('log',m)),GoalScanner)
+            output={}
             for block in pending:
                 local=[s for s in sources if s.id in block.match_ids]
                 output[block.uid]=propose_events(requests[block.uid],scans,local,allow)
