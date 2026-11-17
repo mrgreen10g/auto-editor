@@ -44,7 +44,7 @@ async function refreshInputs(){
  for(const r of d.files.filter(r=>r.status!=='removed')){
   const card=document.createElement('div');card.className='input-file';$('inputFiles').append(card);
   line(card,({host:'Ведущий',match:'Запись матча',script:'Сценарий',mic:'Микрофон'})[r.role]+' · '+r.name,'strong');
-  if(r.role==='mic')line(card,'Для части: '+(hosts.find(h=>h.id===r.block)?.name||'удалена'),'small');
+  if(r.role==='mic')line(card,r.block==='*'?'Общая запись для всех частей':'Для части: '+(hosts.find(h=>h.id===r.block)?.name||'удалена'),'small');
   if(r.block&&r.role!=='mic')line(card,d.blocks.find(b=>b.uid===r.block)?.title||'','small');
   line(card,r.message||({uploading:'Передача с устройства',waiting:'Ожидание'})[r.status]||r.status);
   if(r.size)line(card,Math.min(100,Math.round(r.received/r.size*100))+'% · '+(r.received/1048576).toFixed(1)+' / '+(r.size/1048576).toFixed(1)+' МБ','small');
@@ -193,13 +193,14 @@ function renderDraftSettings(d){
 function readDraftSettings(){const result={};for(const e of $('draftSettings').querySelectorAll('[data-draft-setting]')){if(e.value===''||e.disabled)continue;result[e.dataset.draftSetting]=e.value==='true'?true:e.value==='false'?false:e.dataset.draftSetting==='insert_frequency'?e.value:Number(e.value);}return result;}
 
 // Compact presenter selector. One component moves with the current creation step.
-let presenterHosts=[''],presenterMic='',presenterFiles=[],presenterMicFiles=[],presenterDraft='',presenterRoot='',presenterReadyKey='';
-function basename(path){return path.split(/[\\/]/).pop()}
+let presenterHosts=[''],presenterMic='',presenterFiles=[],presenterMicFiles=[],presenterDraft='',presenterRoot='',presenterReadyKey='',presenterNames={},presenterRenderKey='';
+function basename(path){if(presenterNames[path])return presenterNames[path];return path.split(/[\\/]/).pop()}
 function presenterOptions(select,paths,value,empty){
  select.replaceChildren(new Option(empty,''));for(const path of [...new Set([...paths,...(value?[value]:[])])])select.add(new Option(basename(path),path));
  select.add(new Option('↑ Загрузить с телефона…','@device'));select.add(new Option('📁 Выбрать на сервере…','@server'));select.value=value;
 }
 function renderPresenter(d){
+ if(d)for(const r of d.files)if(r.path&&r.name)presenterNames[r.path]=r.name;
  const readyKey=d?d.files.filter(r=>r.role==='host'&&r.status==='ready').map(r=>r.id).join(','):'';
  if(d&&presenterDraft===d.id&&inputStep!=='setup'&&!deviceBusy&&readyKey!==presenterReadyKey){presenterHosts=d.files.filter(r=>r.role==='host'&&r.status==='ready').map(r=>r.path);if(!presenterHosts.length)presenterHosts=[''];}
  if(d)presenterReadyKey=readyKey;
@@ -212,13 +213,14 @@ function renderPresenter(d){
  }
  drawPresenter();
 }
-function drawPresenter(){
+function drawPresenter(force=false){
+ const key=JSON.stringify([presenterHosts,presenterMic,presenterFiles,presenterMicFiles,presenterNames]);if(!force&&key===presenterRenderKey)return;presenterRenderKey=key;
  const box=$('presenterRows');box.replaceChildren();
  presenterHosts.forEach((path,i)=>{
   const row=document.createElement('div');row.className='presenter-row';box.append(row);
   const label=document.createElement('label');label.textContent='Часть '+(i+1);row.append(label);
   const select=document.createElement('select');select.dataset.part=String(i);label.append(select);
-  presenterOptions(select,presenterFiles.filter(p=>p!==presenterMic),path,'Выбрать запись…');
+  presenterOptions(select,presenterFiles.filter(p=>p!==presenterMic&&!presenterHosts.some((h,j)=>j!==i&&h===p)),path,'Выбрать запись…');
   select.onchange=()=>guard(()=>presenterChoose('host',i,select.value,row));
   if(i>0)fileAction(row,'↑',async()=>{[presenterHosts[i-1],presenterHosts[i]]=[presenterHosts[i],presenterHosts[i-1]];await savePresenter()}).setAttribute('aria-label','Передвинуть часть выше');
   if(presenterHosts.length>1)fileAction(row,'×',async()=>{presenterHosts.splice(i,1);await savePresenter()}).setAttribute('aria-label','Убрать часть');
@@ -250,17 +252,17 @@ async function ensurePresenterDraft(){
 }
 async function presenterChoose(role,index,value,row){
  if(value==='@server'){
-  drawPresenter();materialRole=role;
-  const anchor=role==='mic'?$('presenterMicrophone').closest('label'):$('presenterRows').children[index];
+  drawPresenter(true);materialRole=role;
+  const anchor=role==='mic'?$('presenterMicrophone').closest('label'):$('presenterRows');
   anchor.after($('materialBrowser'));
   materialCallback=async path=>{if(role==='mic')presenterMic=path;else presenterHosts[index]=path;await savePresenter()};
   await browseMaterial(presenterRoot||inputState?.draft?.folder||'');return;
  }
  if(value==='@device'){
-  drawPresenter();const input=$('presenterUpload');input.accept=role==='mic'?'video/*,audio/*,.wav,.mp3,.mkv':'video/*,.mov,.mp4';
+  drawPresenter(true);const input=$('presenterUpload');input.accept=role==='mic'?'video/*,audio/*,.wav,.mp3,.mkv':'video/*,.mov,.mp4';
   input.onchange=()=>guard(async()=>{
    const file=input.files[0];if(!file)return;if(deviceBusy)throw Error('Дождитесь текущей загрузки.');deviceBusy=true;
-   try{await ensurePresenterDraft();const id=await uploadDevice(file,role,role==='mic'?{block:'*'}:{});const state=await api('input-status',{id:draftId});const found=state.draft.files.find(r=>r.id===id);if(!found)throw Error('Загруженный файл не найден.');if(role==='mic')presenterMic=found.path;else presenterHosts[index]=found.path;await savePresenter();drawPresenter();}
+   try{await ensurePresenterDraft();const id=await uploadDevice(file,role,role==='mic'?{block:'*'}:{});const state=await api('input-status',{id:draftId});const found=state.draft.files.find(r=>r.id===id);if(!found)throw Error('Загруженный файл не найден.');presenterNames[found.path]=found.name;if(role==='mic')presenterMic=found.path;else presenterHosts[index]=found.path;await savePresenter();drawPresenter();}
    finally{deviceBusy=false;input.value=''}
   });input.click();return;
  }

@@ -154,7 +154,7 @@ def check():
                     expect(page.locator('#presenterRows select').nth(i)).not_to_have_value('')
                 expect(page.locator('#presenterRows > div')).to_have_count(2)
                 click('#presenterRows > div:nth-child(2) button[aria-label="Передвинуть часть выше"]')
-                expect(page.locator('#presenterRows select').first).to_have_value(__import__('re').compile('second-host'))
+                expect(page.locator('#presenterRows select').first.locator('option:checked')).to_have_text('second-host.mp4')
                 page.locator('#presenterMicrophone').select_option('@server')
                 page.locator('#materialBrowser').wait_for(state='visible')
                 assert page.locator('#materialBrowser').evaluate('(e)=>e.previousElementSibling.contains(document.getElementById("presenterMicrophone"))')
@@ -262,10 +262,10 @@ def check():
                 click('#editUndo');assert app.plan.cards[0].offset_x==0
                 assert page.locator('#editVideo').get_attribute('src')==bed_src
                 from test_folder_import import setup
-                existing=root/'existing';existing.mkdir();setup(existing)
+                existing=root/'existing';existing.mkdir();existing_host,_=setup(existing);shutil.copy2(original_host,existing_host)
                 click('#inputTab');page.locator('#draftChoice').select_option('');click('#inputSteps [data-step="setup"]')
                 click('#serverImportPanel summary');page.locator('#serverFolder').evaluate('(e,p)=>{e.value=p}',str(existing))
-                click('#scanServerFolder');expect(page.locator('#serverMicrophone')).to_be_visible();expect(page.locator('#serverMicrophone')).to_have_value('');click('#openServerScript');expect(page.locator('#serverScriptText')).to_have_value(SCRIPT);click('#saveServerScript')
+                click('#scanServerFolder');expect(page.locator('#presenterMicrophone')).to_be_visible();expect(page.locator('#presenterMicrophone')).to_have_value('');click('#openServerScript');expect(page.locator('#serverScriptText')).to_have_value(SCRIPT);click('#saveServerScript')
                 expect(page.locator('#inputSummary')).to_contain_text('АМУР')
                 expect(page.locator('#activateInput')).to_be_enabled()
                 source=existing/'text.txt';source.write_text(SCRIPT.replace('Амур играет дома.','Амур играет дома. Свежая правка сценария.'),encoding='utf-8')
