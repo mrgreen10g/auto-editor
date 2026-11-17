@@ -201,8 +201,8 @@ function presenterOptions(select,paths,value,empty){
 }
 function renderPresenter(d){
  if(d)for(const r of d.files)if(r.path&&r.name)presenterNames[r.path]=r.name;
- const readyKey=d?d.files.filter(r=>r.role==='host'&&r.status==='ready').map(r=>r.id).join(','):'';
- if(d&&presenterDraft===d.id&&inputStep!=='setup'&&!deviceBusy&&readyKey!==presenterReadyKey){presenterHosts=d.files.filter(r=>r.role==='host'&&r.status==='ready').map(r=>r.path);if(!presenterHosts.length)presenterHosts=[''];}
+ const readyKey=d?d.files.filter(r=>['host','mic'].includes(r.role)&&r.status==='ready').map(r=>r.id).join(','):'';
+ if(d&&presenterDraft===d.id&&inputStep!=='setup'&&!deviceBusy&&readyKey!==presenterReadyKey){presenterHosts=d.files.filter(r=>r.role==='host'&&r.status==='ready').map(r=>r.path);if(!presenterHosts.length)presenterHosts=[''];presenterMic=d.files.filter(r=>r.role==='mic'&&r.status==='ready').at(-1)?.path||'';}
  if(d)presenterReadyKey=readyKey;
  if(d&&presenterDraft!==d.id){
   presenterDraft=d.id;presenterRoot=d.folder;
