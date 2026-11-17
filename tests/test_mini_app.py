@@ -50,12 +50,14 @@ class MiniAuthTests(unittest.TestCase):
             return urlopen(Request(base+path,data=json.dumps(data).encode(),headers=headers),timeout=3)
         try:
             with urlopen(base) as response:self.assertIn(b'AUTO EDITOR',response.read())
-            for path in ('/api/state','/api/media','/api/action','/api/process-start','/api/process-cancel','/api/process-config'):
+            for path in ('/api/input-presenter','/api/state','/api/media','/api/action','/api/process-start','/api/process-cancel','/api/process-config'):
                 with self.assertRaises(HTTPError) as error:post(path,{})
                 self.assertEqual(error.exception.code,401)
             bridge.request.assert_not_called()
             with post('/api/auth',{'initData':signed()}) as response:session=json.load(response)['session']
             with post('/api/state',{},session) as response:self.assertEqual(json.load(response),{'items':[]})
+            with post('/api/input-presenter',{'id':'draft','hosts':[],'microphone':''},session) as response:self.assertEqual(response.status,200)
+            bridge.request.assert_called_with('input-presenter',{'id':'draft','hosts':[],'microphone':''})
             with self.assertRaises(HTTPError) as error:post('/api/action',{},session,'https://evil.example')
             self.assertEqual(error.exception.code,403)
             with self.assertRaises(HTTPError):urlopen(base+'/../../notifications.py')
