@@ -137,11 +137,10 @@ class Inputs:
                 ordered=[next(r for r in d['files'] if r['role']=='host' and r['status']=='ready' and Path(r['path']).resolve()==Path(h).resolve()) for h in hosts]
                 d['files']=[r for r in d['files'] if r not in ordered]+ordered
             if microphone is not None:
+                mic_owner='*' if 'hosts' in data or not microphone else next(r['id'] for r in d['files'] if r['role']=='host' and r['status']=='ready' and Path(r['path']).resolve()==Path(host).resolve())
                 for row in d['files']:
-                    if row['role']=='mic' and row['status']=='ready':row['status']='removed'
-                if microphone:
-                    mic_owner='*' if 'hosts' in data else next(r['id'] for r in d['files'] if r['role']=='host' and r['status']=='ready' and Path(r['path']).resolve()==Path(host).resolve())
-                    ready(self,d,microphone,'mic',mic_owner,explicit=True)
+                    if row['role']=='mic' and row['status']=='ready' and not (microphone and row.get('block')==mic_owner and Path(row['path']).resolve()==Path(microphone).resolve()):row['status']='removed'
+                if microphone:ready(self,d,microphone,'mic',mic_owner,explicit=True)
             added=reconcile(self,d)
             target=Path(d['folder']);target.mkdir(parents=True,exist_ok=True)
             for section in ('Ведущий','Матчи','Сценарий','Результат'):(target/section).mkdir(exist_ok=True)

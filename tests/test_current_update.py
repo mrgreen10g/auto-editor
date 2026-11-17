@@ -63,6 +63,11 @@ class DraftRecoveryAndPresenterTests(unittest.TestCase):
    d=self.inputs.load(ident);self.assertEqual([r['path'] for r in d['files'] if r['role']=='host' and r['status']=='ready'],[str(second),str(self.host)])
    self.assertEqual([r['block'] for r in d['files'] if r['role']=='mic' and r['status']=='ready'],['*'])
    from hockey_editor.presenter_inputs import update
+   microw=next(r for r in d['files'] if r['role']=='mic' and r['status']=='ready');microw['name']='Original microphone.mp4';self.inputs.save(d)
+   update(self.inputs,dict(id=ident,hosts=[str(self.host),str(second)],microphone=str(mic)))
+   self.assertEqual(self.inputs.summary(self.inputs.load(ident))['microphone'],'Original microphone.mp4')
+   self.inputs.server_import(dict(self.payload,hosts=[str(second),str(self.host)],microphone=str(mic)))
+   self.assertEqual(self.inputs.summary(self.inputs.load(ident))['microphone'],'Original microphone.mp4')
    update(self.inputs,dict(id=ident,hosts=[str(self.host)],microphone=''))
    d=self.inputs.load(ident);self.assertEqual(self.inputs.summary(d)['hosts'],[self.host.name]);self.assertEqual(self.inputs.summary(d)['microphone'],'')
  def test_invalid_selection_is_transactional(self):

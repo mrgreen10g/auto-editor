@@ -21,12 +21,12 @@ def update(inputs,data):
         d=inputs.load(data['id']);inputs.mutable(d)
         if inputs.active and inputs.active[0]==d['id']:raise RemoteError('Дождитесь завершения передачи файла.')
         for row in d['files']:
-            if row['role']=='host' and row['status']=='ready' and row['path'] not in paths:row['status']='removed'
+            if row['role']=='host' and row['status']=='ready' and str(Path(row['path']).resolve()) not in paths:row['status']='removed'
         for p in paths:ready(inputs,d,p,'host',explicit=True)
-        ordered=[next(r for r in d['files'] if r['role']=='host' and r['status']=='ready' and r['path']==p) for p in paths]
+        ordered=[next(r for r in d['files'] if r['role']=='host' and r['status']=='ready' and Path(r['path']).resolve()==Path(p)) for p in paths]
         d['files']=[r for r in d['files'] if r not in ordered]+ordered
         for row in d['files']:
-            if row['role']=='mic' and row['status']=='ready':row['status']='removed'
+            if row['role']=='mic' and row['status']=='ready' and not (mic and row.get('block')=='*' and Path(row['path']).resolve()==Path(mic).resolve()):row['status']='removed'
         if mic:ready(inputs,d,mic,'mic','*',explicit=True)
         inputs.save(d)
     return dict(ok=True)
