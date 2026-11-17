@@ -150,7 +150,7 @@ def check():
                     with page.expect_file_chooser() as chooser:
                         page.locator('#presenterRows select').nth(i).select_option('@device')
                     chooser.value.set_files(path)
-                    page.wait_for_function('!deviceBusy && document.body.dataset.busy === "false"',timeout=60000)
+                    page.wait_for_function('() => !deviceBusy && document.body.dataset.busy === "false"',timeout=60000)
                     expect(page.locator('#presenterRows select').nth(i)).not_to_have_value('')
                 expect(page.locator('#presenterRows > div')).to_have_count(2)
                 click('#presenterRows > div:nth-child(2) button[aria-label="Передвинуть часть выше"]')
@@ -160,7 +160,7 @@ def check():
                 assert page.locator('#materialBrowser').evaluate('(e)=>e.previousElementSibling.contains(document.getElementById("presenterMicrophone"))')
                 page.evaluate('(p)=>browseMaterial(p)',str(Path(original_host).parent))
                 page.locator('#materialFiles button').filter(has_text=Path(original_host).name).first.click()
-                page.wait_for_function('document.body.dataset.busy === "false"')
+                page.wait_for_function('() => document.body.dataset.busy === "false"')
                 expect(page.locator('#presenterMicrophone')).to_have_value(str(Path(original_host).resolve()))
                 expect(page.locator('#inputFiles')).to_contain_text('Микрофон')
                 click('[data-step="summary"]');expect(page.locator('#activateInput')).to_be_enabled()
