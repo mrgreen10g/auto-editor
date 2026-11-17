@@ -39,7 +39,7 @@ class MusicAndDensityTests(unittest.TestCase):
 
 class DraftRecoveryAndPresenterTests(unittest.TestCase):
  def setUp(self):
-  self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name);self.folder=self.root/'release';self.folder.mkdir()
+  self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name).resolve();self.folder=self.root/'release';self.folder.mkdir()
   self.host,self.script=setup(self.folder);self.inputs=Inputs(Bridge(app_fixture(self.root)),self.root/'index.json')
   self.payload=dict(folder=str(self.folder),profile='ru_hockey',host=str(self.host),script=str(self.script),refresh=True)
  def tearDown(self):self.tmp.cleanup()
