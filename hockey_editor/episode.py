@@ -281,6 +281,8 @@ class EpisodeEngine(Engine):
             plans.append(p);previous=p.source_end
         plan=combine(runtime,plans)
         if self.project.full_video and self.project.assets.get('disclaimer'):plan=prepend_disclaimer(plan,self.project.assets['disclaimer'])
+        from .insert_limit import apply
+        apply(plan,self.project.settings.insert_frequency)
         store_episode(self.project,plan);self.save_plan(plan)
         self.log(f'Выпуск готов к проверке: {len(plans)} разбора, {plan.duration:.1f} с.')
         return plan

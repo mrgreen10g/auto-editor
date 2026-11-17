@@ -30,6 +30,7 @@ def project_edit_key(project, index):
         if not p.is_file(): return [str(p),'missing']
         st=p.stat();return [str(p.resolve()),st.st_size,st.st_mtime_ns]
     structural={k:getattr(project.settings,k) for k in ('cut_pauses','insert_frequency','auto_rotate','rotate','mirror_host','use_manual_clips','allow_other_matches')}
+    if project.settings.insert_frequency=='low':structural['insert_limit']='whole-video-10-v1'
     for clip in block['clips']:
         clip['path']=identity(clip['path'])
         if clip.get('origin_path'):clip['origin_path']=identity(clip['origin_path'])

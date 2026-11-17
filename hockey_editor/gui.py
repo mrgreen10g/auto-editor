@@ -338,7 +338,8 @@ class App(EpisodeMixin,MatchMixin):
             self.controls.append(widget)
         sound = ui.card(page, 'Голос и музыка', 'Очистка уменьшает фоновый шум, музыка автоматически приглушается под речь.')
         self.noise = tk.StringVar(value='Обычно')
-        self.level = tk.StringVar(value='Тихо')
+        self.level = tk.DoubleVar(value=25)
+        self.music_percent_label=tk.StringVar(value='25%')
         self.resolution = tk.StringVar(value='720p')
         self.option(sound, 'Очистка голоса', self.noise, ['Выключено', 'Мягко', 'Обычно', 'Сильнее'])
         ttk.Label(sound, text='Музыка · необязательно', style='CardMuted.TLabel').pack(anchor='w', pady=(12, 6))
@@ -346,7 +347,10 @@ class App(EpisodeMixin,MatchMixin):
         row = ttk.Frame(sound, style='Card.TFrame')
         row.pack(fill='x', pady=(6, 12))
         self.button(row, 'Убрать музыку', lambda: self.music.set('')).pack(side='right')
-        self.option(sound, 'Громкость музыки', self.level, ['Очень тихо', 'Тихо', 'Заметнее'])
+        ttk.Label(sound,text='Громкость музыки · 0% — выключена').pack(anchor='w')
+        ttk.Label(sound,textvariable=self.music_percent_label).pack(anchor='w')
+        slider=ttk.Scale(sound,from_=0,to=100,variable=self.level,command=lambda v:self.music_percent_label.set(f'{round(float(v))}%'))
+        slider.pack(fill='x');self.controls.append(slider)
         logos = ui.card(page, 'Карточка матча', 'Логотипы команд выбираются отдельно. PNG, JPEG или WebP автоматически вписываются в карточку; детали размытого оригинала не восстанавливаются.')
         self.logos_panel=logos.master
         self.logo_folder_label=tk.StringVar()
@@ -364,7 +368,7 @@ class App(EpisodeMixin,MatchMixin):
         options = ui.card(page, 'Подбор игровых сцен', 'Голы сохраняют приоритет. Резервные кадры берутся только из игровых сцен. Источник замены виден в редакторе.')
         self.frequency=tk.StringVar(value='Обычно')
         self.option(options,'Частота обычных игровых вставок',self.frequency,['Реже','Обычно','Чаще'])
-        ttk.Label(options,text='Частота меняет обычные перебивки. Прямые упоминания голов не пропускаются.',style='CardMuted.TLabel',wraplength=660).pack(anchor='w',pady=5)
+        ttk.Label(options,text='Реже — максимум 10 игровых вставок на весь выпуск. Количество плашек не ограничивается.',style='CardMuted.TLabel',wraplength=660).pack(anchor='w',pady=5)
         self.allow_other = tk.BooleanVar(value=True)
         self.use_manual = tk.BooleanVar(value=False)
         for label, var in [('Разрешить архивные кадры из других матчей', self.allow_other), ('Показывать и использовать готовые вставки (старые проекты)', self.use_manual)]:
@@ -538,7 +542,7 @@ class App(EpisodeMixin,MatchMixin):
         p.settings.zoom_max = 1.20
         p.settings.denoise = self.noise.get() != 'Выключено'
         p.settings.noise_reduction = {'Выключено': 10, 'Мягко': 6, 'Обычно': 10, 'Сильнее': 14}[self.noise.get()]
-        p.settings.music_db = {'Очень тихо': -32, 'Тихо': -28, 'Заметнее': -24}[self.level.get()]
+        p.settings.music_volume = float(round(self.level.get()))
         p.settings.width, p.settings.height = (1920, 1080) if self.resolution.get() == '1080p' else (1280, 720)
         if p.profile.endswith('_shorts'):p.settings.width,p.settings.height=p.settings.height,p.settings.width
         from .logos import assign
@@ -574,7 +578,8 @@ class App(EpisodeMixin,MatchMixin):
         for key, var in self.effect_vars.items():
             var.set(getattr(p.settings, key))
         self.noise.set('Выключено' if not p.settings.denoise else 'Мягко' if p.settings.noise_reduction < 8 else 'Сильнее' if p.settings.noise_reduction > 12 else 'Обычно')
-        self.level.set('Очень тихо' if p.settings.music_db <= -30 else 'Заметнее' if p.settings.music_db >= -26 else 'Тихо')
+        self.level.set(p.settings.music_volume)
+        self.music_percent_label.set(f'{round(p.settings.music_volume)}%')
         self.resolution.set('1080p' if max(p.settings.width,p.settings.height) == 1920 else '720p')
         from .preferences import presets
         self.presetbox.configure(values=sorted(presets(p.profile)))

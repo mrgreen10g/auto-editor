@@ -256,7 +256,7 @@ class Editor:
         # Validate settings without requiring a finished script/source analysis.
         s=project.settings
         sizes=[(720,1280),(1080,1920)] if project.profile.endswith('_shorts') else [(1280,720),(1920,1080)]
-        if not 1<=s.zoom_max<=1.4 or not 1<=s.noise_reduction<=20 or not -60<=s.music_db<=-15 or s.rotate not in (0,90,180,270) or s.insert_frequency not in ('low','normal','high') or (s.width,s.height) not in sizes or s.fps!=30:raise RemoteError('Проверьте настройки изображения и звука.')
+        if not 1<=s.zoom_max<=1.4 or not 1<=s.noise_reduction<=20 or not 0<=s.music_volume<=100 or not -60<=s.music_db<=-15 or s.rotate not in (0,90,180,270) or s.insert_frequency not in ('low','normal','high') or (s.width,s.height) not in sizes or s.fps!=30:raise RemoteError('Проверьте настройки изображения и звука.')
         if structural:
             for x in [project.intro,*project.blocks,project.outro]:x.edit_plan=None;x.edit_key=''
             project.episode_plan=None;project.episode_key='';app.invalidate()

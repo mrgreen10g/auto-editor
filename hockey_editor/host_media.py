@@ -1,3 +1,4 @@
+from .music_level import bed_filter
 """Ordered source recordings: concatenate PCM for analysis, retain original video."""
 from pathlib import Path
 import hashlib,json,math
@@ -118,9 +119,9 @@ def prepare_base(engine,plan,base):
     voice+='[processed]';fl.append(voice)
     if head:fl.append('[head][processed]concat=n=2:v=0:a=1[voice]')
     else:fl.append('[processed]anull[voice]')
-    if p.music:
+    if p.music and s.music_volume>0:
         args+=['-stream_loop','-1','-i',p.music];idx=len(paths)
-        fl.append(f'[{idx}:a]atrim=duration={plan.duration:.6f},asetpts=PTS-STARTPTS,loudnorm=I={s.music_db}:TP=-9:LRA=7,aresample=48000,afade=t=in:d=1,afade=t=out:st={max(0,plan.duration-2)}:d=2[bed]')
+        fl.append(f'[{idx}:a]'+bed_filter(s,plan.duration)+'[bed]')
         fl+=['[voice]asplit=2[vmain][vside]','[bed][vside]sidechaincompress=threshold=0.03:ratio=4:attack=20:release=350[duck]',
              '[vmain][duck]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.85:level=false:latency=true[audio]']
     else:fl.append('[voice]alimiter=limit=0.85:level=false:latency=true[audio]')

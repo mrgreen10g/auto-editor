@@ -72,9 +72,15 @@ class Settings:
     cut_pauses: bool = True
     color: bool = True
     music_db: float = -28.0
+    music_volume: float | None = None
     width: int = 1280
     height: int = 720
     fps: int = 30
+
+    def __post_init__(self):
+        if self.music_volume is None:
+            from .music_level import percent_from_db
+            self.music_volume=percent_from_db(self.music_db)
 
 @dataclass
 class Block:
@@ -185,6 +191,8 @@ class Project:
         sizes=[(720,1280,30),(1080,1920,30)] if self.profile.endswith('_shorts') else [(1280,720,30),(1920,1080,30)]
         if (s.width,s.height,s.fps) not in sizes:
             raise ValueError('Выберите 720p или 1080p при 30 кадрах/с; Shorts — вертикальное видео 9:16.')
+        if not math.isfinite(s.music_volume) or not 0<=s.music_volume<=100:
+            raise ValueError('Громкость музыки должна быть от 0 до 100%.')
         if not math.isfinite(s.music_db) or not -60 <= s.music_db <= -15:
             raise ValueError('Громкость музыки должна быть от −60 до −15 дБ.')
 

@@ -23,12 +23,17 @@ class Inputs:
         data=storage.read(self.index)
         return data if isinstance(data,list) else []
     def load(self,ident):
-        entry=next((x for x in self.catalog() if x['id']==ident),None)
-        if not entry:raise RemoteError('Черновик не найден.',404)
-        path=Path(entry['folder'])/'mobile-draft.json';draft=storage.read(path)
-        if not draft or draft.get('id')!=ident:raise RemoteError('Папка черновика перемещена или недоступна.',409)
-        return draft
-    def save(self,draft):storage.write(Path(draft['folder'])/'mobile-draft.json',draft)
+        from .draft_store import load
+        return load(self,ident)
+    def save(self,draft):
+        # A new shared microphone takes effect only after validation succeeds.
+        shared=[r for r in draft['files'] if r['role']=='mic' and r['block']=='*' and r['status']=='ready']
+        if shared:
+            latest=shared[-1]
+            for row in draft['files']:
+                if row['role']=='mic' and row is not latest and row['status']=='ready':row['status']='removed'
+        from .draft_store import save
+        save(self,draft)
     def mutable(self,draft):
         if draft.get('project'):raise RemoteError('Проект уже создан. Откройте его для обработки; для нового выпуска создайте новый черновик.',409)
     def status(self,data):
@@ -65,8 +70,8 @@ class Inputs:
         profile=data.get('profile')
         if profile not in {p for rows in PROFILES.values() for p,_ in rows}:raise RemoteError('Выберите шаблон.')
         root=folder(data.get('folder',''))
-        target=root/'shorts' if profile.endswith('_shorts') else root
-        if profile.endswith('_shorts'):
+        target=root/'shorts' if profile.endswith('_shorts') and root.name.casefold()!='shorts' else root
+        if profile.endswith('_shorts') and root.name.casefold()!='shorts':
             choices=[p for p in root.iterdir() if p.is_dir() and not p.is_symlink() and p.name.casefold()=='shorts']
             if len(choices)>1:raise RemoteError('Выберите единственную папку shorts.')
             if choices:target=choices[0]
@@ -81,23 +86,35 @@ class Inputs:
         from .mobile_reparse import parse,reopen,reconcile_files
         from .script_input import read_script
         found=self.server_files(data);root=folder(data['folder']);target=Path(found['target'])
-        host=str(data.get('host',''));script=str(data.get('script',''))
-        if host and Path(host).resolve() not in {Path(p).resolve() for p in found['hosts']}:raise ValueError('Выберите запись ведущего из списка файлов.')
+        hosts=data.get('hosts') if 'hosts' in data else ([str(data['host'])] if data.get('host') else [])
+        if not isinstance(hosts,list) or any(not isinstance(p,str) for p in hosts):raise RemoteError('Проверьте список частей ведущего.')
+        hosts=list(dict.fromkeys(p for p in hosts if p));host=hosts[0] if hosts else '';script=str(data.get('script',''))
+        from .media import probe
+        from .folder_import import VIDEO
+        if 'hosts' not in data and host and Path(host).resolve() not in {Path(p).resolve() for p in found['hosts']}:raise ValueError('Выберите запись ведущего из списка файлов.')
+        for path in (hosts if 'hosts' in data else []):
+            p=Path(path);folder(str(p.parent))
+            if not p.is_file() or p.is_symlink() or p.suffix.lower() not in VIDEO:raise RemoteError('Выберите видео ведущего.')
+            info=probe(p)
+            if not info.get('video') or not info.get('audio'):raise RemoteError('В части ведущего должны быть видео и звук.')
         if script and Path(script).resolve() not in {Path(p).resolve() for p in found['scripts']}:raise ValueError('Выберите сценарий из списка файлов.')
         microphone=data.get('microphone')
         if microphone:
             if not host:raise ValueError('Сначала выберите запись камеры.')
-            if Path(microphone).resolve() not in {Path(p).resolve() for p in found['microphones']} or Path(microphone).resolve()==Path(host).resolve():raise ValueError('Выберите отдельный файл микрофона из папки.')
+            if 'hosts' not in data and Path(microphone).resolve() not in {Path(p).resolve() for p in found['microphones']}:raise ValueError('Выберите отдельный файл микрофона из папки.')
+            folder(str(Path(microphone).parent))
+            if not Path(microphone).is_file() or Path(microphone).is_symlink() or Path(microphone).resolve() in {Path(h).resolve() for h in hosts}:raise ValueError('Выберите отдельный файл микрофона.')
             from .media import probe
             info=probe(microphone)
             if not info.get('audio') or info.get('duration',0)<=0:raise ValueError('В записи микрофона нет звука.')
         with self.lock:
-            previous=next((r for r in self.catalog() if Path(r['folder'])==target and r['profile']==data['profile']),None)
+            from .draft_store import existing
+            old=existing(self,target,data['profile'])
+            previous=old
             if data.get('id'):
                 old=self.load(data['id'])
                 if old['profile']!=data['profile']:raise RemoteError('Шаблон папки должен совпадать с текущим черновиком.')
                 previous=next(r for r in self.catalog() if r['id']==old['id'])
-            else:old=self.load(previous['id']) if previous else None
             if old and not data.get('refresh'):return dict(id=old['id'],count=len(old['blocks']),updated=old.get('script_updated',0),refreshed=False)
             if old and self.active and self.active[0]==old['id']:raise RemoteError('Дождитесь загрузки материалов.',409)
             if not old and (target/'mobile-draft.json').exists():raise RemoteError('В папке уже есть черновик другого выпуска.')
@@ -111,13 +128,20 @@ class Inputs:
                 # Refresh hints and discover additional headings from a newly attached root.
                 d=parse(d,d['script']);reconcile_files(d)
             d['preset']=str(data.get('preset',d.get('preset','')))
-            if host:
-                ready(self,d,host,'host',explicit=True)
-                if microphone is not None:
-                    camera=next(r for r in d['files'] if r['role']=='host' and r['status']=='ready' and Path(r['path']).resolve()==Path(host).resolve())
-                    for r in d['files']:
-                        if r['role']=='mic' and r['block']==camera['id']:r['status']='removed'
-                    if microphone:ready(self,d,microphone,'mic',camera['id'],explicit=True)
+            if 'hosts' in data:
+                wanted={Path(h).resolve() for h in hosts}
+                for row in d['files']:
+                    if row['role']=='host' and row['status']=='ready' and Path(row['path']).resolve() not in wanted:row['status']='removed'
+            for path in hosts:ready(self,d,path,'host',explicit=True)
+            if hosts:
+                ordered=[next(r for r in d['files'] if r['role']=='host' and r['status']=='ready' and Path(r['path']).resolve()==Path(h).resolve()) for h in hosts]
+                d['files']=[r for r in d['files'] if r not in ordered]+ordered
+            if microphone is not None:
+                for row in d['files']:
+                    if row['role']=='mic' and row['status']=='ready':row['status']='removed'
+                if microphone:
+                    mic_owner='*' if 'hosts' in data else next(r['id'] for r in d['files'] if r['role']=='host' and r['status']=='ready' and Path(r['path']).resolve()==Path(host).resolve())
+                    ready(self,d,microphone,'mic',mic_owner,explicit=True)
             added=reconcile(self,d)
             target=Path(d['folder']);target.mkdir(parents=True,exist_ok=True)
             for section in ('Ведущий','Матчи','Сценарий','Результат'):(target/section).mkdir(exist_ok=True)
@@ -137,7 +161,8 @@ class Inputs:
             if data.get('folder'):
                 from .mini_export import folder
                 target=folder(data['folder'])
-                existing=next((r for r in self.catalog() if Path(r['folder']).resolve()==target),None)
+                from .draft_store import existing as recover_existing
+                existing=recover_existing(self,target,profile)
                 if existing:
                     if existing['profile']!=profile:raise RemoteError('В этой папке уже есть выпуск с другим шаблоном. Выберите другую папку.')
                     return dict(id=existing['id'])
@@ -193,9 +218,9 @@ class Inputs:
         block=str(data.get('block',''))
         if role=='match' and block not in {b['uid'] for b in d['blocks']}:raise RemoteError('Сначала определите разборы и выберите нужный.')
         if role=='mic':
-            if block not in {r['id'] for r in d['files'] if r['role']=='host' and r['status']=='ready'}:raise RemoteError('Сначала загрузите и выберите часть ведущего.')
-            if any(r['role']=='mic' and r['block']==block and r['status']!='removed' for r in d['files']):raise RemoteError('У этой части уже есть микрофон. Уберите прежний файл перед заменой.')
-        if len(d['files'])>=200:raise RemoteError('В черновике слишком много файлов.')
+            if block!='*' and block not in {r['id'] for r in d['files'] if r['role']=='host' and r['status']=='ready'}:raise RemoteError('Сначала загрузите и выберите часть ведущего.')
+            if block!='*' and any(r['role']=='mic' and r['block']==block and r['status']!='removed' for r in d['files']):raise RemoteError('У этой части уже есть микрофон. Уберите прежний файл перед заменой.')
+        if role not in ('host','mic') and sum(r['status']!='removed' and r['role'] not in ('host','mic') for r in d['files'])>=200:raise RemoteError('В черновике слишком много материалов матчей.')
         item=dict(id=secrets.token_hex(16),role=role,block=block,name=str(data.get('name','Видео'))[:100],home=str(data.get('home',''))[:120],away=str(data.get('away',''))[:120],fighter=str(data.get('fighter',''))[:120],status='waiting',message='',received=0,size=0,path='',source='',fingerprint='')
         if role=='match':
             title=next(b['title'] for b in d['blocks'] if b['uid']==block)
@@ -371,12 +396,12 @@ class Inputs:
         if not hosts:problems.append('Добавьте запись ведущего.')
         if any(r['status']!='ready' for r in files):problems.append('Дождитесь загрузок или уберите ненужные материалы.')
         for r in files:
-            if r['role']=='mic' and r['block'] not in {h['id'] for h in hosts}:problems.append('Уберите микрофон удалённой части ведущего: '+r['name'])
+            if r['role']=='mic' and r['block']!='*' and r['block'] not in {h['id'] for h in hosts}:problems.append('Уберите микрофон удалённой части ведущего: '+r['name'])
             if r['status']=='ready' and (not r['path'] or not Path(r['path']).is_file()):problems.append('Файл недоступен: '+r['name'])
             if r['role']=='match' and (not r['fighter'] if d['profile'].startswith(('uz_combat','ru_combat')) else not r['home'] or not r['away']):problems.append('Укажите участников записи: '+r['name'])
         counts={b['uid']:sum(r['role']=='match' and r['block']==b['uid'] and r['status']=='ready' for r in files) for b in d['blocks']}
         notes=d.get('import_notes',[])+[b['title']+': записей нет, останется ведущий.' for b in d['blocks'] if not counts[b['uid']]]
-        return dict(problems=problems,notes=notes,hosts=[r['name'] for r in hosts],counts=counts,can_create=not problems)
+        return dict(problems=problems,notes=notes,hosts=[r['name'] for r in hosts],microphone=next((r['name'] for r in reversed(files) if r['role']=='mic' and r['status']=='ready'),''),counts=counts,can_create=not problems)
     def activate(self,data):
         from .model import Project,Block,MatchSource
         from .profiles import apply_profile,kit_path
@@ -404,7 +429,9 @@ class Inputs:
                 for block in project.blocks:block.match_ids=[]
                 ready=[r for r in d['files'] if r['status']=='ready'];project.hosts=[r['path'] for r in ready if r['role']=='host'];project.host=project.hosts[0]
                 host_ids={r['id']:r['path'] for r in ready if r['role']=='host'}
-                project.microphones={host_ids[r['block']]:r['path'] for r in ready if r['role']=='mic'}
+                project.microphones={host_ids[r['block']]:r['path'] for r in ready if r['role']=='mic' and r['block'] in host_ids}
+                shared=next((r['path'] for r in reversed(ready) if r['role']=='mic' and r['block']=='*'),'')
+                if shared:project.microphones={h:shared for h in project.hosts}
                 project.full_video=True;project.whole_episode=True;project.settings.use_manual_clips=False
                 sport='combat' if d['profile'].startswith(('uz_combat','ru_combat')) else 'football' if 'football' in d['profile'] else 'cs' if d['profile']=='ru_cs' else 'hockey'
                 for r in ready:

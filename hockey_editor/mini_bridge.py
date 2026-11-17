@@ -277,6 +277,9 @@ class Bridge:
             return refresh_script(self.inputs,data,from_file=True)
         if kind.startswith('input-'):
             from .mobile_scripts import start_document,document_status,local_script
+            if kind=='input-presenter':
+                from .presenter_inputs import update
+                return update(self.inputs,data)
             if kind=='input-doc-start':return start_document(self.inputs,data)
             if kind=='input-doc-status':return document_status(self.inputs,data)
             if kind=='input-script-open':return local_script(self.inputs,data)

@@ -1,3 +1,4 @@
+from .music_level import bed_filter
 """A cancellable local pipeline. Source media and accepted exports are immutable."""
 from pathlib import Path
 import hashlib,json,re,math,os,shutil
@@ -153,6 +154,8 @@ class Engine:
         from .review import attach,preserve_edits
         attach(plan,block,p)
         preserve_edits(p.blocks[self.index].edit_plan,plan)
+        from .insert_limit import apply
+        apply(plan,p.settings.insert_frequency)
         from .local_ai import annotate
         annotate(plan,self.cache,self.cancel,self.log)
         self.check()
@@ -168,6 +171,9 @@ class Engine:
 
     def render(self,plan,target,draft=False):
         self.check();self.project.validate(self.index)
+        import copy
+        from .insert_limit import apply
+        plan=apply(copy.deepcopy(plan),self.project.settings.insert_frequency)
         if not draft and self.project.profile.startswith(('uz_combat','ru_combat')):
             from .goals import unresolved
             if any(unresolved(b) for b in self.project.blocks):raise ValueError('Проверьте боевые вставки или выберите «Оставить ведущего» перед экспортом.')
@@ -206,9 +212,9 @@ class Engine:
             voice=f'concat=n={n}:v=0:a=1,'+voice_filters(s,measured_gain([p.host],self.cache,self.cancel))
             fl.append(''.join(f'[a{i}]' for i in range(n))+voice+'[voice]')
             args=['-y','-threads','2','-ss',plan.source_start,'-t',plan.source_end-plan.source_start,'-i',p.host]
-            if p.music:
+            if p.music and s.music_volume>0:
                 args+=['-stream_loop','-1','-i',p.music]
-                fl.append(f'[1:a]atrim=duration={plan.duration:.6f},asetpts=PTS-STARTPTS,loudnorm=I={s.music_db}:TP=-9:LRA=7,aresample=48000,afade=t=in:d=1,afade=t=out:st={max(0,plan.duration-2)}:d=2[bed]')
+                fl.append(f'[1:a]'+bed_filter(s,plan.duration)+'[bed]')
                 fl.append('[voice]asplit=2[vmain][vside]')
                 fl.append('[bed][vside]sidechaincompress=threshold=0.03:ratio=4:attack=20:release=350[duck]')
                 fl.append('[vmain][duck]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.85:level=false:latency=true[audio]')

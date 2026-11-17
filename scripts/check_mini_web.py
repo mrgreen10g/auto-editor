@@ -1,5 +1,5 @@
 """Mobile browser -> authenticated HTTP -> editor transaction and real previews."""
-import copy,json,sys,tempfile,threading,time
+import copy,json,sys,tempfile,threading,time,shutil
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];sys.path[:0]=[str(ROOT),str(ROOT/'tests')]
 from test_mini_app import app_fixture,signed,TOKEN,OWNER
@@ -37,7 +37,7 @@ def check():
             with sync_playwright() as p:
                 # Windows' bundled test Chromium lacks H.264/AAC. The runner's
                 # stock Chrome exercises the same MP4 codecs used by phones.
-                browser=p.chromium.launch(headless=True,**({'channel':'chrome'} if sys.platform=='win32' else {}))
+                browser=p.chromium.launch(headless=True,**({'channel':'chrome'} if sys.platform=='win32' else {'executable_path':shutil.which('chromium')} if shutil.which('chromium') else {}))
                 page=browser.new_page(viewport={'width':390,'height':844},is_mobile=True,has_touch=True)
                 def click(selector):
                     page.locator('body[data-busy="false"]').wait_for(timeout=60000)
@@ -143,21 +143,25 @@ def check():
                 page.locator('[data-draft-setting=subtitles]').select_option('true')
                 page.locator('[data-draft-setting=insert_frequency]').select_option('high')
                 click('#saveInputSettings')
-                page.locator('#hostMethod').select_option('device')
                 second_host=root/'second-host.mp4'
                 run(['-y','-i',original_host,'-map','0','-c','copy','-metadata','title=Second part',second_host],threading.Event())
-                page.locator('#hostFile').set_input_files([original_host,str(second_host)])
-                expect(page.locator('#deviceProgress')).to_contain_text('готово',timeout=60000)
-                expect(page.locator('#hostParts > div')).to_have_count(2,timeout=60000)
-                click('#hostParts > div:first-child button');expect(page.locator('#hostParts > div:first-child')).to_contain_text('second-host.mp4')
-                # Real server file picker, then associate microphone video with the first part.
-                expect(page.locator('#micHost')).to_be_visible()
-                page.locator('#micHost').select_option(index=0)
-                click('#browseMicFile')
+                for i,path in enumerate([original_host,str(second_host)]):
+                    if i:click('#addPresenterPart')
+                    with page.expect_file_chooser() as chooser:
+                        page.locator('#presenterRows select').nth(i).select_option('@device')
+                    chooser.value.set_files(path)
+                    page.wait_for_function('!deviceBusy && document.body.dataset.busy === "false"',timeout=60000)
+                    expect(page.locator('#presenterRows select').nth(i)).not_to_have_value('')
+                expect(page.locator('#presenterRows > div')).to_have_count(2)
+                click('#presenterRows > div:nth-child(2) button[aria-label="Передвинуть часть выше"]')
+                expect(page.locator('#presenterRows select').first).to_have_value(__import__('re').compile('second-host'))
+                page.locator('#presenterMicrophone').select_option('@server')
+                page.locator('#materialBrowser').wait_for(state='visible')
+                assert page.locator('#materialBrowser').evaluate('(e)=>e.previousElementSibling.contains(document.getElementById("presenterMicrophone"))')
                 page.evaluate('(p)=>browseMaterial(p)',str(Path(original_host).parent))
                 page.locator('#materialFiles button').filter(has_text=Path(original_host).name).first.click()
-                expect(page.locator('#micServerPath')).to_have_value(str(Path(original_host).resolve()))
-                click('#addMicServer')
+                page.wait_for_function('document.body.dataset.busy === "false"')
+                expect(page.locator('#presenterMicrophone')).to_have_value(str(Path(original_host).resolve()))
                 expect(page.locator('#inputFiles')).to_contain_text('Микрофон')
                 click('[data-step="summary"]');expect(page.locator('#activateInput')).to_be_enabled()
                 page.screenshot(path=str(ROOT/'build/gui-mini-create.jpg'),full_page=True)
@@ -167,7 +171,7 @@ def check():
                 assert app.project.full_video and app.project.whole_episode
                 assert app.project.settings.mirror_host and app.project.settings.subtitles
                 assert app.project.settings.insert_frequency=='high'
-                assert app.project.microphones.get(app.project.hosts[0])==str(Path(original_host).resolve())
+                assert all(app.project.microphones.get(h)==str(Path(original_host).resolve()) for h in app.project.hosts)
                 assert len(app.project.hosts)==2 and Path(app.project.hosts[0]).read_bytes()==second_host.read_bytes()
                 # Mobile montage: readable times, edit type, persisted undo/redo.
                 app.plan=copy.deepcopy(bridge.editor.app.plan) if bridge.editor.app.plan else None
