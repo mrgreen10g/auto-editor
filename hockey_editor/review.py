@@ -147,7 +147,9 @@ def attach(plan, block, project):
             card.review_reason='Фраза попала в вырезанную паузу. Проверьте время плашки.'
     counts={}
     from .framing import forecast_text
-    if block.kind=='analysis' and not block.top5_rank and '_top5_' not in project.profile and not (block.sport=='combat' and not forecast_text(block)) and not any(c.title=='ПРОГНОЗ' for c in plan.cards):
+    from .shorts_cta import teaser
+    optional_forecast=(project.profile.startswith('ru_') and project.profile.endswith('_shorts') and (teaser(project) or not forecast_text(block)))
+    if block.kind=='analysis' and not optional_forecast and not block.top5_rank and '_top5_' not in project.profile and not (block.sport=='combat' and not forecast_text(block)) and not any(c.title=='ПРОГНОЗ' for c in plan.cards):
         from .framing import forecast_text
         text=forecast_text(block) or block.title+' — уточните прогноз'
         a=max(0,plan.duration-5)

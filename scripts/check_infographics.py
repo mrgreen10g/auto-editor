@@ -16,6 +16,10 @@ def check(profile='ru_football'):
   project=Project(host=str(source),profile=profile,blocks=[block],settings=Settings(auto_rotate=False,color=False,denoise=False,zoom=False,wobble=False))
   if profile.endswith('_shorts'):project.settings.width=720;project.settings.height=1280
   lines=[Line(text,.5,3.8)];cards=enrich(block,lines,[])
+  if profile.endswith('_shorts'):
+   from hockey_editor.shorts_cta import cards as cta_cards
+   cards[0].end=2
+   cards+=cta_cards([Line('Мои прогнозы на эти матчи — в полном разборе. Жми на видео под этим роликом!',2,3.9)],4)
   plan=Plan(0,4,[(0,4)],lines,[],cards,[],4,rotation=0)
   cache=root/'cache';out=root/'result.mp4';Engine(project,0,cache,threading.Event()).render(plan,out,draft=True)
   info=probe(out);assert info['audio'] and abs(info['duration']-4)<.1,info

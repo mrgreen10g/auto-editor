@@ -153,7 +153,12 @@ def finish_cards(project,block,lines,cards,inserts,duration):
         if card.title=='ПРОГНОЗ' and block.kind=='outro':
             owner=next((b for b in project.blocks if b.uid==card.forecast_id),None)
             if owner:card.fixture=owner.title
-    priorities={'ТЕЛЕГРАМ':5,'ПРОГНОЗ':4,'РАЗБОР МАТЧА':3,'ПОДПИСКА':2}
+    if project.profile.startswith('ru_'):
+        from .shorts_cta import cards as invitation_cards,TITLE
+        for invitation in invitation_cards(lines,duration):
+            cards=[c for c in cards if c.asset or c.end<=invitation.start or c.start>=invitation.end]
+            cards.append(invitation)
+    priorities={'ТЕЛЕГРАМ':6,'ПОЛНЫЙ РАЗБОР':5,'ПРОГНОЗ':4,'РАЗБОР МАТЧА':3,'ПОДПИСКА':2}
     priorities.update({f'{n} МЕСТО':4 for n in range(1,6)})
     selected=[]
     for card in sorted(cards,key=lambda c:(-priorities.get(c.title,1),c.start)):
@@ -166,7 +171,7 @@ def finish_cards(project,block,lines,cards,inserts,duration):
         original=card.start;card.start=frame(a);card.end=frame(b)
         if card.asset:card.source_in+=card.start-original
         selected.append(card)
-    protected=[c for c in selected if c.title in ('ТЕЛЕГРАМ','ПРОГНОЗ','РАЗБОР МАТЧА') or re.fullmatch(r'[1-5] МЕСТО',c.title)]
+    protected=[c for c in selected if c.title in ('ТЕЛЕГРАМ','ПРОГНОЗ','РАЗБОР МАТЧА','ПОЛНЫЙ РАЗБОР') or re.fullmatch(r'[1-5] МЕСТО',c.title)]
     kept=[]
     for clip in inserts:
         pieces=[(clip.start,clip.end)]
