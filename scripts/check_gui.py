@@ -26,12 +26,15 @@ def check():
     from hockey_editor.keyboard import shortcut
     from types import SimpleNamespace
     root.clipboard_clear();root.clipboard_append('Русский текст — 19 голов')
-    for widget in (ttk.Entry(root),tk.Text(root),ttk.Combobox(root)):
+    clipboard_window=tk.Toplevel(root)
+    for widget in (ttk.Entry(clipboard_window),tk.Text(clipboard_window),ttk.Combobox(clipboard_window)):
+        widget.pack();root.update();widget.focus_force();root.update()
         shortcut(SimpleNamespace(widget=widget,keycode=86,keysym='Cyrillic_em',state=4),windows=True)
         root.update()
         value=widget.get('1.0','end-1c') if isinstance(widget,tk.Text) else widget.get()
-        assert value=='Русский текст — 19 голов',value
+        assert value=='Русский текст — 19 голов',(widget.winfo_class(),value)
         widget.destroy()
+    clipboard_window.destroy()
 
     from hockey_editor.notification_ui import show as notification_settings
     notification_window=notification_settings(app);root.update()
