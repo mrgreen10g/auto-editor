@@ -143,14 +143,14 @@ class Engine:
             from .framing import framing_cards
             from .review import framing_draft
             inserts=[];cards,extra=framing_draft(p,block,lines,duration)
+        if p.profile in ('ru_football','ru_football_shorts') and p.settings.informative_cards:
+            from .football_facts import enrich
+            cards=enrich(block,lines,cards)
         if p.profile.endswith('_shorts'):
             from .shorts import finish_cards
             cards,inserts=finish_cards(p,block,lines,cards,inserts,duration)
         from .orientation import detect_rotation
         rotation=detect_rotation(p.host,self.cache,self.cancel,self.log) if p.settings.auto_rotate else p.settings.rotate
-        if p.profile=='ru_football' and p.settings.informative_cards:
-            from .football_facts import enrich
-            cards=enrich(block,lines,cards)
         plan=Plan(start,end,keep,lines,inserts,cards,list(warnings)+extra,duration,rotation)
         if len(parts)>1 or p.full_video or p.microphones:
             plan.media=media_ranges(p,plan,parts,self.cache,self.cancel,self.log)

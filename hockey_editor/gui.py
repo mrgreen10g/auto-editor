@@ -38,6 +38,8 @@ from .episode_ui import EpisodeMixin,kit_path
 class App(EpisodeMixin,MatchMixin):
     def __init__(self, root):
         self.root = root
+        from .keyboard import install
+        install(root)
         root.title(f'Auto Editor {__version__}')
         w, h = min(1220, root.winfo_screenwidth() - 60), min(860, root.winfo_screenheight() - 100)
         root.geometry(f'{w}x{h}')
@@ -327,7 +329,7 @@ class App(EpisodeMixin,MatchMixin):
                            ('zoom', 'Плавные наезды 100% → 120% с промежутками'),
                            ('transitions', 'Мягкие переходы к игре и обратно'),
                            ('animate_cards', 'Плавное появление и уход плашек'),
-                           ('informative_cards', 'Расширенные факты и инфографика · РУ футбол'),
+                           ('informative_cards', 'Инфографика · РУ футбол и Shorts'),
                            ('wobble', 'Лёгкое покачивание плашек'),
                            ('cut_pauses', 'Сокращать паузы и повторные неудачные дубли'),
                            ('color', 'Лёгкая цветокоррекция'),

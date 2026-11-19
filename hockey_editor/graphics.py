@@ -147,6 +147,9 @@ def card_image(card, path, logos=None,profile='ru_hockey'):
 
 
 def _card_image(card, path, logos=None,profile='ru_hockey'):
+    if profile=='ru_football_shorts' and card.visual:
+        from .football_short_graphics import image
+        return image(card,path)
     if profile=='ru_football' and card.visual:
         from .fact_graphics import image
         return image(card,path)

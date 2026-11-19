@@ -23,6 +23,16 @@ def check():
     errors = []
     root.report_callback_exception = lambda *exc: errors.append(str(exc[1]))
     app = App(root)
+    from hockey_editor.keyboard import shortcut
+    from types import SimpleNamespace
+    root.clipboard_clear();root.clipboard_append('Русский текст — 19 голов')
+    for widget in (ttk.Entry(root),tk.Text(root),ttk.Combobox(root)):
+        shortcut(SimpleNamespace(widget=widget,keycode=86,keysym='Cyrillic_em',state=4),windows=True)
+        root.update()
+        value=widget.get('1.0','end-1c') if isinstance(widget,tk.Text) else widget.get()
+        assert value=='Русский текст — 19 голов',value
+        widget.destroy()
+
     from hockey_editor.notification_ui import show as notification_settings
     notification_window=notification_settings(app);root.update()
     assert notification_window.winfo_ismapped()
