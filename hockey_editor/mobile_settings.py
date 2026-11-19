@@ -6,7 +6,7 @@ import math
 def validate(values):
     if not isinstance(values,dict):raise ValueError('Ожидается список настроек.')
     defaults=Settings();allowed={f.name for f in fields(defaults)}
-    ranges={'music_volume':(0,100),'zoom_max':(1,1.4),'noise_reduction':(1,20),'music_db':(-60,-15)}
+    ranges={'card_sound_volume':(0,100),'music_volume':(0,100),'zoom_max':(1,1.4),'noise_reduction':(1,20),'music_db':(-60,-15)}
     choices={'rotate':(0,90,180,270),'insert_frequency':('low','normal','high'),'width':(720,1080,1280,1920),'height':(720,1080,1280,1920),'fps':(30,)}
     for key,value in values.items():
         if key not in allowed:raise ValueError('Неизвестная настройка: '+key)

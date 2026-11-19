@@ -30,7 +30,7 @@ class LiveCards:
         self.images={}
 
     def artwork(self,card):
-        key=(card.title,card.text,card.fixture,card.offset_x,card.offset_y,card.scale,repr(self.project.team_logos))
+        key=(card.title,card.text,card.fixture,card.offset_x,card.offset_y,card.scale,repr(card.visual),repr(self.project.team_logos))
         if key not in self.images:
             filename=self.cache/(hashlib.sha256(repr(key).encode()).hexdigest()+'.png')
             x,y=card_image(card,filename,self.project.team_logos,self.project.profile)

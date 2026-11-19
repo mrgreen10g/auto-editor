@@ -327,6 +327,7 @@ class App(EpisodeMixin,MatchMixin):
                            ('zoom', 'Плавные наезды 100% → 120% с промежутками'),
                            ('transitions', 'Мягкие переходы к игре и обратно'),
                            ('animate_cards', 'Плавное появление и уход плашек'),
+                           ('informative_cards', 'Расширенные факты и инфографика · РУ футбол'),
                            ('wobble', 'Лёгкое покачивание плашек'),
                            ('cut_pauses', 'Сокращать паузы и повторные неудачные дубли'),
                            ('color', 'Лёгкая цветокоррекция'),
@@ -350,6 +351,12 @@ class App(EpisodeMixin,MatchMixin):
         ttk.Label(sound,text='Громкость музыки · 0% — выключена').pack(anchor='w')
         ttk.Label(sound,textvariable=self.music_percent_label).pack(anchor='w')
         slider=ttk.Scale(sound,from_=0,to=100,variable=self.level,command=lambda v:self.music_percent_label.set(f'{round(float(v))}%'))
+        slider.pack(fill='x');self.controls.append(slider)
+        self.card_sound=tk.DoubleVar(value=20)
+        ttk.Label(sound,text='Звук инфографики · 0% — выключен').pack(anchor='w',pady=(12,0))
+        self.card_sound_label=tk.StringVar(value='20%')
+        ttk.Label(sound,textvariable=self.card_sound_label).pack(anchor='w')
+        slider=ttk.Scale(sound,from_=0,to=100,variable=self.card_sound,command=lambda v:self.card_sound_label.set(f'{round(float(v))}%'))
         slider.pack(fill='x');self.controls.append(slider)
         logos = ui.card(page, 'Карточка матча', 'Логотипы команд выбираются отдельно. PNG, JPEG или WebP автоматически вписываются в карточку; детали размытого оригинала не восстанавливаются.')
         self.logos_panel=logos.master
@@ -543,6 +550,7 @@ class App(EpisodeMixin,MatchMixin):
         p.settings.denoise = self.noise.get() != 'Выключено'
         p.settings.noise_reduction = {'Выключено': 10, 'Мягко': 6, 'Обычно': 10, 'Сильнее': 14}[self.noise.get()]
         p.settings.music_volume = float(round(self.level.get()))
+        p.settings.card_sound_volume = float(round(self.card_sound.get()))
         p.settings.width, p.settings.height = (1920, 1080) if self.resolution.get() == '1080p' else (1280, 720)
         if p.profile.endswith('_shorts'):p.settings.width,p.settings.height=p.settings.height,p.settings.width
         from .logos import assign
@@ -578,6 +586,8 @@ class App(EpisodeMixin,MatchMixin):
         for key, var in self.effect_vars.items():
             var.set(getattr(p.settings, key))
         self.noise.set('Выключено' if not p.settings.denoise else 'Мягко' if p.settings.noise_reduction < 8 else 'Сильнее' if p.settings.noise_reduction > 12 else 'Обычно')
+        self.card_sound.set(p.settings.card_sound_volume)
+        self.card_sound_label.set(f'{round(p.settings.card_sound_volume)}%')
         self.level.set(p.settings.music_volume)
         self.music_percent_label.set(f'{round(p.settings.music_volume)}%')
         self.resolution.set('1080p' if max(p.settings.width,p.settings.height) == 1920 else '720p')

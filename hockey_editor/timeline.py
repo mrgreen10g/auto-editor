@@ -41,6 +41,7 @@ class Card:
     offset_x: float = 0.
     offset_y: float = 0.
     scale: float = 1.
+    visual: dict = field(default_factory=dict)
 
 @dataclass
 class Plan:

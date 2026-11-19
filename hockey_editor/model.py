@@ -64,6 +64,8 @@ class Settings:
     zoom_max: float = 1.20
     zoom: bool = True
     transitions: bool = True
+    informative_cards: bool = True
+    card_sound_volume: float = 20.0
     animate_cards: bool = True
     subtitles: bool = False
     wobble: bool = True
@@ -191,6 +193,8 @@ class Project:
         sizes=[(720,1280,30),(1080,1920,30)] if self.profile.endswith('_shorts') else [(1280,720,30),(1920,1080,30)]
         if (s.width,s.height,s.fps) not in sizes:
             raise ValueError('Выберите 720p или 1080p при 30 кадрах/с; Shorts — вертикальное видео 9:16.')
+        if not math.isfinite(s.card_sound_volume) or not 0<=s.card_sound_volume<=100:
+            raise ValueError('Громкость инфографики должна быть от 0 до 100%.')
         if not math.isfinite(s.music_volume) or not 0<=s.music_volume<=100:
             raise ValueError('Громкость музыки должна быть от 0 до 100%.')
         if not math.isfinite(s.music_db) or not -60 <= s.music_db <= -15:

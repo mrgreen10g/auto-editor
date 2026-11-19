@@ -148,6 +148,9 @@ class Engine:
             cards,inserts=finish_cards(p,block,lines,cards,inserts,duration)
         from .orientation import detect_rotation
         rotation=detect_rotation(p.host,self.cache,self.cancel,self.log) if p.settings.auto_rotate else p.settings.rotate
+        if p.profile=='ru_football' and p.settings.informative_cards:
+            from .football_facts import enrich
+            cards=enrich(block,lines,cards)
         plan=Plan(start,end,keep,lines,inserts,cards,list(warnings)+extra,duration,rotation)
         if len(parts)>1 or p.full_video or p.microphones:
             plan.media=media_ranges(p,plan,parts,self.cache,self.cancel,self.log)
@@ -314,10 +317,17 @@ class Engine:
             if write_ass(plan,ass):
                 fl.append(f"[{v}]subtitles=filename='{filter_path(ass)}'[captioned]");v='captioned'
         fl.append(f'[{v}]scale={width}:{height},setsar=1,format=yuv420p[final]')
+        from .card_sounds import create as card_sounds
+        sound=card_sounds(plan,s,self.cache)
+        audio_map='0:a:0';audio_codec=['-c:a','copy']
+        if sound:
+            args+=['-i',sound]
+            fl.append(f'[0:a][{inputs}:a]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95:level=false:latency=true[fxaudio]')
+            audio_map='[fxaudio]';audio_codec=['-c:a','aac','-b:a','192k']
         graph=self.cache/'final-filter.txt';graph.write_text(';\n'.join(fl),encoding='utf-8')
         temp=target.with_name(target.stem+'.partial.mp4')
         if temp.exists():temp.unlink()
-        args+=['-filter_complex_threads','2','-filter_complex_script',graph,'-map','[final]','-map','0:a:0','-c:v','libx264','-preset','ultrafast' if draft else 'fast','-crf','27' if draft else '19','-threads','4','-c:a','copy','-r','30','-t',plan.duration,'-movflags','+faststart',temp]
+        args+=['-filter_complex_threads','2','-filter_complex_script',graph,'-map','[final]','-map',audio_map,'-c:v','libx264','-preset','ultrafast' if draft else 'fast','-crf','27' if draft else '19','-threads','4',*audio_codec,'-r','30','-t',plan.duration,'-movflags','+faststart',temp]
         try:
             run(args,self.cancel,self.cache/'final-render.log',lambda t:self.log(f'Экспорт: {min(100,int(t/plan.duration*100))}%'))
             self.check()

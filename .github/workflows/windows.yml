@@ -25,6 +25,8 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Source integration check
         run: python main.py --self-test source-check.json
+      - name: Informational graphics export
+        run: python scripts/check_infographics.py
       - name: Scoreboard OCR integration
         run: python scripts/check_ocr.py
       - name: Desktop workflow and layout check

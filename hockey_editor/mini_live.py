@@ -62,7 +62,7 @@ def artwork(bridge,data):
         c.text=str(data['text']).strip()
         if not c.text or len(c.text)>4000:raise RemoteError('Введите текст до 4000 символов.')
     c.offset_x=c.offset_y=0;c.scale=1
-    digest=hashlib.sha256(json.dumps([c.title,c.text,c.fixture,app.project.profile,
+    digest=hashlib.sha256(json.dumps([c.title,c.text,c.fixture,c.visual,app.project.profile,
         {k:identity(v) for k,v in app.project.team_logos.items()}],sort_keys=True,ensure_ascii=False).encode()).hexdigest()
     cache=Path(app.cache_path())/'mobile-live-art';cache.mkdir(parents=True,exist_ok=True)
     path=cache/(digest+'.png');meta=cache/(digest+'.json')
