@@ -128,7 +128,7 @@ Obuna bo'ling. Xayr!'''
             speech=[segment(first,0),segment('Сегодня хозяева играют очень плохо нет',3),segment(target,7)]
             _,cuts=remove_retakes([b],speech);self.assertTrue(cuts)
             p=Project(host=str(d/'host.mp4'),blocks=[b]);p.settings.auto_rotate=False
-            with patch('hockey_editor.ru_speech.transcribe',return_value=speech):
+            with patch('hockey_editor.speech_cleanup.acoustic_evidence',return_value=([(0,18)],18)),patch('hockey_editor.speech_retry.improve',side_effect=lambda p,s,*args:s),patch('hockey_editor.ru_speech.transcribe',return_value=speech):
                 plan=Engine(p,0,d/'cache',threading.Event()).analyze()
             for a,z in plan.keep:
                 for lo,hi in cuts:

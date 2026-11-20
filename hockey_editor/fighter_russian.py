@@ -217,6 +217,17 @@ Shavkat Rakhmonov|Шавкат Рахмонов
 Henry Cejudo|Генри Сехудо
 Amanda Nunes|Аманда Нуньес
 '''
+_ROWS+='''Andrey Goncharov|Андрей Гончаров
+Akhmed Aliev|Ахмед Алиев
+Vadim Nemkov|Вадим Немков
+Sergey Bilostenniy|Сергей Билостенный
+Saygid Izagakhmaev|Сайгид Изагахмаев
+Renan Ferreira|Ренан Феррейра
+Tim Johnson|Тим Джонсон
+Bruno Cappelozza|Бруно Каппелоцца
+Valentin Moldavsky|Валентин Молдавский
+Abubakar Vagaev|Абубакар Вагаев
+'''
 NAMES=dict(row.split('|') for row in _ROWS.strip().splitlines())
 VARIANTS={
  'Song Yadong':('Сонг Ядонг',), 'Petr Yan':('Петр Ян',),
