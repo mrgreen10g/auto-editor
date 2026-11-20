@@ -572,7 +572,7 @@ def check():
         root.update();app.collect()
         assert app.project.profile=='ru_football'
         assert all(b.language=='ru' and b.sport=='football' for b in app.project.blocks)
-        assert app.speakerbox.get()=='РУ спикер'
+        assert app.speakerbox.get()=='РУ спикер лонг'
         assert all(key.startswith('ru_') for key,_ in app.profile_choices)
         app.effect_vars['mirror_host'].set(True);app.collect()
         app.project.save(tmp/'mirrored-football.hockeyproj')
@@ -584,7 +584,7 @@ def check():
             assert app.project.profile==profile
             assert (app.project.settings.width,app.project.settings.height)==(1080,1920)
             assert app.project.full_video and app.project.whole_episode
-            assert app.speakerbox.get()=='РУ спикер'
+            assert app.speakerbox.get()=='РУ спикер шортс'
         select_profile('ru_hockey')
         with patch('hockey_editor.profiles.kit_path',return_value=tmp/'ru-kit.json'):app.switch_profile()
         # One-folder setup is reviewable and repeatable for different releases.
