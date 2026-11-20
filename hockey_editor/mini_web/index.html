@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Auto Editor</title><link rel="stylesheet" href="/app.css"><script src="https://telegram.org/js/telegram-web-app.js"></script><script defer src="/app.js"></script></head>
 <body>
-<header><div class="heading"><div><small>AUTO EDITOR · 0.8.9rc24</small><h1 id="pageTitle">Процесс</h1></div><button id="refresh" class="quiet" aria-label="Обновить данные">↻</button></div><p id="title">Подключение…</p></header>
+<header><div class="heading"><div><small>AUTO EDITOR · 0.8.9rc25</small><h1 id="pageTitle">Процесс</h1></div><button id="refresh" class="quiet" aria-label="Обновить данные">↻</button></div><p id="title">Подключение…</p></header>
 <div id="notice" role="status" aria-live="polite"></div>
 <main>
 <div id="presenterParking" hidden><div id="presenterControls"><div class="presenter-heading"><strong>Части ведущего</strong><button id="addPresenterPart" type="button" aria-label="Добавить часть ведущего">＋</button></div><div id="presenterRows"></div><label>Микрофон · одна запись на все части<select id="presenterMicrophone"></select></label><p id="presenterSummary" class="hint"></p><input id="presenterUpload" type="file" accept="video/*,.mov,.mp4" hidden></div></div>
@@ -9,7 +9,7 @@
 <section id="inputPanel" hidden>
 <div class="surface"><label>Сохранённые выпуски<select id="draftChoice"><option value="">Новый выпуск…</option></select></label><p id="draftFolder" class="hint"></p></div>
 <div id="inputSteps" class="tabs"><button data-step="setup">Папка</button><button data-step="script">Сценарий</button><button data-step="files">Материалы</button><button data-step="summary">Сводка</button></div>
-<div id="inputCommon" class="surface"><h2>Общие настройки выпуска</h2><label>Ведущий<select id="inputSpeaker"><option value="ru">РУ</option><option value="uz">УЗ</option></select></label><label>Шаблон<select id="inputProfile"></select></label><label>Сохранённые настройки<select id="inputPreset"><option value="">Стандартные</option></select></label><p class="hint">Применяются при обоих способах создания выпуска.</p></div>
+<div id="inputCommon" class="surface"><h2>Общие настройки выпуска</h2><label>Ведущий<select id="inputSpeaker"><option value="ru_long">РУ спикер лонг</option><option value="ru_shorts">РУ спикер шортс</option><option value="uz_long">УЗ спикер лонг</option><option value="uz_shorts">УЗ спикер шортс</option></select></label><label>Шаблон<select id="inputProfile"></select></label><label>Сохранённые настройки<select id="inputPreset"><option value="">Стандартные</option></select></label><p class="hint">Применяются при обоих способах создания выпуска.</p></div>
 <div id="input_setup" class="input-step surface"><h2>Где хранить выпуск</h2>
 <label>Папка выпуска на сервере<input id="inputParent" readonly placeholder="Выберите папку"></label><button id="chooseInputParent">Выбрать папку</button>
 <p class="hint">Материалы сохранятся прямо в выбранной папке. Новую папку можно создать в окне выбора.</p>

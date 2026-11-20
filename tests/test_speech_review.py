@@ -48,7 +48,7 @@ class SpeechReviewTests(unittest.TestCase):
         lines=draft_alignment([self.block],[],20,'Нет речи')[self.block.uid][0]
         self.assertTrue(all(l.review_reason for l in lines));self.assertEqual(lines[-1].end,20)
     def test_ru_production_fallback_no_abort(self):
-        with patch('hockey_editor.ru_speech.transcribe',return_value=[segment(0,20,'Не похожий на сценарий текст.')]),patch('hockey_editor.host_media.sources',return_value=[{'duration':25}]):
+        with patch('hockey_editor.speech_cleanup.acoustic_evidence',return_value=([(0,25)],25)),patch('hockey_editor.speech_retry.improve',side_effect=lambda p,s,*args:s),patch('hockey_editor.ru_speech.transcribe',return_value=[segment(0,20,'Не похожий на сценарий текст.')]),patch('hockey_editor.host_media.sources',return_value=[{'duration':25}]):
             result=prepare_ru(self.project,[self.block],self.root,threading.Event(),lambda _:None)
         self.assertTrue(result[self.block.uid][0][0].review_reason)
         self.assertEqual(result[self.block.uid][0][-1].end,25)

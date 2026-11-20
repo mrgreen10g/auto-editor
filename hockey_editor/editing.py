@@ -10,8 +10,8 @@ from .timeline import Plan
 
 def project_edit_key(project, index):
     block = asdict(project.blocks[index]); block.pop('edit_plan',None);block.pop('edit_key',None)
-    if project.settings.cut_pauses:block['voice_safety_revision']='v1'
-    if project.profile.startswith('ru_') and project.settings.cut_pauses:block['retake_version']='script-thought-v3'
+    if project.settings.cut_pauses:block['voice_safety_revision']='v3-retakes'
+    if project.profile.startswith('ru_') and project.settings.cut_pauses:block['retake_version']='acoustic-retry-v4'
     if project.profile.startswith('uz_'):block['review_context_version']='heard-v2'
     if not block.get('archive_pool'):block.pop('archive_pool',None)
     if not block.get('top5_rank'):block.pop('top5_rank',None)
@@ -29,6 +29,7 @@ def project_edit_key(project, index):
         p=Path(path)
         if not p.is_file(): return [str(p),'missing']
         st=p.stat();return [str(p.resolve()),st.st_size,st.st_mtime_ns]
+    if project.profile.startswith('ru_combat'):block['combat_facts_revision']=['v1',project.settings.informative_cards]
     if project.profile in ('ru_football','ru_football_shorts'):block['facts_revision']=['v2-shorts',project.settings.informative_cards]
     structural={k:getattr(project.settings,k) for k in ('cut_pauses','insert_frequency','auto_rotate','rotate','mirror_host','use_manual_clips','allow_other_matches')}
     if project.settings.insert_frequency=='low':structural['insert_limit']='whole-video-10-v1'

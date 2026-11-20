@@ -55,6 +55,7 @@ def pair_heading(line):
     if cue:
         value=value[cue.end():].rstrip('.!');names=full_names(value)
         if len(names)==2:return ' — '.join(names)
+        value=re.sub(r'^переходим\s+.*?[—–:]\s*','',value,flags=re.I)
     elif value.endswith(('.', '!', '?')):return None
     if len(value)>130:return None
     parts=re.split(r'\s+[—–-]\s+|\s+против\s+|\s+и\s+',value,flags=re.I)
@@ -70,6 +71,11 @@ def parse_script(text,shorts=False):
     ending=next((i for i,r in enumerate(rows) if re.match(ENDING,plain(r))),len(rows))
     outro.script='\n'.join(rows[ending:]);rows=rows[:ending]
     headers=[(i,pair_heading(r)) for i,r in enumerate(rows) if pair_heading(r)]
+    for i,row in enumerate(rows[:-1]):
+        if re.search(r'теперь переходим к|переходим ко второй',plain(row)) and not any(j in (i,i+1) for j,_ in headers):
+            names=full_names(rows[i+1])
+            if len(names)==2:headers.append((i,' — '.join(names)))
+    headers.sort()
     if not headers:
         names=full_names(text)
         if not shorts or len(names)!=2:raise ValueError('Укажите пары заголовками, словами «Начинаем с … / Теперь …» или метками Разбор1, Разбор2 и далее.')
@@ -91,8 +97,8 @@ def parse_script(text,shorts=False):
     return intro,blocks,outro
 
 def normalize_bet(text):
-    from .card_text import numeric
-    t=numeric(plain(text))
+    from .combat_facts import digits
+    t=digits(plain(text))
     values={'одиннадцать':11,'двенадцать':12,'тринадцать':13,'четырнадцать':14,'пятнадцать':15,'шестнадцать':16,'семнадцать':17,'восемнадцать':18,'девятнадцать':19,'двадцать':20,'тридцать':30,'сорок':40,'пятьдесят':50,'шестьдесят':60,'семьдесят':70,'восемьдесят':80,'девяносто':90,'сто':100}
     for word,value in values.items():t=re.sub(r'\b'+word+r'\b',str(value),t)
     t=re.sub(r'\b([2-9]0)\s+([1-9])\b',lambda m:str(int(m[1])+int(m[2])),t)

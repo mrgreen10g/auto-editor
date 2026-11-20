@@ -43,8 +43,10 @@ def check():
     def select_profile(profile):
         from hockey_editor.profiles import PROFILES
         language='uz' if profile.startswith('uz_') else 'ru'
-        app.speakerbox.current(1 if language=='uz' else 0)
-        app.profile_choices=PROFILES[language]
+        from hockey_editor.profiles import SPEAKER_GROUPS,group_for,group_profiles
+        group=group_for(profile)
+        app.speakerbox.current([key for key,_ in SPEAKER_GROUPS].index(group))
+        app.profile_choices=group_profiles(group)
         app.profilebox['values']=[label for _,label in app.profile_choices]
         app.profilebox.current([key for key,_ in app.profile_choices].index(profile))
     out = ROOT / 'build'

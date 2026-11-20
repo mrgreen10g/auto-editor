@@ -10,7 +10,7 @@ function inputStepTo(step){
  for(const b of $('inputSteps').querySelectorAll('button'))b.classList.toggle('active',b.dataset.step===step);
 }
 function inputProfiles(){
- $('inputProfile').replaceChildren();for(const [id,label] of inputState.profiles[$('inputSpeaker').value])$('inputProfile').add(new Option(label,id));
+ $('inputProfile').replaceChildren();for(const [id,label] of inputState.profiles[$('inputSpeaker').value.split('_')[0]])if(id.endsWith('_shorts')===$('inputSpeaker').value.endsWith('_shorts'))$('inputProfile').add(new Option(label,id));
 }
 function line(parent,text,tag='p'){const e=document.createElement(tag);e.textContent=text;parent.append(e);return e}
 function fileAction(parent,label,action){const b=document.createElement('button');b.textContent=label;b.onclick=()=>guard(action);parent.append(b);return b}
@@ -24,7 +24,7 @@ async function refreshInputs(){
  $('draftFolder').textContent=d.folder;$('scriptSourceHint').textContent=d.script_source?'Файл для повторного чтения: '+d.script_source:'Сценарий ещё не сохранён.';
  const reuse=$('reuseChoice').value;$('reuseChoice').replaceChildren();for(const r of inputState.reusable)$('reuseChoice').add(new Option(r.label,r.draft+':'+r.file));if([...$('reuseChoice').options].some(x=>x.value===reuse))$('reuseChoice').value=reuse;
  if(draftLoaded!==d.id){
-  draftLoaded=d.id;$('inputSpeaker').value=d.profile.startsWith('uz_')?'uz':'ru';inputProfiles();$('inputProfile').value=d.profile;$('inputScript').value=d.script;$('inputAssets').value=d.asset_folder||inputState.kits[d.profile]||'';
+  draftLoaded=d.id;$('inputSpeaker').value=(d.profile.startsWith('uz_')?'uz':'ru')+(d.profile.endsWith('_shorts')?'_shorts':'_long');inputProfiles();$('inputProfile').value=d.profile;$('inputScript').value=d.script;$('inputAssets').value=d.asset_folder||inputState.kits[d.profile]||'';
   for(const id of ['inputPreset','draftPreset']){$(id).replaceChildren(new Option('Стандартные',''));for(const p of inputState.presets)$(id).add(new Option(p,p));} $('draftPreset').value=d.preset;
   renderDraftSettings(d);renderInputBlocks(d);inputStepTo(d.project?'summary':d.blocks.length?'files':'script');
  }

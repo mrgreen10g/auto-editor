@@ -6,6 +6,12 @@ PROFILES={'ru':[('ru_hockey','Хоккей · лонг'),('ru_cs','Counter-Strik
           'uz':[('uz_football','Футбол · лонг'),('uz_hockey','Хоккей · лонг'),('uz_combat','Бои · лонг'),('uz_combat_shorts','Бои · Shorts'),('uz_football_shorts','Футбол · Shorts'),('uz_hockey_shorts','Хоккей · Shorts')]}
 
 
+SPEAKER_GROUPS=[('ru_long','РУ спикер лонг'),('ru_shorts','РУ спикер шортс'),('uz_long','УЗ спикер лонг'),('uz_shorts','УЗ спикер шортс')]
+def group_for(profile):
+    return ('uz' if profile.startswith('uz_') else 'ru')+('_shorts' if profile.endswith('_shorts') else '_long')
+def group_profiles(group):
+    return [(key,label) for key,label in PROFILES[group.split('_')[0]] if key.endswith('_shorts')==group.endswith('_shorts')]
+
 def kit_path(profile='ru_hockey'):
     if profile in ('ru_hockey_top5_shorts','ru_football_top5_shorts'):profile='ru_hockey_shorts'
     if profile in ('ru_cs','ru_football_shorts','uz_combat_shorts','ru_combat','ru_combat_shorts'):return Path(os.environ.get('LOCALAPPDATA',str(Path.home()/'.cache')))/'HockeyAutoEditor'/('asset-kit-'+profile.replace('_','-')+'.json')

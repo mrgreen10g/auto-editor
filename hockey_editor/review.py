@@ -60,9 +60,15 @@ def draft_alignment(blocks, segments, duration, reason):
     starts=[]
     for i,(_,_,_,lo,hi) in enumerate(rows):
         guess=float(np.interp(lo,keys,times)) if keys else duration*lo/max(1,len(script))
-        if i==0:guess=0.
+        if i==0 and not any(k in mapping for k in range(lo,min(hi,lo+2))):guess=0.
         starts.append(min(duration-(len(rows)-i)*gap,max(starts[-1]+gap if starts else 0,guess)))
-    starts.append(duration)
+    tail=duration
+    if rows and keys and words:
+        last_lo,last_hi=rows[-1][3:]
+        matched=[k for k in range(last_lo,last_hi) if k in mapping]
+        if len(matched)>=.7*(last_hi-last_lo) and matched and mapping[matched[-1]]>=len(source)-3:
+            tail=min(duration,max(starts[-1]+gap,words[-1]['end']+.15))
+    starts.append(tail)
     result={b.uid:([],[]) for b in blocks}
     global_weak=len(mapping)<.55*max(1,len(script))
     for i,(b,index,text,lo,hi) in enumerate(rows):
@@ -71,7 +77,7 @@ def draft_alignment(blocks, segments, duration, reason):
         next_anchor=i+1==len(rows) or any(k in mapping for k in range(rows[i+1][3],min(rows[i+1][4],rows[i+1][3]+2)))
         # An abbreviated Uzbek script must not invalidate an independently
         # matched sentence elsewhere. Keep local boundary checks mandatory.
-        uncertain=(global_weak and language!='uz') or coverage<.7 or not anchored or not next_anchor
+        uncertain=coverage<.7 or not anchored or not next_anchor
         message=('Нет надёжного совпадения. '+reason) if uncertain else ''
         heard=' '.join(w['word'].strip() for w in words if starts[i]<=w['start']<starts[i+1])
         result[b.uid][0].append(Line(text,starts[i],starts[i+1],1. if uncertain else 0.,message,heard,f'{b.uid}:line:{index}'))

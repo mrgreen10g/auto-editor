@@ -4,10 +4,10 @@ from PIL import Image,ImageDraw
 from .graphics import font,wrap
 from .football_facts import visual
 
-def image(card,path):
- data=visual(card.text,card.title) # Rebuild after manual timeline edits.
+def image(card,path,data=None,accent=None):
+ data=data or visual(card.text,card.title) # Rebuild after manual timeline edits.
  items=data['metrics'];body=data['caption'];w=424
- accent='#51dfc2'
+ accent=accent or '#51dfc2'
  if re.search(r'проиграл|поражени|кризис',body,re.I) and not re.search(r'не проиграл|без поражени',body,re.I):accent='#ff7687'
  if card.title in ('СОСТАВ КОМАНДЫ','ДИСЦИПЛИНА','ФАКТОР РИСКА'):accent='#ffb360'
  rows=(len(items)+1)//2;top=74+rows*91
@@ -37,6 +37,14 @@ def image(card,path):
   label_size=16
   while label_size>11 and measure.textlength(item['label'],font=font(label_size))>cell-16:label_size-=1
   d.text((x+8,y+57),item['label'],font=font(label_size),fill='#bcd0da')
+ if data.get('sport')=='combat' and len(items)==2 and items[0]['label']==items[1]['label']:
+  values=[float(v['value'].replace(',','.')) if re.fullmatch(r'\d+(?:[,.]\d+)?',v['value']) else None for v in items]
+  if all(v is not None for v in values) and max(values)>0:
+   cell=(w-54)//2
+   for i,value in enumerate(values):
+    x=22+i*(cell+10)
+    d.rectangle((x+8,122,x+cell-8,125),fill='#29424c')
+    d.rectangle((x+8,122,x+8+(cell-16)*value/max(values),125),fill=accent)
  if len(items)==1 and items[0]['label']=='Владение':
   percent=float(items[0]['value'].rstrip('%').replace(',','.'))
   if 0<=percent<=100:

@@ -150,6 +150,9 @@ def _card_image(card, path, logos=None,profile='ru_hockey'):
     if profile.startswith('ru_') and profile.endswith('_shorts') and card.title=='ПОЛНЫЙ РАЗБОР':
         from .shorts_cta import image
         return image(card,path)
+    if profile.startswith('ru_combat') and card.visual and card.visual.get('sport')=='combat':
+        from .combat_facts import image
+        return image(card,path,shorts=profile.endswith('_shorts'))
     if profile=='ru_football_shorts' and card.visual:
         from .football_short_graphics import image
         return image(card,path)

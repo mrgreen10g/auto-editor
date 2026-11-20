@@ -4,9 +4,9 @@ from PIL import Image,ImageDraw
 from .graphics import font,wrap
 from .football_facts import visual
 
-def image(card,path):
-    data=visual(card.text,card.title);body=data['caption'];items=data['metrics']
-    width=608;accent='#51dfc2'
+def image(card,path,data=None,accent=None):
+    data=data or visual(card.text,card.title);body=data['caption'];items=data['metrics']
+    width=608;accent=accent or '#51dfc2'
     if re.search(r'проиграл|поражени|кризис',body,re.I) and not re.search(r'не проиграл|без поражени',body,re.I):accent='#ff7687'
     if card.title in ('СОСТАВ КОМАНДЫ','ДИСЦИПЛИНА','ФАКТОР РИСКА'):accent='#ffbd69'
     cols=min(3,max(1,len(items)));rows=(len(items)+cols-1)//cols

@@ -79,6 +79,8 @@ def transcribe(project,cache,cancel,log):
     return result
 
 def tokens(text,cs=False):
+    from .ru_lexical import normalized
+    text=normalized(text)
     if cs:
         from .cs import normalize_speech as cs_speech
         text=cs_speech(text)
@@ -173,8 +175,16 @@ def prepare(project,blocks,cache,cancel,log):
     from .speech_cleanup import remove_retakes
     cuts=[]
     if project.settings.cut_pauses:
+        from .speech_cleanup import acoustic_evidence,acoustic_cleanup,merge_ranges
+        regions,duration=acoustic_evidence(project,cache,cancel,log)
+        from .speech_retry import improve
+        segments=improve(project,segments,regions,duration,cache,cancel,log)
+        segments,pauses=acoustic_cleanup(segments,regions,duration)
         segments,cuts=remove_retakes(blocks,segments)
-        if cuts:log(f'Удалены повторные неудачные дубли: {len(cuts)}.')
+        retake_count=len(cuts)
+        if pauses:log(f'Подтверждено длинных пауз без речи: {len(pauses)}.')
+        cuts=merge_ranges(cuts+pauses)
+        if retake_count:log(f'Удалены повторные неудачные дубли: {retake_count}.')
     try:
         if project.recording_times.strip():
             from .recording_times import recording_ranges
@@ -235,7 +245,8 @@ def speech_word_units(words,cs=False):
             if any(b['start']-a['end']>.8 for a,b in zip(window,window[1:])):continue
             value=' '.join(w['word'].strip() for w in window).strip(' .,!?:;«»').replace('ё','е')
             from .cs import speech_name
-            if (cs and speech_name(value)) or any(p.fullmatch(value) for p in patterns) or player_pattern.fullmatch(plain(value)) or re.fullmatch(r'\d+\s*[,.]\s*\d+',value):
+            from .ru_lexical import names as lexical_names
+            if lexical_names(value)!=value or (cs and speech_name(value)) or any(p.fullmatch(value) for p in patterns) or player_pattern.fullmatch(plain(value)) or re.fullmatch(r'\d+\s*[,.]\s*\d+',value):
                 count=size;break
         window=words[i:i+count]
         result.append(dict(words[i],word=' '.join(w['word'].strip() for w in window),end=window[-1]['end']))

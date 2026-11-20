@@ -154,7 +154,7 @@ class App(EpisodeMixin,MatchMixin):
             self.button(bar, label, cmd).pack(side='right', padx=(8, 0))
         profilebar=ttk.Frame(main);profilebar.pack(fill='x',pady=(0,8))
         ttk.Label(profilebar,text='Шаблон ведущего',style='Muted.TLabel').pack(side='left',padx=(0,8))
-        self.speakerbox=ttk.Combobox(profilebar,values=['РУ спикер','УЗ спикер'],state='readonly',width=13)
+        self.speakerbox=ttk.Combobox(profilebar,values=['РУ спикер лонг','РУ спикер шортс','УЗ спикер лонг','УЗ спикер шортс'],state='readonly',width=20)
         self.speakerbox.pack(side='left',padx=(0,8));self.controls.append(self.speakerbox)
         self.speakerbox.bind('<<ComboboxSelected>>',self.switch_speaker)
         self.profilebox=ttk.Combobox(profilebar,state='readonly',width=28)
@@ -296,7 +296,13 @@ class App(EpisodeMixin,MatchMixin):
     def build_settings(self):
         page = self.scrollable('settings')
         from .performance import LABELS,mode,save
-        machine=ui.card(page,'Производительность','Режим этого компьютера. Применяется к следующим операциям; качество видео и точность поиска не меняются.')
+        performance_panel=ttk.Frame(page)
+        def toggle_performance():
+            if performance_panel.winfo_manager():performance_panel.pack_forget();performance_button.configure(text='▶ Производительность')
+            else:performance_panel.pack(fill='x',after=performance_button);performance_button.configure(text='▼ Производительность')
+        performance_button=ttk.Button(page,text='▶ Производительность',command=toggle_performance)
+        performance_button.pack(anchor='w',pady=(0,8))
+        machine=ui.card(performance_panel,'Производительность','Режим этого компьютера. Применяется к следующим операциям; качество видео и точность поиска не меняются.')
         choice=tk.StringVar(value=LABELS[mode()])
         selector=ttk.Combobox(machine,textvariable=choice,values=list(LABELS.values()),state='readonly')
         selector.pack(fill='x')
@@ -329,7 +335,7 @@ class App(EpisodeMixin,MatchMixin):
                            ('zoom', 'Плавные наезды 100% → 120% с промежутками'),
                            ('transitions', 'Мягкие переходы к игре и обратно'),
                            ('animate_cards', 'Плавное появление и уход плашек'),
-                           ('informative_cards', 'Инфографика · РУ футбол и Shorts'),
+                           ('informative_cards', 'Инфографика · РУ футбол и бои'),
                            ('wobble', 'Лёгкое покачивание плашек'),
                            ('cut_pauses', 'Сокращать паузы и повторные неудачные дубли'),
                            ('color', 'Лёгкая цветокоррекция'),
@@ -563,8 +569,10 @@ class App(EpisodeMixin,MatchMixin):
         p = self.project
         from .profiles import PROFILES
         language='uz' if p.profile.startswith('uz_') else 'ru'
-        self.speakerbox.current(1 if language=='uz' else 0)
-        self.profile_choices=PROFILES[language]
+        from .profiles import SPEAKER_GROUPS,group_for,group_profiles
+        group=group_for(p.profile)
+        self.speakerbox.current([key for key,_ in SPEAKER_GROUPS].index(group))
+        self.profile_choices=group_profiles(group)
         self.profilebox['values']=[label for _,label in self.profile_choices]
         self.profilebox.current([key for key,_ in self.profile_choices].index(p.profile))
         block = p.blocks[self.index]
@@ -923,7 +931,8 @@ class App(EpisodeMixin,MatchMixin):
     def switch_speaker(self,event=None):
         if self.busy:return
         from .profiles import PROFILES
-        self.profile_choices=PROFILES['uz' if self.speakerbox.current()==1 else 'ru']
+        from .profiles import SPEAKER_GROUPS,group_profiles
+        self.profile_choices=group_profiles(SPEAKER_GROUPS[self.speakerbox.current()][0])
         self.profilebox['values']=[label for _,label in self.profile_choices]
         self.profilebox.current(0)
         self.switch_profile()
