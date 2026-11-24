@@ -286,6 +286,8 @@ def check():
                 # Portrait review can save inside an outer guarded action (no UI deadlock).
                 app.project.profile='ru_combat_shorts';app.project.settings.width=720;app.project.settings.height=1280
                 click('#processTab')
+                details=page.locator('#processPanel details:has(#framePresenter)')
+                if not details.evaluate('(e)=>e.open'):click('#processPanel details:has(#framePresenter) > summary')
                 page.locator('#framePresenter').click()
                 expect(page.locator('#portraitDialog')).to_be_visible()
                 expect(page.locator('#portraitSave')).to_be_enabled(timeout=60000)
