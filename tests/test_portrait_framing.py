@@ -32,7 +32,7 @@ class FramingTests(unittest.TestCase):
   self.assertEqual(out.size,(288,512));self.assertEqual(out.getpixel((0,0)),mirrored.getpixel((287,0)))
  def test_portable_project_and_preview_cache(self):
   with tempfile.TemporaryDirectory() as tmp:
-   root=Path(tmp);host=root/'camera.mp4';host.touch()
+   root=Path(tmp).resolve();host=root/'camera.mp4';host.touch()
    p=Project(host=str(host),profile='ru_combat_shorts');p.host_framing[str(host)]={'x':.2,'y':.6,'zoom':1.3,'approved':True}
    target=root/'episode.hockeyproj';p.save(target);loaded=Project.load(target)
    self.assertEqual(loaded.host_framing,p.host_framing)

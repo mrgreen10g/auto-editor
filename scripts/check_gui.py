@@ -23,16 +23,29 @@ def check():
     errors = []
     root.report_callback_exception = lambda *exc: errors.append(str(exc[1]))
     app = App(root)
-    from hockey_editor.keyboard import shortcut
-    from types import SimpleNamespace
-    root.clipboard_clear();root.clipboard_append('Русский текст — 19 голов')
+    from hockey_editor.keyboard import TAG
     clipboard_window=tk.Toplevel(root)
-    for widget in (ttk.Entry(clipboard_window),tk.Text(clipboard_window),ttk.Combobox(clipboard_window)):
+    expected='Русский текст — 19 голов'
+    for widget in (tk.Entry(clipboard_window),ttk.Entry(clipboard_window),tk.Text(clipboard_window),
+                   tk.Spinbox(clipboard_window),ttk.Spinbox(clipboard_window),ttk.Combobox(clipboard_window)):
         widget.pack();root.update();widget.focus_force();root.update()
-        shortcut(SimpleNamespace(widget=widget,keycode=86,keysym='Cyrillic_em',state=4),windows=True)
-        root.update()
-        value=widget.get('1.0','end-1c') if isinstance(widget,tk.Text) else widget.get()
-        assert value=='Русский текст — 19 голов',(widget.winfo_class(),value)
+        assert widget.bindtags()[0]==TAG
+        def value():return widget.get('1.0','end-1c') if isinstance(widget,tk.Text) else widget.get()
+        def key(symbol,shift=False):
+            widget.event_generate('<KeyPress>',keysym=symbol,state=4|(1 if shift else 0));root.update()
+        if isinstance(widget,tk.Text):widget.delete('1.0','end');widget.edit_reset()
+        else:widget.delete(0,'end')
+        root.clipboard_clear();root.clipboard_append(expected)
+        # Real Tk dispatch, including Cyrillic keysyms, not a direct handler call.
+        key('Cyrillic_em');assert value()==expected,(widget.winfo_class(),value())
+        key('Cyrillic_ef');key('Cyrillic_es');assert root.clipboard_get()==expected
+        key('Cyrillic_che');assert value()==''
+        key('Cyrillic_em');assert value()==expected
+        key('Cyrillic_ya');assert value()=='',(widget.winfo_class(),value())
+        key('Cyrillic_en');assert value()==expected
+        key('Cyrillic_ya');key('Cyrillic_ya',shift=True);assert value()==expected
+        # Latin shortcuts must not paste twice.
+        key('a');key('v');assert value()==expected
         widget.destroy()
     clipboard_window.destroy()
 
@@ -621,6 +634,31 @@ def check():
         assert load_kit(tmp/'folder-kit.json')[0]==str(materials)
         app.project.save(tmp/'folder-project.hockeyproj')
         assert Project.load(tmp/'folder-project.hockeyproj').asset_folder==str(materials)
+        # The portrait dialog stays responsive while detection is running.
+        from hockey_editor.shorts_framing_ui import dialog as portrait_dialog
+        from PIL import Image
+        image=tmp/'portrait-source.jpg';Image.new('RGB',(640,360),'#203040').save(image)
+        auto=dict(x=.5,y=.5,zoom=1.2,signature='gui-test',rotation=0,face_found=True)
+        attempts=[0]
+        def portrait_controls():
+            attempts[0]+=1
+            windows=[w for w in root.winfo_children() if isinstance(w,tk.Toplevel) and w.title().startswith('Кадрирование Shorts')]
+            def walk(w):
+                return [w]+[c for child in w.winfo_children() for c in walk(child)]
+            for window in windows:
+                children=walk(window)
+                if any(hasattr(w,'photo') for w in children):
+                    next(w for w in children if isinstance(w,ttk.Button) and w.cget('text')=='→').invoke()
+                    next(w for w in children if isinstance(w,ttk.Button) and w.cget('text')=='Применить кадрирование').invoke()
+                    return
+                if attempts[0]>100:
+                    errors.append('Portrait preview did not load');window.tk.call(window.protocol('WM_DELETE_WINDOW'));return
+            root.after(100,portrait_controls)
+        root.after(100,portrait_controls)
+        with patch('hockey_editor.orientation.detect_rotation',return_value=0),patch('hockey_editor.shorts_framing.detect',return_value=(auto,image)):
+            assert portrait_dialog(app,app.project.host)
+        crop=app.project.host_framing[app.project.host]
+        assert crop['approved'] and abs(crop['x']-.5)>.001
         assert not errors, errors
         app.close()
     (out / 'gui-check.json').write_text(json.dumps({'status': 'ok', 'checks': ['v1-project-compatibility', 'block-switching', 'card-editing', 'stale-plan-invalidation', 'busy-control-restoration', 'worker-queue-flow', 'compact-window-layout', 'multiple-source-review-flow', 'v2-project-roundtrip', 'review-retains-custom-trim','episode-editor-roundtrip','seek-after-edit-rebuild-save','source-visual-trim','persistent-block-navigation','all-block-events-own-source','per-block-logo-tabs','ordered-host-sources','full-video-dialog-roundtrip']}, indent=2), encoding='utf-8')

@@ -6,3 +6,5 @@
 - Microphone-prepared sources retain the original camera's framing settings. Preview caches change when framing changes.
 - Reference IMG_1887.MOV: 1920×1080 HLG, 166.89 seconds. Five sampled frames locate the presenter around normalized x=0.517. Both single-source and multipart render paths tested on a four-second excerpt, retaining sound and duration.
 - A missing or uncertain face detection requests manual confirmation instead of asserting a reliable speaker location.
+
+- Clipboard and undo/redo shortcuts run before native Tk handlers, independent of Russian/English layout. Applied to Entry, Text, Spinbox, editable Combobox and new dialogs; readonly fields stay protected. Windows UI tests dispatch real Cyrillic key events.

@@ -42,7 +42,7 @@ class KeyboardTests(unittest.TestCase):
   self.assertEqual(shortcut(e,True),'break');self.assertEqual(self.events,['<<Paste>>'])
  def test_no_double_paste_or_altgr(self):
   w=self.widget();e=SimpleNamespace(widget=w,keycode=86,keysym='v',state=4)
-  self.assertIsNone(shortcut(e,True));self.assertEqual(self.events,[])
+  self.assertEqual(shortcut(e,True),'break');self.assertEqual(self.events,['<<Paste>>']);self.events=[]
   e.keysym='Cyrillic_em';e.state=12;self.assertIsNone(shortcut(e,True));self.assertEqual(self.events,[])
  def test_disabled_and_non_text_untouched(self):
   for state,kind in [('disabled','Text'),('readonly','TCombobox'),('normal','Button')]:

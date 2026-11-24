@@ -56,8 +56,15 @@ def detect(path,rotation,cache,cancel=None):
  with Image.open(frames[chosen]) as im:im.save(folder/'preview.jpg')
  saved.write_text(json.dumps(result));return result,folder/'preview.jpg'
 
-def entry(project,path,rotation,cache,cancel=None):
+
+def saved_value(project,path):
  value=project.host_framing.get(path)
+ if value is not None:return value
+ resolved=Path(path).resolve()
+ return next((v for k,v in project.host_framing.items() if Path(k).resolve()==resolved),None)
+
+def entry(project,path,rotation,cache,cancel=None):
+ value=saved_value(project,path)
  if value and value.get('signature')==signature(path,rotation):
   validate(value);return value
  value,_=detect(path,rotation,cache,cancel);project.host_framing[path]=value
@@ -85,6 +92,6 @@ def pending(project):
   # Automatic orientation is confirmed during detection; display metadata applies here.
   rotation=0 if project.settings.auto_rotate else project.settings.rotate
   if dimensions(path,rotation)[0]<=dimensions(path,rotation)[1]:continue
-  value=project.host_framing.get(path,{})
+  value=saved_value(project,path) or {}
   if not value.get('approved') or value.get('signature')!=signature(path,value.get('rotation',rotation) if project.settings.auto_rotate else rotation):result.append(path)
  return result

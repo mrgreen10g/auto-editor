@@ -42,6 +42,7 @@ def dialog(app,path):
  for label,dx,dy in [('←',-.02,0),('→',.02,0),('↑',0,-.02),('↓',0,.02)]:
   ttk.Button(controls,text=label,command=lambda x=dx,y=dy:move(x,y)).pack(fill='x',pady=2)
  def reset():
+  if 'automatic' not in state:return
   for k,v in values.items():v.set(state['automatic'][k])
   draw()
  ttk.Button(controls,text='Автоматическое положение',command=reset).pack(pady=12)
