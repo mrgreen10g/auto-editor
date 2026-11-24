@@ -283,7 +283,13 @@ async function reviewPortrait(force=false){
   if(result.status==='error')throw Error(result.error);
  }catch(error){dialog.close();throw error}
  const items=result.items,values=items.map(x=>({...x.value})),images=[];
- for(const item of items){const im=new Image();im.src=item.image;await im.decode();images.push(im)}
+ try{
+  for(const item of items){
+   const im=new Image(),bytes=Uint8Array.from(atob(item.image.split(',')[1]),c=>c.charCodeAt(0));
+   const url=URL.createObjectURL(new Blob([bytes],{type:'image/jpeg'}));
+   try{im.src=url;await im.decode();images.push(im)}finally{URL.revokeObjectURL(url)}
+  }
+ }catch(error){dialog.close();throw Error('Не удалось открыть кадр предпросмотра. Откройте кадрирование повторно.')}
  if(cancelled)return false;
  const select=$('portraitPart');select.replaceChildren();items.forEach((item,i)=>select.add(new Option(item.name,i)));
  const fields=['portraitX','portraitY','portraitZoom'],keys=['x','y','zoom'];
