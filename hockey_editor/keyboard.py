@@ -28,6 +28,30 @@ def _undo_entry(widget,redo):
     widget.delete(0,'end');widget.insert(0,rows[target]);widget.icursor('end')
     widget._text_history=(rows,target)
 
+def _selection(widget):
+    if widget.winfo_class()=='Text':
+        spans=widget.tag_ranges('sel')
+        return (str(spans[0]),str(spans[-1])) if spans else None
+    return (widget.index('sel.first'),widget.index('sel.last')) if widget.selection_present() else None
+
+def _clipboard(widget,action):
+    text=widget.winfo_class()=='Text'
+    if action=='<<SelectAll>>':
+        if text:widget.tag_add('sel','1.0','end-1c');widget.mark_set('insert','end-1c')
+        else:widget.selection_range(0,'end');widget.icursor('end')
+        return
+    selected=_selection(widget)
+    if action in ('<<Copy>>','<<Cut>>'):
+        if not selected:return
+        value=widget.get(*selected) if text else widget.get()[selected[0]:selected[1]]
+        widget.clipboard_clear();widget.clipboard_append(value)
+        if action=='<<Cut>>':widget.delete(*selected)
+        return
+    value=widget.clipboard_get()
+    if selected:widget.delete(*selected)
+    widget.insert('insert',value)
+
+
 def shortcut(event,windows=None):
     if windows is None:windows=sys.platform=='win32'
     if not windows or not event.state & 0x4 or event.state & (0x8|0x20000):return None
@@ -43,12 +67,16 @@ def shortcut(event,windows=None):
         readonly=str(widget.cget('state')) in ('disabled','readonly')
         if readonly and virtual not in ('<<Copy>>','<<SelectAll>>'):return 'break'
         if kind!='Text' and hasattr(widget,'get'):_remember(widget)
-        if kind!='Text' and virtual in ('<<Undo>>','<<Redo>>') and hasattr(widget,'get'):
-            _undo_entry(widget,virtual=='<<Redo>>')
-        else:
-            if kind=='Text' and virtual in ('<<Paste>>','<<Cut>>') and hasattr(widget,'edit_separator'):widget.edit_separator()
-            widget.event_generate(virtual)
-            if kind=='Text' and virtual in ('<<Paste>>','<<Cut>>') and hasattr(widget,'edit_separator'):widget.edit_separator()
+        if hasattr(widget,'get'):
+            if virtual in ('<<Undo>>','<<Redo>>'):
+                if kind=='Text':
+                    (widget.edit_redo if virtual=='<<Redo>>' else widget.edit_undo)()
+                else:_undo_entry(widget,virtual=='<<Redo>>')
+            else:
+                if kind=='Text' and virtual in ('<<Paste>>','<<Cut>>'):widget.edit_separator()
+                _clipboard(widget,virtual)
+                if kind=='Text' and virtual in ('<<Paste>>','<<Cut>>'):widget.edit_separator()
+        else:widget.event_generate(virtual)
         if kind!='Text' and hasattr(widget,'get'):_remember(widget)
         return 'break'  # Also consume Latin shortcuts: exactly one action.
     except tk.TclError:return 'break'
