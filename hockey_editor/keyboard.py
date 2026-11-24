@@ -36,6 +36,7 @@ def shortcut(event,windows=None):
     if not virtual:return None
     if code==90 and event.state & 1:virtual='<<Redo>>'
     widget=event.widget
+    if not hasattr(widget,'winfo_class'):return None
     try:
         kind=widget.winfo_class()
         if kind not in TEXT_CLASSES:return None
@@ -53,13 +54,14 @@ def shortcut(event,windows=None):
     except tk.TclError:return 'break'
 
 def attach(widget):
+    if not hasattr(widget,'winfo_class'):return
     try:
         kind=widget.winfo_class()
         if kind not in TEXT_CLASSES:return
         tags=widget.bindtags()
         if TAG not in tags:widget.bindtags((TAG,*tags))
         if kind=='Text':
-            if not widget.cget('undo'):widget.configure(undo=True,maxundo=64)
+            if not widget.tk.getboolean(widget.cget('undo')):widget.configure(undo=True,maxundo=64)
         else:_remember(widget)
     except tk.TclError:pass
 
