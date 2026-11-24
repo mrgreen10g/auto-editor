@@ -15,13 +15,14 @@ def identity(path):
 def sources(project,cache=None,cancel=None,log=lambda _:None):
     result=[];cursor=0
     for path in project.host_paths():
+        original=path
         if cache is not None and project.microphones.get(path):
             from .microphone import prepare
             path=prepare(path,project.microphones[path],cache,cancel,log)
         info=probe(path)
         if not info['video'] or not info['audio']:raise ValueError('У каждой части ведущего должны быть видео и голос: '+Path(path).name)
         duration=math.floor(info['duration']*30)/30
-        result.append({'path':path,'offset':cursor,'duration':duration});cursor=frame(cursor+duration)
+        result.append({'path':path,'original':original,'offset':cursor,'duration':duration});cursor=frame(cursor+duration)
     if cursor>1800:raise ValueError('Суммарная запись ведущего должна быть не длиннее 30 минут.')
     return result
 
@@ -59,7 +60,7 @@ def media_ranges(project,plan,parts,cache,cancel,log):
             if path not in rotations:
                 rotations[path]=detect_rotation(path,cache,cancel,log) if project.settings.auto_rotate else project.settings.rotate
             result.append({'path':path,'start':frame(lo-part['offset']),'end':frame(hi-part['offset']),
-                           'rotation':rotations[path],'kind':'host'})
+                           'rotation':rotations[path],'original':part.get('original',path),'kind':'host'})
     return result
 
 
@@ -76,6 +77,9 @@ def prepare_base(engine,plan,base):
     """Decode original files into one concat filter, with per-part orientation."""
     p=engine.project;s=p.settings
     width,height=(720,1280) if p.profile.endswith('_shorts') else (1280,720)
+    original_paths={}
+    if p.microphones and any(m.get('kind')!='disclaimer' and not m.get('original') for m in plan.media):
+        original_paths={v['path']:v['original'] for v in sources(p,engine.cache,engine.cancel,engine.log)}
     groups=[]
     for segment in plan.media:
         if groups and all(segment.get(k)==groups[-1][-1].get(k) for k in ('path','rotation','kind')) and segment['start']>=groups[-1][-1]['end']-.001:
@@ -93,6 +97,10 @@ def prepare_base(engine,plan,base):
         if rot==180:video+=',hflip,vflip'
         elif rot==90:video+=',transpose=clock'
         elif rot==270:video+=',transpose=cclock'
+        if m.get('kind')!='disclaimer':
+            from .shorts_framing import filter_for
+            crop=filter_for(p,path,rot,engine.cache,engine.cancel,original=m.get('original') or original_paths.get(path,path))
+            if crop:video+=','+crop.rstrip(',')
         if s.mirror_host and m.get('kind')!='disclaimer':video+=',hflip'
         video+=f',scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p'
         if s.color and m.get('kind')!='disclaimer':video+=',eq=contrast=1.045:saturation=1.035:brightness=-0.004'

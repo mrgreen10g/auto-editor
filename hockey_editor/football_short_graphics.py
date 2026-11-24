@@ -21,10 +21,15 @@ def image(card,path,data=None,accent=None):
     d.rounded_rectangle((0,0,width-1,height-1),radius=22,fill=(9,20,29,247),outline=accent,width=2)
     d.rounded_rectangle((8,20,13,height-20),radius=3,fill=accent)
     d.text((25,15),card.title,font=font(18,True),fill=accent)
+    if data.get('sport')=='combat':
+        from .combat_graphics import surface
+        im=surface(width,height);d=ImageDraw.Draw(im)
+        d.text((25,15),card.title,font=font(18,True),fill='#b8c8df')
     cell=(width-44-(cols-1)*10)//cols
     for i,item in enumerate(items):
         x=22+(i%cols)*(cell+10);y=49+(i//cols)*76
         d.rounded_rectangle((x,y,x+cell,y+67),radius=10,fill='#192b35')
+        if data.get('sport')=='combat':d.rectangle((x,y,x+cell,y+3),fill='#dc2535' if i%2==0 else '#245be0')
         size_value=37
         while size_value>16 and d.textlength(item['value'],font=font(size_value,True))>cell-16:size_value-=1
         d.text((x+8,y+1),item['value'],font=font(size_value,True),fill=accent)

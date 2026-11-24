@@ -122,7 +122,7 @@ def norm(text):return re.sub(r'\s+',' ',text.lower().replace('ё','е')).strip()
 def placements(block,lines,clip_meta,duration,frequency='normal',shorts=False):
     from .event_rules import explicit_reference,topic_for_phrase,suggested_names
     warnings=[];matched=[]
-    for clip in block.clips:
+    for clip in ([] if frequency=='none' else block.clips):
         found=[i for i,l in enumerate(lines) if norm(clip.phrase) in norm(l.text)]
         if not found:
             warnings.append(f'Не найдена фраза «{clip.phrase}»: вставка пропущена.');continue

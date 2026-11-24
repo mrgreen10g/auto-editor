@@ -279,6 +279,20 @@ def check():
                 expect(page.locator('#scriptRefreshStatus')).to_contain_text('разборов: 3')
                 updated=bridge.inputs.load(page.evaluate('draftId'))
                 assert list(bridge.inputs.summary(updated)['counts'].values())==[1,1,1]
+                # Portrait review can save inside an outer guarded action (no UI deadlock).
+                app.project.profile='ru_combat_shorts';app.project.settings.width=720;app.project.settings.height=1280
+                click('#processTab')
+                page.locator('#framePresenter').click()
+                expect(page.locator('#portraitDialog')).to_be_visible()
+                expect(page.locator('#portraitSave')).to_be_enabled(timeout=60000)
+                page.locator('#portraitX').evaluate("(e)=>{e.value='0.65';e.dispatchEvent(new Event('input'))}")
+                page.locator('#portraitZoom').evaluate("(e)=>{e.value='1.2';e.dispatchEvent(new Event('input'))}")
+                page.locator('#portraitSave').click()
+                page.locator('body[data-busy="false"]').wait_for(timeout=60000)
+                expect(page.locator('#portraitDialog')).not_to_be_visible()
+                assert app.project.host_framing[app.project.host]['approved']
+                assert app.project.host_framing[app.project.host]['x']==.65
+                assert app.project.host_framing[app.project.host]['zoom']==1.2
                 assert not errors,errors
                 browser.close()
         finally:stop.set();gateway.close()

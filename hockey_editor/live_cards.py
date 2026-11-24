@@ -20,7 +20,8 @@ def base_key(plan,project=None):
         for key in ('review_id','review_reason','forecast_id','line'):c.pop(key,None)
     if project and project.profile.startswith('ru_') and project.profile.endswith('_shorts') and project.settings.subtitles:
         data['subtitles']=[dict(text=l.text,recognized=l.recognized,start=l.start,end=l.end,words=l.words) for l in plan.lines]
-    data['layout_version']='fullscreen-tg-v3'
+    data['layout_version']='combat-night-portrait-v4'
+    if project:data['host_framing']=project.host_framing
     return json.dumps(data,sort_keys=True,ensure_ascii=False)
 
 

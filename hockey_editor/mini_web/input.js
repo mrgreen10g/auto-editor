@@ -183,7 +183,7 @@ function renderDraftSettings(d){
  const bools=['auto_rotate','mirror_host','use_manual_clips','allow_other_matches','zoom','transitions','animate_cards','informative_cards','subtitles','wobble','denoise','cut_pauses','color'];
  for(const key of Object.keys(settingLabels)){
   const label=line(box,settingLabels[key],'label');let e;
-  const choices=bools.includes(key)?[['true','Включено'],['false','Выключено']]:key==='insert_frequency'?[['low','Реже'],['normal','Обычно'],['high','Чаще']]:key==='rotate'?[[0,'0°'],[90,'90°'],[180,'180°'],[270,'270°']]:null;
+  const choices=bools.includes(key)?[['true','Включено'],['false','Выключено']]:key==='insert_frequency'?[['none','Без вставок'],['low','Реже'],['normal','Обычно'],['high','Чаще']]:key==='rotate'?[[0,'0°'],[90,'90°'],[180,'180°'],[270,'270°']]:null;
   e=document.createElement(choices?'select':'input');e.dataset.draftSetting=key;
   if(['music_volume','card_sound_volume'].includes(key)){e.type='range';e.min=0;e.max=100;e.step=1;const enabled=document.createElement('input');enabled.type='checkbox';enabled.checked=d.settings?.[key]!=null;e.disabled=!enabled.checked;const out=document.createElement('output');out.textContent=enabled.checked?Math.round(d.settings[key])+'%':'Из набора';enabled.onchange=()=>{e.disabled=!enabled.checked;out.textContent=enabled.checked?e.value+'%':'Из набора'};e.oninput=()=>out.textContent=e.value+'%';label.append(enabled,out);e.value=d.settings?.[key]??(key==='music_volume'?25:20);label.append(e);continue;}
   if(choices){e.add(new Option('Из набора',''));for(const [v,t] of choices)e.add(new Option(t,v));}else{e.type='number';e.step='any';e.placeholder='Из набора';}

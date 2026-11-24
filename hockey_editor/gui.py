@@ -330,6 +330,8 @@ class App(EpisodeMixin,MatchMixin):
         look = ui.card(page, 'Изображение и динамика', 'Проверенные настройки уже включены. Их можно менять для конкретного выпуска.')
         self.rotate = tk.StringVar(value='Автоматически')
         self.option(look, 'Поворот ведущего', self.rotate, ['Автоматически', 'Без поворота', '90°', '180°', '270°'])
+        from .shorts_framing_ui import show as framing_ui
+        self.button(look,'Кадрирование Shorts · положение спикера',lambda:framing_ui(self,force=True) if not self.busy else None).pack(anchor='w',pady=6)
         self.effect_vars = {}
         for key, label in [('mirror_host', 'Отзеркалить ведущего по горизонтали'),
                            ('zoom', 'Плавные наезды 100% → 120% с промежутками'),
@@ -382,7 +384,7 @@ class App(EpisodeMixin,MatchMixin):
         self.logo_labels=self.logo_rows[0]
         options = ui.card(page, 'Подбор игровых сцен', 'Голы сохраняют приоритет. Резервные кадры берутся только из игровых сцен. Источник замены виден в редакторе.')
         self.frequency=tk.StringVar(value='Обычно')
-        self.option(options,'Частота обычных игровых вставок',self.frequency,['Реже','Обычно','Чаще'])
+        self.option(options,'Частота обычных игровых вставок',self.frequency,['Без вставок','Реже','Обычно','Чаще'])
         ttk.Label(options,text='Реже — максимум 10 игровых вставок на весь выпуск. Количество плашек не ограничивается.',style='CardMuted.TLabel',wraplength=660).pack(anchor='w',pady=5)
         self.allow_other = tk.BooleanVar(value=True)
         self.use_manual = tk.BooleanVar(value=False)
@@ -490,11 +492,11 @@ class App(EpisodeMixin,MatchMixin):
         if self.page=='settings':return self.show_page('export' if self.plan else 'materials')
         for i in self.selected_indices():
             b=self.project.blocks[i]
-            if needs_search(b,self.project.matches,self.use_manual.get()):
+            if self.frequency.get()!='Без вставок' and needs_search(b,self.project.matches,self.use_manual.get()):
                 return self.search_matches()
         for i in self.selected_indices():
             b=self.project.blocks[i]
-            if unresolved(b):
+            if self.frequency.get()!='Без вставок' and unresolved(b):
                 self.index=i;self.refresh();self.show_page('review');self.reviewtabs.select(self.events_page)
                 self.eventtable.selection_set(self.event_row_id(i,b.events.index(unresolved(b)[0])));return self.edit_event()
         if self.page=='review' and self.plan:self.show_page('export')
@@ -552,7 +554,7 @@ class App(EpisodeMixin,MatchMixin):
         p.settings.auto_rotate = self.rotate.get() == 'Автоматически'
         p.settings.use_manual_clips = self.use_manual.get()
         p.settings.allow_other_matches = self.allow_other.get()
-        p.settings.insert_frequency = {'Реже':'low','Обычно':'normal','Чаще':'high'}[self.frequency.get()]
+        p.settings.insert_frequency = {'Без вставок':'none','Реже':'low','Обычно':'normal','Чаще':'high'}[self.frequency.get()]
         p.settings.rotate = {'Автоматически': 0, 'Без поворота': 0, '90°': 90, '180°': 180, '270°': 270}[self.rotate.get()]
         p.settings.zoom_max = 1.20
         p.settings.denoise = self.noise.get() != 'Выключено'
@@ -591,7 +593,7 @@ class App(EpisodeMixin,MatchMixin):
         self.rotate.set('Автоматически' if p.settings.auto_rotate else {0: 'Без поворота', 90: '90°', 180: '180°', 270: '270°'}[p.settings.rotate])
         self.use_manual.set(p.settings.use_manual_clips)
         self.allow_other.set(p.settings.allow_other_matches)
-        self.frequency.set({'low':'Реже','normal':'Обычно','high':'Чаще'}[p.settings.insert_frequency])
+        self.frequency.set({'none':'Без вставок','low':'Реже','normal':'Обычно','high':'Чаще'}[p.settings.insert_frequency])
         self.sync_manual_panel()
         for key, var in self.effect_vars.items():
             var.set(getattr(p.settings, key))
@@ -643,8 +645,8 @@ class App(EpisodeMixin,MatchMixin):
         labels = {'materials': 'Определить тайминги →', 'review': 'Перейти к экспорту →' if self.plan else 'Определить тайминги →',
                   'export': 'Собрать MP4', 'settings': 'Готово · вернуться'}
         selected=[self.project.blocks[i] for i in self.selected_indices()]
-        pending=sum(len(unresolved(b)) for b in selected)
-        unsearched=any(needs_search(b,self.project.matches,self.use_manual.get()) for b in selected)
+        pending=0 if self.frequency.get()=='Без вставок' else sum(len(unresolved(b)) for b in selected)
+        unsearched=self.frequency.get()!='Без вставок' and any(needs_search(b,self.project.matches,self.use_manual.get()) for b in selected)
         if not missing:self.readiness.set(f'Разборов: {len(selected)} · Эпизодов для проверки: {pending}')
         if self.page!='settings':
             if unsearched:labels[self.page]='Найти голы →'
@@ -988,6 +990,7 @@ class App(EpisodeMixin,MatchMixin):
         self.project.host=replace(self.project.host);self.project.music=replace(self.project.music)
         self.project.hosts=[replace(p) for p in self.project.hosts]
         self.project.microphones={replace(k):replace(v) for k,v in self.project.microphones.items()}
+        self.project.host_framing={replace(k):v for k,v in self.project.host_framing.items()}
         self.project.assets={k:replace(v) for k,v in self.project.assets.items()}
         for m in self.project.matches:m.path=replace(m.path)
         for b in self.project.blocks:
@@ -1094,6 +1097,12 @@ class App(EpisodeMixin,MatchMixin):
             from .notifications import emit
             emit(self,'error','Нельзя запустить тайминги или рендер: проверьте материалы выпуска на сервере.')
             return messagebox.showerror('Проверьте материалы', str(e))
+        if remote:
+            from .shorts_framing import pending as pending_framing
+            if pending_framing(self.project):raise ValueError('Проверьте кадрирование Shorts перед запуском.')
+        if self.project.profile.endswith('_shorts') and not remote:
+            from .shorts_framing_ui import show as framing_ui
+            if not framing_ui(self):return
         if render and not remote:
             target = filedialog.asksaveasfilename(title='Готовый ролик — новое имя файла', defaultextension='.mp4', initialfile='Мой выпуск.mp4' if self.project.whole_episode else 'Мой разбор.mp4', filetypes=[('Видео MP4', '*.mp4')])
             if not target:
@@ -1128,7 +1137,7 @@ class App(EpisodeMixin,MatchMixin):
                 self.jobs.put(('plan', plan))
                 from .review import pending
                 from .goals import unresolved
-                if render and engine.project.profile.startswith(('uz_combat','ru_combat')) and any(unresolved(b) for b in engine.project.blocks):
+                if render and engine.project.settings.insert_frequency!='none' and engine.project.profile.startswith(('uz_combat','ru_combat')) and any(unresolved(b) for b in engine.project.blocks):
                     self.jobs.put(('footage_review_required',None))
                 elif render and pending(plan):
                     self.jobs.put(('review_required',None))

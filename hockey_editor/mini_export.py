@@ -42,7 +42,7 @@ class Export:
         from .review import pending
         from .goals import unresolved
         indices=app.selected_indices() if hasattr(app,'selected_indices') else [app.index]
-        clips=sum(len(unresolved(app.project.blocks[i])) for i in indices)
+        clips=0 if app.project.settings.insert_frequency=='none' else sum(len(unresolved(app.project.blocks[i])) for i in indices)
         cards=len(pending(app.plan)) if app.plan else 0
         default=self.last_folder or str(Path(app.project_path or app.project.host or Path.home()).resolve().parent)
         return dict(job=self.job,busy=app.busy,locked=self.bridge.locked(),stage=app.status.get(),folder=default,

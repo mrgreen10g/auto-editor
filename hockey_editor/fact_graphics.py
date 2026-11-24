@@ -28,9 +28,15 @@ def image(card,path,data=None,accent=None):
  title_size=16
  while measure.textlength(card.title,font=font(title_size,True))>w-68:title_size-=1
  d.text((44,17),card.title,font=font(title_size,True),fill=accent)
+ if data.get('sport')=='combat':
+  from .combat_graphics import surface
+  im=surface(w,h);d=ImageDraw.Draw(im)
+  d.text((22,17),card.title,font=font(title_size,True),fill='#b8c8df')
+  d.line((22,56,w-22,56),fill='#dc2535',width=2)
  for i,item in enumerate(items):
   cell=(w-54)//2;x=22+(i%2)*(cell+10);y=70+(i//2)*91
   d.rounded_rectangle((x,y,x+cell,y+80),radius=10,fill=(25,43,53,255))
+  if data.get('sport')=='combat':d.rectangle((x,y,x+cell,y+3),fill='#dc2535' if i%2==0 else '#245be0')
   value_size=48 if len(items)==1 else 34
   while value_size>13 and measure.textlength(item['value'],font=font(value_size,True))>cell-16:value_size-=1
   d.text((x+8,y+6),item['value'],font=font(value_size,True),fill=accent)

@@ -180,7 +180,7 @@ class Engine:
         import copy
         from .insert_limit import apply
         plan=apply(copy.deepcopy(plan),self.project.settings.insert_frequency)
-        if not draft and self.project.profile.startswith(('uz_combat','ru_combat')):
+        if not draft and self.project.settings.insert_frequency!='none' and self.project.profile.startswith(('uz_combat','ru_combat')):
             from .goals import unresolved
             if any(unresolved(b) for b in self.project.blocks):raise ValueError('Проверьте боевые вставки или выберите «Оставить ведущего» перед экспортом.')
         from .editing import validate_plan
@@ -209,6 +209,9 @@ class Engine:
             if rotation==180:video+=',hflip,vflip'
             elif rotation==90:video+=',transpose=clock'
             elif rotation==270:video+=',transpose=cclock'
+            from .shorts_framing import filter_for
+            crop=filter_for(p,p.host,rotation,self.cache,self.cancel)
+            if crop:video+=','+crop.rstrip(',')
             if s.mirror_host:video+=',hflip'
             video+=f',scale={cw}:{ch}:force_original_aspect_ratio=decrease,pad={cw}:{ch}:(ow-iw)/2:(oh-ih)/2,setsar=1'
             if s.color:video+=',eq=contrast=1.045:saturation=1.035:brightness=-0.004'

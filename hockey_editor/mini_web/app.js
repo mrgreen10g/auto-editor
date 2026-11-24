@@ -174,6 +174,7 @@ $('browseFolder').onclick=()=>guard(async()=>{try{await browse($('outputFolder')
 $('useFolder').onclick=()=>{$('outputFolder').value=folderState.path;$('folderBrowser').hidden=true;exportRequest=''};$('closeFolders').onclick=()=>{$('folderBrowser').hidden=true};
 $('outputName').oninput=()=>{exportRequest=''};
 $('startExport').onclick=()=>guard(async()=>{
+ if(!await reviewPortrait())return;
  await refreshExport();if(exportState.locked||exportState.cards||exportState.clips)throw new Error('Сначала завершите обработку и проверку.');
  if(!confirm('Запустить рендер: '+exportState.scope+'?\n'+$('outputFolder').value+'\n'+$('outputName').value))return;
  if(!exportRequest)exportRequest=crypto.randomUUID();
@@ -209,6 +210,7 @@ async function refreshProcess(){
  $('processLog').textContent=s.log.join('\n');
 }
 async function startProcess(stage){
+ if(stage==='analyze' && !await reviewPortrait())return;
  await refreshProcess();if(!processState['can_'+stage])throw new Error('Этап пока недоступен. Завершите проверку или текущую обработку.');
  const prompt=stage==='goals'?'Запустить поиск фрагментов? При повторном подборе существующие вставки и правки дорожки могут быть заменены.':'Запустить поиск таймингов и плашек?';
  if(!confirm(prompt+'\n'+processState.scope))return;
@@ -254,5 +256,39 @@ $('closeBoundaries').onclick=()=>$('boundaryDialog').close();
 $('saveBoundaries').onclick=()=>guard(async()=>{
  await api('editor-action',{revision:editorState.revision,op:'project',recording_times:$('boundaryTimes').value});
  $('boundaryDialog').close();await refreshProcess();
+ if(!await reviewPortrait())return;await refreshProcess();
  await api('process-start',{stage:'analyze',revision:processState.revision,request:crypto.randomUUID()});await refreshProcess();
 });
+
+// Source framing is reviewed before montage, independently of card placement.
+async function reviewPortrait(force=false){
+ const state=await api('process-status',{}),start=await api('portrait-start',{revision:state.revision,force});
+ if(start.ready)return true;
+ const dialog=$('portraitDialog');dialog.showModal();$('portraitStatus').textContent='Определяем положение спикера…';$('portraitSave').disabled=true;
+ let cancelled=false,finish;
+ const answer=new Promise(resolve=>finish=resolve);
+ $('portraitCancel').onclick=()=>{cancelled=true;dialog.close();finish(false)};
+ dialog.oncancel=()=>{cancelled=true;finish(false)};
+ let result;
+ try{
+  do{await new Promise(r=>setTimeout(r,500));if(cancelled)return false;result=await api('portrait-status',{job:start.job})}while(result.status==='running');
+  if(result.status==='error')throw Error(result.error);
+ }catch(error){dialog.close();throw error}
+ const items=result.items,values=items.map(x=>({...x.value})),images=[];
+ for(const item of items){const im=new Image();im.src=item.image;await im.decode();images.push(im)}
+ if(cancelled)return false;
+ const select=$('portraitPart');select.replaceChildren();items.forEach((item,i)=>select.add(new Option(item.name,i)));
+ const fields=['portraitX','portraitY','portraitZoom'],keys=['x','y','zoom'];
+ function draw(){
+  const i=Number(select.value),v=values[i],im=images[i],c=$('portraitCanvas'),ctx=c.getContext('2d');
+  let h=Math.floor(Math.min(im.height,im.width*16/9)/v.zoom/2)*2,w=Math.floor(h*9/16/2)*2;
+  let x=Math.floor(Math.max(0,Math.min(im.width-w,v.x*im.width-w/2))/2)*2,y=Math.floor(Math.max(0,Math.min(im.height-h,v.y*im.height-h/2))/2)*2;
+  ctx.save();ctx.clearRect(0,0,c.width,c.height);if(result.mirror){ctx.translate(c.width,0);ctx.scale(-1,1)}ctx.drawImage(im,x,y,w,h,0,0,c.width,c.height);ctx.restore();
+ }
+ function load(){const i=Number(select.value);fields.forEach((id,k)=>$(id).value=values[i][keys[k]]);$('portraitStatus').textContent=items[i].automatic.face_found?'Спикер найден. Проверьте положение в кадре.':'Лицо не определено уверенно. Поправьте кадр вручную.';draw()}
+ fields.forEach((id,k)=>$(id).oninput=()=>{values[Number(select.value)][keys[k]]=Number($(id).value);draw()});
+ select.onchange=load;$('portraitReset').onclick=()=>{values[Number(select.value)]={...items[Number(select.value)].automatic};load()};
+ $('portraitSave').disabled=false;$('portraitSave').onclick=async()=>{try{$('portraitSave').disabled=true;await api('portrait-save',{job:start.job,values});dialog.close();finish(true)}catch(error){$('portraitStatus').textContent=error.message;$('portraitSave').disabled=false}};
+ load();return answer;
+}
+$('framePresenter').onclick=()=>guard(()=>reviewPortrait(true));

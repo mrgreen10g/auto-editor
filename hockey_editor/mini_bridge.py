@@ -259,6 +259,9 @@ class Bridge:
         threading.Thread(target=work,daemon=True).start()
         return dict(job=ident)
     def handle(self,kind,data):
+        if kind in ('portrait-start','portrait-status','portrait-save'):
+            from .mini_framing import handle
+            return handle(self,kind,data)
         if kind in ('live-scene','live-art'):
             from .mini_live import scene,artwork
             return (scene if kind=='live-scene' else artwork)(self,data)

@@ -122,6 +122,7 @@ class Project:
     episode_key: str = ''
     hosts: list[str] = field(default_factory=list)
     microphones: dict[str,str] = field(default_factory=dict)
+    host_framing: dict = field(default_factory=dict)
     full_video: bool = False
     intro: Block = field(default_factory=lambda: Block(title='Начало', uid='intro', kind='intro'))
     outro: Block = field(default_factory=lambda: Block(title='Итоги', uid='outro', kind='outro'))
@@ -151,7 +152,7 @@ class Project:
             raise ValueError('Вставьте сценарий выбранного разбора.')
         if self.music and not Path(self.music).is_file():
             raise ValueError('Музыка не найдена. Выберите файл заново или очистите поле.')
-        for c in block.clips if self.settings.use_manual_clips else []:
+        for c in block.clips if self.settings.use_manual_clips and self.settings.insert_frequency!='none' else []:
             if not Path(c.path).is_file():
                 raise ValueError(f'Не найден игровой фрагмент: {c.path}')
             if not c.phrase.strip():
@@ -162,7 +163,7 @@ class Project:
         if len(ids) != len(self.matches):
             raise ValueError('Повторяющиеся идентификаторы записей матча.')
         used_sources={e.source_id for e in block.events if e.selection and not e.skipped}
-        for ident in block.match_ids:
+        for ident in (block.match_ids if self.settings.insert_frequency!='none' else []):
             if ident not in ids:
                 raise ValueError('Не найдена запись матча в проекте.')
             m = ids[ident]
@@ -184,7 +185,7 @@ class Project:
                       or not 0 <= c.source_start <= c.event_time <= c.source_end or c.source_end <= c.source_start):
                 raise ValueError('Некорректные границы игрового эпизода.')
         s = self.settings
-        if s.insert_frequency not in ('low','normal','high'):
+        if s.insert_frequency not in ('none','low','normal','high'):
             raise ValueError('Неизвестная частота вставок.')
         if not 1 <= s.zoom_max <= 1.4 or not 1 <= s.noise_reduction <= 20:
             raise ValueError('Некорректная настройка масштаба или очистки звука.')
@@ -209,13 +210,16 @@ class Project:
             except ValueError: return str(Path(s).resolve())
         for key in ('host','music','logo_folder','asset_folder'): data[key] = relative(data[key])
         data['hosts'] = [relative(path) for path in self.host_paths()] if self.hosts else []
+        data['host_framing'] = {relative(k):v for k,v in self.host_framing.items()}
         data['microphones'] = {relative(k):relative(v) for k,v in self.microphones.items()}
         data['assets'] = {key: relative(path) for key,path in self.assets.items()}
         def plan_paths(plan):
             if not plan:return
             for c in plan.get('cards',[]):
                 if c.get('asset'):c['asset']=relative(c['asset'])
-            for c in plan.get('media',[]):c['path']=relative(c['path'])
+            for c in plan.get('media',[]):
+                c['path']=relative(c['path'])
+                if c.get('original'):c['original']=relative(c['original'])
             for c in plan.get('edit_baseline',{}).get('cards',[]):
                 if c.get('asset'):c['asset']=relative(c['asset'])
             for c in plan.get('edit_baseline',{}).get('inserts',[]):c['path']=relative(c['path'])
@@ -260,7 +264,9 @@ class Project:
             if not plan:return
             for c in plan.get('cards',[]):
                 if c.get('asset'):c['asset']=resolve(c['asset'])
-            for c in plan.get('media',[]):c['path']=resolve(c['path'])
+            for c in plan.get('media',[]):
+                c['path']=resolve(c['path'])
+                if c.get('original'):c['original']=resolve(c['original'])
             for c in plan.get('edit_baseline',{}).get('cards',[]):
                 if c.get('asset'):c['asset']=resolve(c['asset'])
             for c in plan.get('edit_baseline',{}).get('inserts',[]):c['path']=resolve(c['path'])
@@ -286,6 +292,7 @@ class Project:
             settings.setdefault('use_manual_clips', any(b.clips for b in blocks))
         project=cls(asset_folder=resolve(data.get('asset_folder','')),logo_folder=resolve(data.get('logo_folder','')),host=resolve(data['host']),music=resolve(data.get('music','')),profile=data.get('profile','ru_hockey'),recording_times=data.get('recording_times',''),
                    microphones={resolve(k):resolve(v) for k,v in data.get('microphones',{}).items()},
+                   host_framing={resolve(k):v for k,v in data.get('host_framing',{}).items()},
                    hosts=[resolve(v) for v in data.get('hosts',[])],full_video=data.get('full_video',False),
                    intro=framing('intro'),outro=framing('outro'),assets={k:resolve(v) for k,v in data.get('assets',{}).items()},
                    whole_episode=data.get('whole_episode',False),episode_plan=episode,episode_key=data.get('episode_key',''),

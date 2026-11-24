@@ -4,6 +4,18 @@ from .graphics import font,wrap,block_teams
 
 RED='#dc2535';BLUE='#245be0';INK='#151c2c';PAPER='#fffaf0'
 
+def surface(width,height):
+    """Same diagonal red/blue fight-night identity as pair transitions."""
+    im=Image.new('RGBA',(width,height),'#0b1020');d=ImageDraw.Draw(im)
+    d.polygon([(0,0),(width*.34,0),(width*.12,height),(0,height)],fill='#271425')
+    d.polygon([(width,0),(width*.82,0),(width*.62,height),(width,height)],fill='#102449')
+    for x in range(-height,width+height,70):d.line((x,height,x+height,0),fill='#1c2638',width=1)
+    d.rounded_rectangle((1,1,width-2,height-2),radius=18,outline='#39465d',width=2)
+    d.rectangle((18,height-5,width//2,height-2),fill=RED)
+    d.rectangle((width//2,height-5,width-18,height-2),fill=BLUE)
+    return im
+
+
 def glove(d,x,y,scale=1,color=RED):
     def box(a,b,c,e):return tuple(round(v) for v in (x+a*scale,y+b*scale,x+c*scale,y+e*scale))
     d.rounded_rectangle(box(9,0,52,47),radius=round(15*scale),fill=color)
@@ -55,9 +67,9 @@ def card_image(card,path,language='uz'):
     height=720 if transition else 180 if pair else 320
     label={'РАЗБОР МАТЧА':'FIGHT CARD','СМЕНА МАТЧА':'NEXT FIGHT','ИТОГИ ВЫПУСКА':'FINAL PICKS','ПРОГНОЗ':'TANLOV','СТАТИСТИКА':'FIGHT STATS','ИНФОРМАЦИЯ':'KEY FACT','УСЛОВИЯ ПРОГНОЗА':'TANLOV SHARTLARI','ТЕЛЕГРАМ':'TELEGRAM','ПОДПИСКА':'OBUNA'}.get(card.title,'FIGHT INSIGHT')
     if language=='ru':label={'РАЗБОР МАТЧА':'РАЗБОР БОЯ','СМЕНА МАТЧА':'СЛЕДУЮЩИЙ БОЙ','ИТОГИ ВЫПУСКА':'ИТОГИ'}.get(card.title,card.title)
-    im=Image.new('RGBA',(width,height),PAPER);d=ImageDraw.Draw(im)
+    im=surface(width,height);d=ImageDraw.Draw(im)
     top=195 if transition else 0
-    d.rectangle((0,top,width,top+58),fill=INK)
+    d.rectangle((0,top,width,top+58),fill=PAPER)
     d.rectangle((0,top,8,top+58),fill=RED)
     d.text((27,top+17),label,font=font(20,True),fill='white')
     glove(d,width-57,top+7,.65,RED)
@@ -68,7 +80,7 @@ def card_image(card,path,language='uz'):
             size=28
             while size>20 and len(wrap(d,name.upper(),font(size,True),440))>2:size-=1
             rows=wrap(d,name.upper(),font(size,True),440)
-            for j,row in enumerate(rows):d.text((x,82+j*(size+6)),row,font=font(size,True),fill=INK)
+            for j,row in enumerate(rows):d.text((x,82+j*(size+6)),row,font=font(size,True),fill=PAPER)
             d.rectangle((x,155,x+440,162),fill=color)
         d.ellipse((498,78,566,146),fill=INK);d.text((532,109),'VS',font=font(26,True),anchor='mm',fill='white')
     else:
@@ -79,13 +91,13 @@ def card_image(card,path,language='uz'):
             if (size+12)*len(rows)<height-top-97:break
             size-=1
         if (size+12)*len(rows)>=height-top-97:raise ValueError('Сократите текст боевой плашки в редакторе.')
-        for j,row in enumerate(rows):d.text((28,top+82+j*(size+12)),row,font=font(size,True),fill=INK)
+        for j,row in enumerate(rows):d.text((28,top+82+j*(size+12)),row,font=font(size,True),fill=PAPER)
         if not transition:im=im.crop((0,0,width,min(height,106+len(rows)*(size+12))))
     d=ImageDraw.Draw(im)
     d.rectangle((0,im.height-7,width//2,im.height),fill=RED);d.rectangle((width//2,im.height-7,width,im.height),fill=BLUE)
     if transition:
         glove(d,70,50,1.5,RED);glove(d,1100,50,1.5,BLUE)
-        d.text((640,105),('ВЕЧЕР БОЁВ' if language=='ru' else 'FIGHT NIGHT'),font=font(36,True),anchor='mm',fill=INK)
+        d.text((640,105),('ВЕЧЕР БОЁВ' if language=='ru' else 'FIGHT NIGHT'),font=font(36,True),anchor='mm',fill=PAPER)
     im.save(path)
     return (0,0) if transition else ((1280-im.width)//2,720-im.height-35) if wide else (28,28)
 
@@ -112,11 +124,11 @@ def portrait_card(card,path,language='uz'):
             size-=1
         height=66+len(body)*(size+7)+(30 if card.fixture else 0)
     if language=='ru':label={'РАЗБОР МАТЧА':'РАЗБОР БОЯ','СМЕНА МАТЧА':'СЛЕДУЮЩИЙ БОЙ','ИТОГИ ВЫПУСКА':'ИТОГИ'}.get(card.title,card.title)
-    im=Image.new('RGBA',(width,height),PAPER);d=ImageDraw.Draw(im)
-    d.rectangle((0,0,width,47),fill=INK);d.text((24,13),label,font=font(17,True),fill=PAPER)
+    im=surface(width,height);d=ImageDraw.Draw(im)
+    d.rectangle((0,0,width,47),fill=PAPER);d.text((24,13),label,font=font(17,True),fill=PAPER)
     glove(d,width-47,5,.47,RED)
     if pair:
-        for name,x in zip(names,(143,465)):d.text((x,97),name,font=font(size,True),anchor='mm',fill=INK)
+        for name,x in zip(names,(143,465)):d.text((x,97),name,font=font(size,True),anchor='mm',fill=PAPER)
         d.text((304,97),'VS',font=font(22,True),anchor='mm',fill=RED)
     else:
         y=58
@@ -124,7 +136,7 @@ def portrait_card(card,path,language='uz'):
             fs=18
             while fs>11 and d.textlength(card.fixture,font=font(fs,True))>width-48:fs-=1
             d.text((24,y),card.fixture,font=font(fs,True),fill=BLUE);y+=30
-        for row in body:d.text((24,y),row,font=font(size,True),fill=INK);y+=size+7
+        for row in body:d.text((24,y),row,font=font(size,True),fill=PAPER);y+=size+7
     d.rectangle((0,height-6,width//2,height),fill=RED);d.rectangle((width//2,height-6,width,height),fill=BLUE)
     im.save(path)
     return (40,70) if pair else (40,min(865,1090-height))

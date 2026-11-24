@@ -33,7 +33,8 @@ class Process:
         from .review import pending
         app=self.bridge.app;blocks=self.blocks()
         missing=any(needs_search(b,app.project.matches,app.project.settings.use_manual_clips) for b in blocks)
-        clips=sum(len(unresolved(b)) for b in blocks);cards=len(pending(app.plan)) if app.plan else 0
+        if app.project.settings.insert_frequency=='none':missing=False
+        clips=0 if app.project.settings.insert_frequency=='none' else sum(len(unresolved(b)) for b in blocks);cards=len(pending(app.plan)) if app.plan else 0
         locked=self.bridge.locked() or self.bridge.media_busy
         if self.job and self.job['status'] in ('running','cancelling'):self.job['elapsed']=round(time.time()-self.job['started'])
         failed=bool(self.job and self.job['scope']==self.scope() and self.job['status'] in ('error','cancelled'))
@@ -45,7 +46,7 @@ class Process:
         return dict(revision=self.bridge.revision(),job=self.job,busy=app.busy,locked=locked,steps=steps,
                     scope='Весь выпуск' if app.project.whole_episode else blocks[0].title if blocks else 'Нет разборов',
                     auto_timing=bool(app.notifier.config.get('auto_timing',True)),clips=clips,cards=cards,
-                    can_goals=not locked and any(b.match_ids for b in blocks),
+                    can_goals=app.project.settings.insert_frequency!='none' and not locked and any(b.match_ids for b in blocks),
                     can_analyze=not locked and bool(blocks) and not missing and not clips,
                     can_render=not locked and app.plan is not None and not missing and not clips and not cards,
                     can_cancel=bool(app.busy and self.job and self.job['status']=='running'),

@@ -391,6 +391,7 @@ def cut_candidate(source, selection, directory, cancel):
 def montage_block(project, index, cache, cancel):
     from .event_search import needs_search
     block = copy.deepcopy(project.blocks[index])
+    if project.settings.insert_frequency=='none':block.clips=[];return block
     if not project.settings.use_manual_clips: block.clips = []
     if needs_search(block,project.matches,project.settings.use_manual_clips) and block.sport!='combat':
         raise ValueError('Сначала выполните поиск голов в исходных матчах.')
