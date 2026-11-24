@@ -119,7 +119,15 @@ async function prepare(mode){
  }
  throw new Error('Подготовка занимает больше времени. Обновите список и повторите позже.');
 }
-async function guard(fn,background=false){if(waiting&&background)return;while(waiting)await new Promise(r=>setTimeout(r,25));waiting=true;document.body.dataset.busy='true';buttons();try{await fn()}catch(error){errorNotice(error.message||'Нет связи с сервером. Проверьте подключение.')}finally{waiting=false;document.body.dataset.busy='false';buttons()}}
+let guardTail=Promise.resolve(),guardPending=0;
+async function guard(fn,background=false){
+ if(waiting&&background)return;
+ const previous=guardTail;let release;guardTail=new Promise(resolve=>release=resolve);
+ guardPending++;waiting=true;document.body.dataset.busy='true';buttons();
+ await previous;
+ try{await fn()}catch(error){errorNotice(error.message||'Нет связи с сервером. Проверьте подключение.')}
+ finally{guardPending--;waiting=guardPending>0;document.body.dataset.busy=String(waiting);buttons();release()}
+}
 $('refresh').onclick=()=>guard(async()=>{back();await refreshPage();notice('Данные обновлены.')});$('back').onclick=()=>guard(async()=>{back();await refresh()});
 $('clips').onclick=()=>{kind='clip';renderList()};$('cards').onclick=()=>{kind='card';renderList()};$('all').onchange=renderList;$('choice').onchange=choice;
 $('blockFilter').onchange=renderList;$('typeFilter').onchange=renderList;

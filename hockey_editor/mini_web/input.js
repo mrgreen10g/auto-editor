@@ -95,7 +95,7 @@ $('importServerFolder').onclick=()=>guard(()=>importServerFresh());
 $('attachServerFolder').onclick=()=>guard(()=>importServerFresh(true));
 for(const b of $('inputSteps').querySelectorAll('button'))b.onclick=()=>inputStepTo(b.dataset.step);
 $('inputSpeaker').onchange=inputProfiles;
-$('draftChoice').onchange=()=>guard(async()=>{draftId=$('draftChoice').value;draftLoaded='';await refreshInputs()});
+$('draftChoice').onchange=()=>{const selected=$('draftChoice').value;return guard(async()=>{draftId=selected;draftLoaded='';await refreshInputs()})};
 $('chooseInputParent').onclick=()=>guard(async()=>{inputFolderTarget='inputParent';await inputBrowse($('inputParent').value)});
 $('chooseInputAssets').onclick=()=>guard(async()=>{inputFolderTarget='inputAssets';await inputBrowse($('inputAssets').value)});
 $('inputRoots').onclick=()=>guard(()=>inputBrowse());$('inputUp').onclick=()=>guard(()=>inputBrowse(inputBrowser.parent));$('inputMore').onclick=()=>guard(()=>inputBrowse(inputBrowser.path,inputBrowser.next));
