@@ -78,7 +78,9 @@ def prepare_base(engine,plan,base):
     p=engine.project;s=p.settings
     width,height=(720,1280) if p.profile.endswith('_shorts') else (1280,720)
     original_paths={}
-    if p.microphones and any(m.get('kind')!='disclaimer' and not m.get('original') for m in plan.media):
+    if p.profile.endswith('_shorts') and p.microphones and any(
+            m.get('kind')!='disclaimer' and not m.get('original') and m['path'] not in p.host_paths()
+            for m in plan.media):
         original_paths={v['path']:v['original'] for v in sources(p,engine.cache,engine.cancel,engine.log)}
     groups=[]
     for segment in plan.media:

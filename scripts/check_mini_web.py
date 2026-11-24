@@ -190,7 +190,9 @@ def check():
                 click('#editUndo');assert app.plan.cards[0].title=='СТАТИСТИКА'
                 click('#editRedo');assert app.plan.cards[0].title=='ВОПРОС ЗРИТЕЛЮ'
                 page.locator('#rangeStart').fill('00:02.00');page.locator('#rangeEnd').fill('00:03.00');click('#cutRange');assert app.plan.duration==7
-                click('#rangePreview');page.locator('#editVideo').wait_for(state='visible',timeout=60000)
+                click('#rangePreview')
+                assert not page.locator('#errorDialog').is_visible(), (page.locator('#errorText').inner_text(),app.log_lines,errors)
+                page.locator('#editVideo').wait_for(state='visible',timeout=60000)
                 page.wait_for_function("() => document.getElementById('editVideo').readyState>=2")
                 assert page.evaluate('previewOffset')==2
                 page.evaluate('seekTimeline(2.5)');click('#markStart');expect(page.locator('#rangeStart')).to_have_value('00:02.50')
