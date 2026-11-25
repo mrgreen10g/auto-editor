@@ -105,6 +105,7 @@ def parse(text, sport):
         title=fixture(heading,sport)
         if title:
             explicit_pairs.add(pair_key(spoken_fixture(heading,sport) or title,'uz_'+sport))
+    ordinal_headings={r for r in body_rows if sport=='football' and r.isupper() and spoken_fixture(r,sport)}
     intro = Block(title='Boshlanish', uid='intro', kind='intro', language='uz', sport=sport)
     outro = Block(title='Yakun', uid='outro', kind='outro', language='uz', sport=sport)
     blocks = []
@@ -132,6 +133,10 @@ def parse(text, sport):
             continue
         title = fixture(line, sport)
         spoken=spoken_fixture(line, sport)
+        if ordinal_headings and raw not in ordinal_headings:
+            title=None
+            if current.kind=='intro' or (spoken and pair_key(spoken,'uz_'+sport)!=pair_key(current.title,'uz_'+sport)):spoken=None
+
         # Prefer names from the initial fixture list to ordinal labels such as
         # 'IKKINCHI UCHRASHUV — TEAM VA TEAM'. These labels are not team names.
         declared=next((p for p in index if p and spoken and key(p)==key(spoken)),None)

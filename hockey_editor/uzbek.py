@@ -68,7 +68,7 @@ def mentions(title,text):
 
 def core(text):
     # Remove only introductory speech; retain the actual selection and team names.
-    return re.sub(r"^\s*(?:(?:mening|birinchi|ikkinchi|uchinchi|to.rt.inchi|beshinchi)\s+)?(?:asosiy\s+)?tanlovim\s*[—:–-]?\s*",'',text,flags=re.I).strip(' .')
+    return re.sub(r"^.*?\b(?:tanlovim|prognozim)\s*[—:–-]\s*",'',text,flags=re.I).strip(' .!')
 
 
 def bet(text):
@@ -87,10 +87,11 @@ def bet(text):
 
 
 def classify(text):
-    t=norm(text).replace("go'l","gol").replace("go'il","gol");is_pick=bool(re.search(r'\btanlovim\b',t))
-    market=bool(re.search(r"\b(?:x2|1x)\b|g'alab|(?:ta)?dan (?:ko'p|kam) gol|fora|total|yutqazma",t))
+    t=norm(text).replace("go'l","gol").replace("go'il","gol");is_pick=bool(re.search(r'\b(?:tanlovim|prognozim)\b',t))
+    market=bool(re.search(r"\b(?:x2|1x)\b|g'alab|(?:ta)?dan (?:ko'p|kam) gol|fora|total|yutqazma|mag'lub bo'lma",t))
     if re.search(r'\b(?:olmayman|tanlamayman)\b',t):return None,''
-    if (is_pick and market) or (market and text==text.upper() and re.search('[A-Z]',text)):
+    explicit_market=bool(re.search(r'\b(?:1x|x2|p[12])\b|\btotal\b',t))
+    if (is_pick and market) or (explicit_market and text==text.upper() and re.search('[A-Z]',text)):
         return 'ПРОГНОЗ',bet(text)
     if re.search(r'\d+:\d+',t) and re.search(r"\bmos\b|o'tadi|yetarli",t):
         return 'УСЛОВИЯ ПРОГНОЗА',', '.join(re.findall(r'\d+:\d+',text))+' — mos keladi'

@@ -146,6 +146,9 @@ class Engine:
         if p.profile in ('ru_football','ru_football_shorts') and p.settings.informative_cards:
             from .football_facts import enrich
             cards=enrich(block,lines,cards)
+        if p.profile in ('uz_football','uz_football_shorts') and p.settings.informative_cards:
+            from .uz_football_facts import enrich
+            cards=enrich(block,lines,cards)
         if p.profile.startswith('ru_combat') and p.settings.informative_cards:
             from .combat_facts import enrich
             cards=enrich(block,lines,cards)

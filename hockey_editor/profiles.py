@@ -6,7 +6,7 @@ PROFILES={'ru':[('ru_hockey','Хоккей · лонг'),('ru_cs','Counter-Strik
           'uz':[('uz_football','Футбол · лонг'),('uz_hockey','Хоккей · лонг'),('uz_combat','Бои · лонг'),('uz_combat_shorts','Бои · Shorts'),('uz_football_shorts','Футбол · Shorts'),('uz_hockey_shorts','Хоккей · Shorts')]}
 
 
-SPEAKER_GROUPS=[('ru_long','РУ спикер лонг'),('ru_shorts','РУ спикер шортс'),('uz_long','УЗ спикер лонг'),('uz_shorts','УЗ спикер шортс')]
+SPEAKER_GROUPS=[('ru_long','РУ лонг'),('ru_shorts','РУ шортс'),('uz_long','УЗ лонг'),('uz_shorts','УЗ шортс')]
 def group_for(profile):
     return ('uz' if profile.startswith('uz_') else 'ru')+('_shorts' if profile.endswith('_shorts') else '_long')
 def group_profiles(group):

@@ -154,7 +154,7 @@ class App(EpisodeMixin,MatchMixin):
             self.button(bar, label, cmd).pack(side='right', padx=(8, 0))
         profilebar=ttk.Frame(main);profilebar.pack(fill='x',pady=(0,8))
         ttk.Label(profilebar,text='Шаблон ведущего',style='Muted.TLabel').pack(side='left',padx=(0,8))
-        self.speakerbox=ttk.Combobox(profilebar,values=['РУ спикер лонг','РУ спикер шортс','УЗ спикер лонг','УЗ спикер шортс'],state='readonly',width=20)
+        self.speakerbox=ttk.Combobox(profilebar,values=['РУ лонг','РУ шортс','УЗ лонг','УЗ шортс'],state='readonly',width=20)
         self.speakerbox.pack(side='left',padx=(0,8));self.controls.append(self.speakerbox)
         self.speakerbox.bind('<<ComboboxSelected>>',self.switch_speaker)
         self.profilebox=ttk.Combobox(profilebar,state='readonly',width=28)

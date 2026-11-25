@@ -13,9 +13,9 @@ def features(text):
     t=re.sub(r'\btanan\b','dan',t)
     c=compact(t)
     chance='x2' if re.search(r'x(?:2|ikki)|[ei]ks?ik{1,2}i|sikki|2x',c) else '1x' if re.search(r"\b1\s*x\b|\bbir\s*(?:iks|eks)\b",t) else '12' if re.search(r"\b12(?=\s+(?:va|variant)\b|$)",t) else None
-    double=chance is not None or bool(re.search(r'yutqaz[ai]?m',c))
+    double=chance is not None or bool(re.search(r'yutqaz[ai]?m|ma[glq]+ubbo[l]?ma',c))
     winner=bool(re.search(r'[gq]alab',c)) and not double
-    cue=bool(re.search(r'tanlo|talno|variy?a|qildik|qilardik|qilaqold',c))
+    cue=bool(re.search(r'tanlo|talno|prognozim|variy?a|qildik|qilardik|qilaqold',c))
     phonetic_total=bool(cue and re.search(r"\bko'l\b",t) and ("ko'p" in t or re.search(r'\bkam\b',t)))
     total='total' in t or bool(re.search(r'g[ou]i?l',c) or ('umumiy' in c and ("ko'p" in t or 'son' in c)) or phonetic_total)
     ordinal=next((n for pattern,n in ((r'\bbirinchi',0),(r'\b(?:ikkinchi|ikinchi|kinchi|ekin(?:chi|ji))',1),(r'\buch(?:i|ri)nchi',2),(r'\b(?:tortinchi|to.rt.inchi)',3),(r'\boxirgi',-1)) if re.search(pattern,t)),None)
@@ -86,6 +86,15 @@ def score(candidate,owner,reference,index,owners,recap=True):
         if len(ordinals)>1 or not (own or ordinal is not None):return None
     if not (f['cue'] or own or ordinal is not None):return None
     if not recap and not f['cue']:return None
+    # A match introduction may share team names with a bet but has no selection.
+    # Reject historical victory statements even when another clause says 'variant'.
+    t=norm(candidate['text'])
+    if not recap and re.search(r"g.alaba qozongan|mag.lub etgan|durang o.ynagan",t) and not re.search(r'tanlo|talno|prognozim',t):return None
+    teams=block_teams(owner.title)
+    reference_words=[{'word':w} for w in reference.split()]
+    expected_sides=[k for k,team in enumerate(teams) if any(h[2]>=.85 for h in name_hits(team,reference_words))]
+    spoken_sides=[k for k,team in enumerate(teams) if any(h[2]>=.85 for h in active_name_hits(team,candidate['words']))]
+    if (expected['winner'] or expected['double']) and len(expected_sides)==1 and len(spoken_sides)==1 and expected_sides!=spoken_sides:return None
     if expected['value'] is not None and f['value'] is not None and expected['value']!=f['value']:return None
     if expected['direction'] and f['direction'] and expected['direction']!=f['direction']:return None
     # An explicit different market must not be silently turned into the scripted bet.
@@ -211,8 +220,8 @@ def missing_forecast(segments,lo,hi,owner,occupied=()):
     if not free:return None
     from .graphics import block_teams
     named=[h for team in block_teams(owner.title) for h in active_name_hits(team,free)]
-    cues=[i for i,w in enumerate(free) if re.search(r'tanlo|talno',norm(w['word']))]
-    index=cues[-1] if cues else named[0][0] if named else max(0,len(free)-8)
+    cues=[i for i,w in enumerate(free) if re.search(r'tanlo|talno|prognozim',norm(w['word']))]
+    index=cues[-1] if cues else max(0,len(free)-8)
     selected=[free[index]]
     for w in free[index+1:]:
         if w['start']-selected[-1]['end']>1 or w['end']-selected[0]['start']>5:break

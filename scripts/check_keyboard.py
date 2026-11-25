@@ -1,5 +1,5 @@
 """Exercise real Windows keyboard layouts through Tk event dispatch."""
-import sys
+import sys,time
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 import tkinter as tk
@@ -23,6 +23,10 @@ def check(root=None):
     russian_layout=user32.LoadKeyboardLayoutW('00000419',0)
     assert russian_layout,'Russian keyboard layout could not be loaded'
     keycodes={'Cyrillic_em':86,'Cyrillic_ef':65,'Cyrillic_es':67,'Cyrillic_che':88,'Cyrillic_ya':90,'Cyrillic_en':89}
+    assert getattr(root,'_native_text_keys',None), 'Windows message handler was not installed'
+    user32.keybd_event.argtypes=[ctypes.c_ubyte,ctypes.c_ubyte,ctypes.c_ulong,ctypes.c_size_t]
+    def pump():
+        for _ in range(4):root.update();time.sleep(.015)
     for widget in (tk.Entry(clipboard_window),ttk.Entry(clipboard_window),tk.Text(clipboard_window),
                    tk.Spinbox(clipboard_window),ttk.Spinbox(clipboard_window),ttk.Combobox(clipboard_window)):
         widget.pack();root.update();widget.focus_force();root.update()
@@ -33,7 +37,14 @@ def check(root=None):
             user32.ActivateKeyboardLayout(russian_layout if russian else original_layout,0);root.update()
             if russian:assert user32.GetKeyboardLayout(0)&0xffff==0x419
             code=keycodes[symbol] if russian else ord(symbol.upper())
-            widget.event_generate('<KeyPress>',keycode=code,state=4|(1 if shift else 0));root.update()
+            # Real OS input: synthetic Tk events bypass the failing Windows translation path.
+            modifiers=[0x11]+([0x10] if shift else [])
+            try:
+                for vk in modifiers:user32.keybd_event(vk,user32.MapVirtualKeyW(vk,0),0,0);pump()
+                user32.keybd_event(code,user32.MapVirtualKeyW(code,0),0,0);pump()
+                user32.keybd_event(code,user32.MapVirtualKeyW(code,0),2,0);pump()
+            finally:
+                for vk in reversed(modifiers):user32.keybd_event(vk,user32.MapVirtualKeyW(vk,0),2,0);pump()
         if isinstance(widget,tk.Text):widget.delete('1.0','end');widget.edit_reset()
         else:widget.delete(0,'end')
         root.clipboard_clear();root.clipboard_append(expected)

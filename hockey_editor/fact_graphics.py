@@ -51,7 +51,7 @@ def image(card,path,data=None,accent=None):
     x=22+i*(cell+10)
     d.rectangle((x+8,122,x+cell-8,125),fill='#29424c')
     d.rectangle((x+8,122,x+8+(cell-16)*value/max(values),125),fill=accent)
- if len(items)==1 and items[0]['label']=='Владение':
+ if len(items)==1 and items[0]['label'] in ('Владение','To‘p nazorati'):
   percent=float(items[0]['value'].rstrip('%').replace(',','.'))
   if 0<=percent<=100:
    box=(w-138,70,w-58,150);d.arc(box,0,360,fill='#29424c',width=9);d.arc(box,-90,-90+360*percent/100,fill=accent,width=9)

@@ -112,6 +112,8 @@ def install(root):
         attach(widget)
         for child in widget.winfo_children():visit(child)
     visit(root)
+    from .windows_text_keys import install as native_install
+    native_install(root)
 
 def _safe_remember(widget):
     try:_remember(widget)
