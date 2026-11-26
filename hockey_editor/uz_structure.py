@@ -106,6 +106,7 @@ def parse(text, sport):
         if title:
             explicit_pairs.add(pair_key(spoken_fixture(heading,sport) or title,'uz_'+sport))
     ordinal_headings={r for r in body_rows if sport=='football' and r.isupper() and spoken_fixture(r,sport)}
+    if not any(key(r).startswith('birinchi ') for r in ordinal_headings):ordinal_headings=set()
     intro = Block(title='Boshlanish', uid='intro', kind='intro', language='uz', sport=sport)
     outro = Block(title='Yakun', uid='outro', kind='outro', language='uz', sport=sport)
     blocks = []

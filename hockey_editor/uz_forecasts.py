@@ -15,7 +15,7 @@ def features(text):
     chance='x2' if re.search(r'x(?:2|ikki)|[ei]ks?ik{1,2}i|sikki|2x',c) else '1x' if re.search(r"\b1\s*x\b|\bbir\s*(?:iks|eks)\b",t) else '12' if re.search(r"\b12(?=\s+(?:va|variant)\b|$)",t) else None
     double=chance is not None or bool(re.search(r'yutqaz[ai]?m|ma[glq]+ubbo[l]?ma',c))
     winner=bool(re.search(r'[gq]alab',c)) and not double
-    cue=bool(re.search(r'tanlo|talno|prognozim|variy?a|qildik|qilardik|qilaqold',c))
+    cue=bool(re.search(r'tanlo|talno|prog(?:noz|iz)|variy?a|qildik|qilardik|qilaqold',c))
     phonetic_total=bool(cue and re.search(r"\bko'l\b",t) and ("ko'p" in t or re.search(r'\bkam\b',t)))
     total='total' in t or bool(re.search(r'g[ou]i?l',c) or ('umumiy' in c and ("ko'p" in t or 'son' in c)) or phonetic_total)
     ordinal=next((n for pattern,n in ((r'\bbirinchi',0),(r'\b(?:ikkinchi|ikinchi|kinchi|ekin(?:chi|ji))',1),(r'\buch(?:i|ri)nchi',2),(r'\b(?:tortinchi|to.rt.inchi)',3),(r'\boxirgi',-1)) if re.search(pattern,t)),None)

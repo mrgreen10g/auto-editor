@@ -62,3 +62,21 @@ Xayr!"""
   with tempfile.TemporaryDirectory() as d:
    for profile in ['uz_football','uz_football_shorts']:
     path=Path(d)/(profile+'.png');card_image(card,path,profile=profile);self.assertTrue(path.stat().st_size>1000)
+
+ def test_recap_and_sentence_boundaries(self):
+  from hockey_editor.uz_speech import recap_cue,make_lines
+  self.assertTrue(recap_cue("Demek, buvi ikki uchrashuv bo'yicha tanloymiz."))
+  self.assertTrue(recap_cue("Demi, bugungi ikki uchrashuv bo'yicha prognozlarimiz quyidagicha."))
+  self.assertFalse(recap_cue("Demak, ikki uchrashuvda jamoa g'alaba qozongan."))
+  self.assertFalse(recap_cue("Jamoa mavsumni yakunlab, bugun maydonga chiqadi."))
+  data=[segment(0,12,"Jamoa 12 ochko olgan. Uels 5 zarba bergan. Mening tanlovim Portugaliya g'alabasi.")]
+  lines,cards=make_lines(data,0,12,[],sentence_split=True)
+  self.assertEqual(len(lines),3)
+  self.assertEqual(lines[0]['text'],'Jamoa 12 ochko olgan.')
+ def test_contextual_numbers_do_not_invent_totals(self):
+  lines=[Line("O'tkazib yuborilgan gollar soni.",0,2),Line('Atletiko — beshta.',2,4),Line("Viking esa to'qqizta.",4,6)]
+  cards=enrich(Block(language='uz',sport='football'),lines,[])
+  self.assertEqual(cards[1].visual['metrics'],[{'value':'5','label':'O‘tkazilgan gollar'}])
+  self.assertEqual(cards[2].visual['metrics'][0]['value'],'9')
+  self.assertFalse(visual("Jamoa uchta golni bekor qildi.",'VAR VA HAKAM QARORI')['metrics'])
+  self.assertFalse(visual("Jamoa uchta g'alaba qozona olmadi.",'JAMOA FORMASI')['metrics'])

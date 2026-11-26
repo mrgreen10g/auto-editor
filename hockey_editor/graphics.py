@@ -157,13 +157,13 @@ def _card_image(card, path, logos=None,profile='ru_hockey'):
         from .football_short_graphics import image
         if profile.startswith('uz_'):
             from .uz_football_facts import visual
-            return image(card,path,data=visual(card.text,card.title))
+            return image(card,path,data=card.visual if card.visual.get('source')==card.text else visual(card.text,card.title))
         return image(card,path)
     if profile in ('ru_football','uz_football') and card.visual:
         from .fact_graphics import image
         if profile.startswith('uz_'):
             from .uz_football_facts import visual
-            return image(card,path,data=visual(card.text,card.title))
+            return image(card,path,data=card.visual if card.visual.get('source')==card.text else visual(card.text,card.title))
         return image(card,path)
     if profile in ('uz_combat_shorts','ru_combat_shorts'):
         from .combat_graphics import portrait_card

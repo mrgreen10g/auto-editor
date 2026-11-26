@@ -206,7 +206,8 @@ def recap_cue(text):
     # A club having finished a season (yakunlab) is not an episode recap.
     return bool(re.search(r'\b(?:qaytar\w*|takror\w*|xulosa|jaml\w*)\b',t) or
                 re.search(r'\byakun(?:laymiz|lasak|ida|iy)?\b',t) or
-                re.search(r'\b(?:demak|demek|deming|demir|demi)\b.*bugun.*(?:tanlo|tahlil\s+qildik)',t) or
+                re.search(r'\b(?:demak|demek|deming|demir|demi)\b.*bugun.*(?:tanlo|prognozlar|tahlil\s+qildik)',t) or
+                re.search(r"\b(?:demak|demek|demi)\b.*(?:ikki|uch|to'rt|besh)\w*\s+uchrashuv\w*\s+bo.yicha\s+(?:tanlo|prognoz)",t) or
                 (re.search(r'eslat|isatib',t) and re.search(r'tanlovla(?:r|miz)|variantlar',t) and re.search(r'yana|oxir|qisqacha',t)))
 
 
@@ -279,11 +280,16 @@ def bet_score(text,reference):
     if 'x2' in t and 'x2' in ref:score+=5
     return score
 
-def make_lines(segments,lo,hi,annotations):
+def make_lines(segments,lo,hi,annotations,sentence_split=False):
     boundaries={lo,hi}
     for s in segments:
         if lo<s['start']<hi:boundaries.add(s['start'])
     for a,b,_,_ in annotations:boundaries.update((max(lo,a),min(hi,b)))
+    if sentence_split:
+        timed=[w for s in segments for w in s['words'] if lo<=w['start']<hi]
+        for left,right in zip(timed,timed[1:]):
+            if re.search(r'[.!?;][”\"»\s]*$',left['word']) or right['start']-left['end']>1.6:
+                boundaries.add(right['start'])
     # Do not split authored Telegram overlays on ASR sentence boundaries.
     for a,b,title,_ in annotations:
         boundaries={v for v in boundaries if not a<v<b}
@@ -395,7 +401,7 @@ def _prepare(project,segments):
             promo_review=contextual_telegram_spans(b,segments,lo,hi,allow_analysis=project.profile=='uz_football_shorts');promos=promo_review
         for a,z in promos:
             if not any(a<end and z>start for start,end,_,_ in annotations):annotations.append((a,z,'ТЕЛЕГРАМ','Telegram'))
-        b.asr_lines,b.speech_cards=make_lines(segments,lo,hi,annotations);b.speech_key=key
+        b.asr_lines,b.speech_cards=make_lines(segments,lo,hi,annotations,sentence_split=b.sport=='football');b.speech_key=key
         if not b.asr_lines:
             b.asr_lines=[dict(text='',start=lo,end=hi,agreement=1.,review_reason='В разделе не распознаны слова.')]
             if b.kind=='analysis':b.speech_cards={'0':dict(title='ПРОГНОЗ',text=picks[b.uid],needs_review=True)}

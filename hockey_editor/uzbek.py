@@ -90,7 +90,7 @@ def classify(text):
     t=norm(text).replace("go'l","gol").replace("go'il","gol");is_pick=bool(re.search(r'\b(?:tanlovim|prognozim)\b',t))
     market=bool(re.search(r"\b(?:x2|1x)\b|g'alab|(?:ta)?dan (?:ko'p|kam) gol|fora|total|yutqazma|mag'lub bo'lma",t))
     if re.search(r'\b(?:olmayman|tanlamayman)\b',t):return None,''
-    explicit_market=bool(re.search(r'\b(?:1x|x2|p[12])\b|\btotal\b',t))
+    explicit_market=bool(re.search(r"\b(?:1x|x2|p[12])\b|\btotal\b|\d+(?:[,.]\d+)?\s*(?:ta)?dan (?:ko'p|kam) gol",t))
     if (is_pick and market) or (explicit_market and text==text.upper() and re.search('[A-Z]',text)):
         return 'ПРОГНОЗ',bet(text)
     if re.search(r'\d+:\d+',t) and re.search(r"\bmos\b|o'tadi|yetarli",t):
