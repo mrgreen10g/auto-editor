@@ -14,8 +14,8 @@ def digits(text):
  text=re.sub(r"(?<=\w)\s+'(?=\w)","'",text)
  text=re.sub(r"\bgo'l\b",'gol',text,flags=re.I)
  # Scores are spoken as ikkiyu bir / to'rtu nol, not as a decimal.
- score=r'\b('+ '|'.join(re.escape(w) for w in ONES)+r')(?:yu|u)\s+('+ '|'.join(re.escape(w) for w in ONES)+r')\b'
- text=re.sub(score,lambda m:f'{ONES[m[1].lower()]}:{ONES[m[2].lower()]}',text,flags=re.I)
+ score=r'\b('+ '|'.join(re.escape(w) for w in ONES)+r')(?:yu|u)\s+('+ '|'.join(re.escape(w) for w in ONES)+r')(ga|da|dan|ni)?\b'
+ text=re.sub(score,lambda m:f'{ONES[m[1].lower()]}:{ONES[m[2].lower()]}' + (m[3] or ''),text,flags=re.I)
  text=re.sub(r'\bbitta\b','1 ta',text,flags=re.I)
  def convert(m):
   total=part=0
@@ -36,7 +36,7 @@ RULES=[
  ('TO‘P NAZORATI',r'to.p.*(?:egalik|nazorat)|egalik.*to.p'),
  ('TURNIR JADVALI',r'ochko|jadval|o.rin|guruh.*(?:yetakchi|peshqadam)'),
  ('O‘YIN STATISTIKASI',r'zarba|foiz|%|xg|uzatma|burchak'),
- ('NATIJA',r'\b\d{1,2}:\d{1,2}\b|yakuniy hisob|hisobni teng'),
+ ('NATIJA',r'\b\d{1,2}:\d{1,2}(?=\b|ga\b|da\b|dan\b|ni\b)|yakuniy hisob|hisobni teng'),
  ('JAMOA FORMASI',r'g.alaba|mag.lub|durang|yutqaz|yutgan|ketma.ket|seriya'),
  ('HUJUM VA HIMOYA',r'gol|hujum|himoya|darvoza|to.sin|vaziyat.*foydalan'),
  ('TAKTIKA',r'pressing|bosim|qanot|markaz|tezlik|temp|sur.at|standart|bo.sh hudud|muvozanat|intizom'),
@@ -72,7 +72,7 @@ def visual(text,title):
    items.append(dict(value=value,label=label))
   # Result suffixes and time-of-day must not be confused.
   if not re.search(r'soat|vaqti',t):
-   for score in re.findall(r'\b\d{1,2}:\d{1,2}\b',source):items.append(dict(value=score,label='Hisob'))
+   for score in re.findall(r'\b\d{1,2}:\d{1,2}(?=\b|ga\b|da\b|dan\b|ni\b)',source):items.append(dict(value=score,label='Hisob'))
   for m in re.finditer(r'(?:urilgan gollar(?: soni)?|o.tkazib yuborilgan gollar)\s*[—:-]\s*(\d+)\s*(?:ta)?',t):
    items.append(dict(value=m[1],label='O‘tkazilgan gollar' if m[0].startswith("o't") else 'Gollar'))
  # Source sentence remains visible so owners, time windows and qualifiers survive.

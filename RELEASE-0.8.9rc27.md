@@ -16,3 +16,11 @@ Both audio/script pairs in the supplied Uzbek football archive were processed wi
 - Every generated information card from both references was exported in Long and Shorts geometry without layout errors. Automated regression checks cover historical-statistic/forecast confusion, incorrect beneficiary, recap boundaries, spoken-number guards and decoder-retry caching.
 
 Recognition is still probabilistic. These checks do not establish perfect transcription of every word or name; ambiguous selections retain the review path. Existing manually edited timelines are preserved. Run analysis again to apply new detection to an existing episode.
+
+### Shipping-runtime verification
+
+Repeated the audit with the exact pinned runtime: faster-whisper 1.1.1, CTranslate2 4.6.0 and PyAV 14.2.0. Added a recap fallback requiring all forecast owners/markets and contextual confirmation of a clipped first-pair presentation. Both tests cover damaged ASR words rather than assuming clean script text.
+
+- 16.11: sections 38.14 / 190.92 s, recap 342.34 s; primary picks about 171.50 / 317.96 s.
+- 24.11: sections 24.14 / 130.64 s, recap 262.48 s; primary picks about 126.82 / 258.98 s.
+- These are recognition-derived source times, not manually specified script timestamps. Small decoder-dependent differences are expected; the correct match and forecast ownership are retained.

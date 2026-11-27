@@ -109,3 +109,26 @@ Xayr!"""
   got=match_forecasts([heard],0,35,[b],{b.uid:"Liverpul mag'lub bo'lmaydi"},False)[0]
   self.assertGreater(got['start'],20)
   self.assertNotIn('gol urgan',got['text'])
+ def test_damaged_recap_word_requires_all_forecast_owners(self):
+  from hockey_editor.uz_speech import sections
+  from hockey_editor.model import Project
+  a=Block(title='Uels — Portugaliya',language='uz',sport='football',script="Mening prognozim — Portugaliya g'alabasi!")
+  b=Block(title='Chili — Kolumbiya',language='uz',sport='football',script='Mening prognozim — Kolumbiya X2!')
+  p=Project(profile='uz_football',blocks=[a,b]);p.outro.script='Yakuniy xulosa.'
+  data=[segment(0,10,'Bugun Uels va Portugaliya, Chili va Kolumbiya. Boshladik.'),segment(20,28,'Birinchi uchrashuv Uels va Portugaliya.'),segment(40,48,'Ikkinchi uchrashuv Chili va Kolumbiya.'),segment(70,76,'Demi, buvina ikkita uchrashuv bo‘yicha ta’limiz.'),segment(77,83,"Birinchi Portugaliya g'alabasi."),segment(84,89,'Ikkinchi Kolumbiya X2.'),segment(90,95,'Xayr do‘stlar.')]
+  self.assertEqual(sections(p,data)[0][-2],70)
+  with self.assertRaises(ValueError):sections(p,data[:5]+[segment(84,89,'Ikkinchi uchrashuv juda qiziqarli.')]+data[6:])
+ def test_score_case_suffix(self):
+  text='Hisob ikkiyu nolga aylangan.'
+  self.assertEqual(digits(text),'Hisob 2:0ga aylangan.')
+  self.assertEqual(classify(text),'NATIJA')
+  self.assertEqual(visual(text,'NATIJA')['metrics'],[{'value':'2:0','label':'Hisob'}])
+ def test_clipped_first_pair_is_confirmed_nearby_not_mid_analysis(self):
+  from hockey_editor.uz_speech import sections
+  from hockey_editor.model import Project
+  a=Block(title='Atletiko Madrid — Viking',language='uz',sport='football')
+  b=Block(title='Bryugge — Liverpul',language='uz',sport='football')
+  p=Project(profile='uz_football',blocks=[a,b])
+  data=[segment(0,10,'Bugun Atletiko Madrid va Viking, Bryugge va Liverpul.'),segment(22,29,'Biza boshadik. Bizada birinchi uchrashuvi Atlet'),segment(35,41,'Atletisko beshta gol urgan.'),segment(42,47,'Viken esa to‘qqizta gol urgan.'),segment(98,104,'Atletiko Viking hujumlarini cheklashi kerak.'),segment(130,136,'Ikkinchi uchrashuv Bryugge va Liverpul.'),segment(160,170,'Demak bugungi ikki uchrashuv bo‘yicha prognozlarimiz quyidagicha.')]
+  self.assertLess(sections(p,data)[0][1],30)
+  self.assertEqual(features('Mening prognozim Iksitga')['chance'],'x2')

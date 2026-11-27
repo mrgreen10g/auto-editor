@@ -107,6 +107,7 @@ def name_hits(name,words,context=()):
     names=[token(v) for v in football_aliases(name,context)];hits=[]
     club=football_identity(name)
     # Uzbek letter-by-letter pronunciation; these are acoustic aliases only.
+    if token(name)=='viking':names.extend(('viken','vikin'))
     if club=='Liverpool':names.extend(token(v) for v in ('liupul','livpul','leopul','livrupul'))
     if club=='OKMK':names.extend(token(v) for v in ('okimaka','okimaki','okimak','o ka em ka'))
     for i in range(len(words)):
@@ -266,10 +267,22 @@ def sections(project,segments):
             if pair_hits(b.title,segment['words']):return True
             ordinal=features(segment['text'])['ordinal']
             if ordinal==-1:ordinal=len(project.blocks)-1
-            return ordinal==index and any(h[2]>=.85 for team in block_teams(b.title) for h in name_hits(team,segment['words']))
+            if ordinal!=index:return False
+            if any(h[2]>=.85 for team in block_teams(b.title) for h in name_hits(team,segment['words'])):return True
+            # A clipped team name at an explicit presentation can be verified by
+            # both teams in the immediately following discussion, not by a later
+            # head-to-head reference halfway through the analysis.
+            cue=' '.join(norm(segment['text']).split())
+            if not re.search(r'\b(?:birinchi|ikkinchi|uchinchi|to.rt.inchi)\s+(?:uchrashuv|bahs|o.yin)',cue):return False
+            nearby=[w for w in words if segment['start']<=w['start']<segment['start']+25]
+            hits=[name_hits(team,nearby) for team in block_teams(b.title)]
+            return all(hits) and any(h[2]>=.85 for group in hits for h in group)
         def transition_start(segment):
             hits=pair_hits(b.title,segment['words'])
-            if not hits:return segment['start']
+            if not hits:
+                for w in segment['words']:
+                    if features(w['word'])['ordinal']==index:return w['start']
+                return segment['start']
             first=hits[0][0]
             if first<=4:return segment['start']
             # A decoder window can contain the previous bet and the next pair.
@@ -286,6 +299,21 @@ def sections(project,segments):
         if not choices:raise ValueError('Не удалось найти начало разбора по речи: '+b.title+'. Проверьте названия и состав блоков.')
         starts.append(choices[0]);floor=starts[-1]+10
     ending=next((s['start'] for s in segments if s['start']>starts[-1]+10 and recap_cue(s['text'])),None)
+    if ending is None and len(project.blocks)>1:
+        # A damaged recap noun (e.g. tanlovimiz -> ta'limiz) must not turn the
+        # entire episode into guessed script timing. Require all spoken markets
+        # and owners after an explicit summary transition instead.
+        from .uz_forecasts import match_forecasts
+        from .framing import forecast_text
+        references={b.uid:forecast_text(b) for b in project.blocks}
+        for i,w in enumerate(words):
+            if w['start']<=starts[-1]+10 or token(w['word']) not in ('demak','demek','demi','demir','deming'):continue
+            cue=norm(' '.join(v['word'].strip() for v in words[i:i+14]))
+            if not re.search(r'uchrashuv.*bo.yicha',cue):continue
+            try:recap=match_forecasts(segments,w['start'],min(words[-1]['end'],w['start']+45),project.blocks,references,recap=True)
+            except ValueError:continue
+            if len(recap)==len(project.blocks) and all(not c.get('needs_review') for c in recap):
+                ending=w['start'];break
     if ending is None and not project.outro.script.strip():ending=words[-1]['end']
     if ending is None:raise ValueError('В речи не найден переход к итогам. Таймкоды сценария не использованы.')
     bounds=[words[0]['start'],*starts,ending,words[-1]['end']]

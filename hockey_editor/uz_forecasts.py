@@ -12,7 +12,7 @@ def features(text):
     t=re.sub(r"\b(bir|ikki|uch)\s*(?:yarim|yarm|yam)(?:t?i?dan(?:an)?|tana|danan|dan)?\b",r'\1 yarim',t)
     t=re.sub(r'\btanan\b','dan',t)
     c=compact(t)
-    chance='x2' if re.search(r'x(?:2|ikki)|[ei]ks?ik{1,2}i|sikki|2x',c) else '1x' if re.search(r"\b1\s*x\b|\bbir\s*(?:iks|eks)\b",t) else '12' if re.search(r"\b12(?=\s+(?:va|variant)\b|$)",t) else None
+    chance='x2' if re.search(r'x(?:2|ikki)|[ei]ks?ik{1,2}i|[ei]ksitga|sikki|2x',c) else '1x' if re.search(r"\b1\s*x\b|\bbir\s*(?:iks|eks)\b",t) else '12' if re.search(r"\b12(?=\s+(?:va|variant)\b|$)",t) else None
     double=chance is not None or bool(re.search(r'yutqaz[ai]?m|ma[glq]+ubbo[l]?(?:ma|mi)',c))
     winner=bool(re.search(r'[gq]alab',c)) and not double
     cue=bool(re.search(r'tanlo|talno|prog(?:noz|iz)|qildik|qilardik|qilaqold',c) or re.search(r'\bvar(?:i|iy)ant\w*',t))
