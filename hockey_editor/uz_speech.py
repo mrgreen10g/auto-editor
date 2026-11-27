@@ -68,7 +68,9 @@ def recognition_prompt(project):
 
 def transcribe(project,cache,cancel,log):
     folder=Path(cache)/'uz-speech';folder.mkdir(parents=True,exist_ok=True);saved=folder/(recording_key(project)+'.json')
-    if saved.exists():return json.loads(saved.read_text(encoding='utf-8'))
+    from .uz_refine import decoder_loop,recover_loops
+    previous=json.loads(saved.read_text(encoding='utf-8')) if saved.exists() else None
+    if previous is not None and not any(decoder_loop(s['text']) for s in previous):return previous
     os.environ['HF_HUB_DISABLE_TELEMETRY']='1';os.environ['DO_NOT_TRACK']='1'
     model_dir=model_path(cancel,log)
     from .speech_cache import prepared_audio, recognize
@@ -76,11 +78,13 @@ def transcribe(project,cache,cancel,log):
     audio=prepared_audio(project,folder,cancel,log)
     from .speech_cache import with_model
     def work(model):
+        if previous is not None:return recover_loops(model,audio,previous,project,cancel,log)
         vocabulary=recognition_prompt(project)
         result=recognize(model,audio,saved.with_suffix('.raw.json'),'uz',vocabulary,cancel,log,hotwords=vocabulary)
         from .uz_refine import refine
         with stage(folder,'Уточнение узбекской речи',log):
             result=refine(model,audio,result,project,cancel,log)
+            result=recover_loops(model,audio,result,project,cancel,log)
         if project.profile.startswith('uz_combat'):
             from .combat import recover_gaps
             result=recover_gaps(model,audio,result,cancel,log)
@@ -103,6 +107,7 @@ def name_hits(name,words,context=()):
     names=[token(v) for v in football_aliases(name,context)];hits=[]
     club=football_identity(name)
     # Uzbek letter-by-letter pronunciation; these are acoustic aliases only.
+    if club=='Liverpool':names.extend(token(v) for v in ('liupul','livpul','leopul','livrupul'))
     if club=='OKMK':names.extend(token(v) for v in ('okimaka','okimaki','okimak','o ka em ka'))
     for i in range(len(words)):
         for count in (1,2,3):
@@ -206,7 +211,7 @@ def recap_cue(text):
     # A club having finished a season (yakunlab) is not an episode recap.
     return bool(re.search(r'\b(?:qaytar\w*|takror\w*|xulosa|jaml\w*)\b',t) or
                 re.search(r'\byakun(?:laymiz|lasak|ida|iy)?\b',t) or
-                re.search(r'\b(?:demak|demek|deming|demir|demi)\b.*bugun.*(?:tanlo|prognozlar|tahlil\s+qildik)',t) or
+                re.search(r'\b(?:demak|demek|deming|demir|demi)\b.*bugu\w*.*(?:tanlo|prognozlar|tahlil\s+qildik)',t) or
                 re.search(r"\b(?:demak|demek|demi)\b.*(?:ikki|uch|to'rt|besh)\w*\s+uchrashuv\w*\s+bo.yicha\s+(?:tanlo|prognoz)",t) or
                 (re.search(r'eslat|isatib',t) and re.search(r'tanlovla(?:r|miz)|variantlar',t) and re.search(r'yana|oxir|qisqacha',t)))
 
@@ -218,11 +223,11 @@ def section_segments(project,segments):
     for i,w in enumerate(words):
         if token(w['word']) in ('boshladik','boshlaymiz') and i+1<len(words):
             cuts.add(words[i+1]['start'])
-        text=norm(' '.join(v['word'] for v in words[i:i+5]))
+        text=norm(' '.join(v['word'].strip() for v in words[i:i+5]))
         if re.match(r"(?:birinchi|ikkinchi|uchinchi|to'rtinchi|beshinchi|oxirgi)\s+(?:uchrashuv|bahs|o.yin)",text):
             local=words[i:i+16]
             if any(pair_hits(b.title,local) for b in project.blocks):
-                cuts.add(w['start'])
+                cuts.add(words[i-1]['start'] if i and token(words[i-1]['word'])=='endi' else w['start'])
                 # An ordinal alone at the preceding ASR edge belongs to its pair.
                 for edge in list(cuts):
                     if w['start']<edge<=words[min(i+1,len(words)-1)]['start']:cuts.discard(edge)
@@ -262,7 +267,22 @@ def sections(project,segments):
             ordinal=features(segment['text'])['ordinal']
             if ordinal==-1:ordinal=len(project.blocks)-1
             return ordinal==index and any(h[2]>=.85 for team in block_teams(b.title) for h in name_hits(team,segment['words']))
-        choices=[s['start'] for s in segments if s['start']>=floor-.1 and is_start(s)]
+        def transition_start(segment):
+            hits=pair_hits(b.title,segment['words'])
+            if not hits:return segment['start']
+            first=hits[0][0]
+            if first<=4:return segment['start']
+            # A decoder window can contain the previous bet and the next pair.
+            # Locate the new presentation inside that window, never before its cue.
+            local=segment['words'];start=first
+            for j in range(first-1,max(-1,first-9),-1):
+                if re.search(r'uchrashuv|bahs|o.yin',norm(local[j]['word'])):
+                    start=j
+                    if j and re.search(r'ikkinchi|uchinchi|keyingi|kechuvchi',norm(local[j-1]['word'])):start=j-1
+                    break
+                if re.search(r'[.!?]$',local[j]['word'].strip()):break
+            return local[start]['start']
+        choices=[transition_start(s) for s in segments if s['start']>=floor-.1 and is_start(s)]
         if not choices:raise ValueError('Не удалось найти начало разбора по речи: '+b.title+'. Проверьте названия и состав блоков.')
         starts.append(choices[0]);floor=starts[-1]+10
     ending=next((s['start'] for s in segments if s['start']>starts[-1]+10 and recap_cue(s['text'])),None)

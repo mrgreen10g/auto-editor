@@ -8,7 +8,7 @@ def image(card,path,data=None,accent=None):
     data=data or visual(card.text,card.title);body=data['caption'];items=data['metrics']
     width=608;accent=accent or '#51dfc2'
     if re.search(r'проиграл|поражени|кризис',body,re.I) and not re.search(r'не проиграл|без поражени',body,re.I):accent='#ff7687'
-    if card.title in ('СОСТАВ КОМАНДЫ','ДИСЦИПЛИНА','ФАКТОР РИСКА'):accent='#ffbd69'
+    if card.title in ('СОСТАВ КОМАНДЫ','ДИСЦИПЛИНА','ФАКТОР РИСКА','JAROHAT VA TARKIB','INTIZOM','EHTIMOL VA XAVF'):accent='#ffbd69'
     cols=min(3,max(1,len(items)));rows=(len(items)+cols-1)//cols
     top=54+rows*76
     measure=ImageDraw.Draw(Image.new('RGBA',(1,1)))

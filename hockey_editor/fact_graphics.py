@@ -9,7 +9,7 @@ def image(card,path,data=None,accent=None):
  items=data['metrics'];body=data['caption'];w=424
  accent=accent or '#51dfc2'
  if re.search(r'проиграл|поражени|кризис',body,re.I) and not re.search(r'не проиграл|без поражени',body,re.I):accent='#ff7687'
- if card.title in ('СОСТАВ КОМАНДЫ','ДИСЦИПЛИНА','ФАКТОР РИСКА'):accent='#ffb360'
+ if card.title in ('СОСТАВ КОМАНДЫ','ДИСЦИПЛИНА','ФАКТОР РИСКА','JAROHAT VA TARKIB','INTIZOM','EHTIMOL VA XAVF'):accent='#ffb360'
  rows=(len(items)+1)//2;top=74+rows*91
  measure=ImageDraw.Draw(Image.new('RGBA',(1,1)))
  for width in (w,760):
@@ -51,17 +51,18 @@ def image(card,path,data=None,accent=None):
     x=22+i*(cell+10)
     d.rectangle((x+8,122,x+cell-8,125),fill='#29424c')
     d.rectangle((x+8,122,x+8+(cell-16)*value/max(values),125),fill=accent)
- if len(items)==1 and items[0]['label'] in ('Владение','To‘p nazorati'):
+ if len(items)==1 and items[0]['label'] in ('Владение','To‘p nazorati') and re.fullmatch(r'\d+(?:[.,]\d+)?%',items[0]['value']):
   percent=float(items[0]['value'].rstrip('%').replace(',','.'))
   if 0<=percent<=100:
    box=(w-138,70,w-58,150);d.arc(box,0,360,fill='#29424c',width=9);d.arc(box,-90,-90+360*percent/100,fill=accent,width=9)
  series=re.search(r'(\d+)\s+(?:побед|поражений)\s+подряд',data['source'],re.I)
  if not series:series=re.search(r'(?:проиграл\w*|выиграл\w*)\s+(\d+)\s+матч\w*\s+подряд',data['source'],re.I)
+ if not series and data.get('language')=='uz':series=re.search(r"ketma.ket\s+(\d+)\s*(?:ta\s*)?(?:g.alaba|mag.lubiyat)",data['source'],re.I)
  if len(items)==1 and series and 1<=int(series[1])<=10:
   for n in range(int(series[1])):
    x=244+(n%5)*29;y=82+(n//5)*34
    d.ellipse((x,y,x+22,y+22),fill=accent)
-   d.text((x+5,y+2),'П' if 'поражен' in items[0]['label'] else 'В',font=font(13,True),fill='#09141d')
+   d.text((x+5,y+2),('L' if 'Mag‘lub' in items[0]['label'] else 'W') if data.get('language')=='uz' else ('П' if 'поражен' in items[0]['label'] else 'В'),font=font(13,True),fill='#09141d')
  for i,line in enumerate(lines):
   x=22;y=top+i*(size+7)
   for piece in re.split(r'(\d+(?:[,:.]\d+)?%?)',line):

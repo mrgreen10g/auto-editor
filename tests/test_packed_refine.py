@@ -54,3 +54,26 @@ class PackedRefineTests(unittest.TestCase):
             with patch('hockey_editor.uz_speech.recognition_prompt',return_value=''):
                 result=refine(model,audio,[original],NS(profile='uz_football'),threading.Event(),lambda _:None)
             self.assertEqual(result[0]['text'].strip(),original['text'])
+
+    def test_decoder_loop_recovery_bounded_cached_and_audio_unchanged(self):
+        from hockey_editor.uz_refine import recover_loops,decoder_loop
+        import hashlib
+        self.assertFalse(decoder_loop('Jamoa uchta gol urgan. Jamoa uchta gol urgan.'))
+        self.assertTrue(decoder_loop("o'o'o'o'o'o'o'o'o'o'o'"))
+        with tempfile.TemporaryDirectory() as tmp:
+            audio=Path(tmp)/'voice.wav'
+            with wave.open(str(audio),'wb') as w:
+                w.setnchannels(1);w.setsampwidth(2);w.setframerate(16000);w.writeframes(bytes(16000*2*30))
+            before=hashlib.sha256(audio.read_bytes()).hexdigest();calls=[]
+            def transcribe(buffer,**kw):
+                calls.append(len(buffer));span=len(buffer)/16000
+                text='Mening prognozim Liverpul maglub bolmaydi'
+                words=[NS(**dict(w,probability=.95)) for w in segment(0,span,text)['words']]
+                return [NS(words=words)],None
+            original=segment(4,25,"o'o'o'o'o'o'o'o'o'o'o'o'")
+            p=NS(blocks=[NS(title='Bryugge — Liverpul')])
+            result=recover_loops(NS(transcribe=transcribe),audio,[original],p,threading.Event(),lambda _:None)
+            again=recover_loops(NS(transcribe=transcribe),audio,[original],p,threading.Event(),lambda _:None)
+            self.assertEqual(len(calls),2);self.assertTrue(all(n<=10.5*16000 for n in calls))
+            self.assertEqual(result,again);self.assertEqual(result[0]['start'],4);self.assertEqual(result[-1]['end'],25)
+            self.assertEqual(hashlib.sha256(audio.read_bytes()).hexdigest(),before)

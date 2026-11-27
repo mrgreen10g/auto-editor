@@ -11,6 +11,8 @@ NUM=re.compile(r"(?<![\w'])((?:"+TOKEN+r")(?:\s+(?:"+TOKEN+r"))*)(ta(?:si|dan)?|
 
 def digits(text):
  text=text.translate(str.maketrans({c:"'" for c in '’‘ʻʼ`'}))
+ text=re.sub(r"(?<=\w)\s+'(?=\w)","'",text)
+ text=re.sub(r"\bgo'l\b",'gol',text,flags=re.I)
  # Scores are spoken as ikkiyu bir / to'rtu nol, not as a decimal.
  score=r'\b('+ '|'.join(re.escape(w) for w in ONES)+r')(?:yu|u)\s+('+ '|'.join(re.escape(w) for w in ONES)+r')\b'
  text=re.sub(score,lambda m:f'{ONES[m[1].lower()]}:{ONES[m[2].lower()]}',text,flags=re.I)
@@ -53,7 +55,7 @@ def classify(text):
 def visual(text,title):
  source=digits(text);t=norm(source);items=[]
  if title!='EHTIMOL VA XAVF' and not re.search(r'qozona olma|gol ura olma|golni bekor|degani emas',t):
-  pattern=r'(?P<n>\d+(?:[.,]\d+)?)\s*(?:(?:ta(?:dan|si)?|marta)\s*)?(?P<a>(?:(?:urilgan|o.tkazib yuborilgan|aniq|muhim|so.nggi|oxirgi)\s+)*)(?P<u>%|foiz\w*|gol\w*|ochko\w*|zarba\w*|g.alaba\w*|mag.lubiyat\w*|durang\w*|uchrashuv\w*|o.yin\w*|tur\b|o.rin\w*|daqiqa\w*)'
+  pattern=r'(?P<n>\d+(?:[.,]\d+)?)\s*(?:(?:ta(?:dan|si)?|marta)\s*)?(?P<a>(?:(?:urilgan|o.tkazib yuborilgan|aniq|muhim|so.nggi|oxirgi)\s+)*)(?P<u>%|foiz\w*|gol\w*|ochko\w*|zarba\w*|g.alaba\w*|mag.lubiyat\w*|durang\w*|uchrashuv\w*|o.yin\w*|tur(?:da|dan|ni)?\b|o.rin\w*|daqiqa\w*)'
   for m in re.finditer(pattern,t):
    value=m['n'];unit=m['u'];context=t[max(0,m.start()-35):m.end()+30]
    label=('Gollar' if unit.startswith('gol') else 'Ochkolar' if unit.startswith('ochko') else 'Zarbalar' if unit.startswith('zarba') else 'G‘alabalar' if re.match('g.alaba',unit) else 'Mag‘lubiyatlar' if re.match('mag.lubiyat',unit) else 'Duranglar' if unit.startswith('durang') else 'Uchrashuvlar' if re.match('uchrashuv|o.yin',unit) else 'O‘rin' if re.match('o.rin',unit) else 'Daqiqa' if unit.startswith('daqiqa') else 'Tur')
@@ -62,6 +64,8 @@ def visual(text,title):
     value+='%';label='To‘p nazorati' if re.search('to.p|egalik',t) else 'Foiz'
    if label=='Gollar' and ('yubor' in m['a'] or re.match(r'\s*(?:ham\s+)?o.tkazib',t[m.end():])):label='O‘tkazilgan gollar'
    if label in ('Gollar','O‘tkazilgan gollar') and re.match(r"\s*(?:ham\s+)?(?:ko'proq|kamroq)",t[m.end():]):label='Farq · '+label.lower()
+   if label=='Gollar' and re.search(r'darvoza.*(?:olib chiq|olibchiq)',context):label='O‘tkazilgan gollar'
+   if label in ('Gollar','O‘tkazilgan gollar') and re.search(r'har biri|har bir o.yin',t[:m.start()]):label='Har o‘yinda · '+label.lower()
    if label=='Zarbalar' and 'darvoza' in context and re.search('aniq|to.g.ri|tomon',context):label='Darvoza tomon zarbalar'
    qualifier=re.search(r'(atigi|kamida|taxminan|ko.pi bilan)\s*$',t[:m.start()])
    if qualifier:value=qualifier[1]+' '+value
@@ -75,11 +79,30 @@ def visual(text,title):
  unique=list({(i['value'],i['label']):i for i in items}.values())[:6]
  return dict(source=source,caption=source,kind=title,metrics=unique,language='uz',sport='football')
 
+def spoken_spelling(text,script):
+ # Limited acoustic spelling variants, not fuzzy replacement of numbers.
+ # A spelling is restored only next to a statistical unit and when the authored
+ # block contains that value. Explicit digits are never replaced.
+ original=text
+ text=digits(text)
+ allowed=set(re.findall(r'\b\d+\b',digits(script)))
+ # Keep a damaged tens word attached to its units; never display '2 shots'
+ # when the recognizer retained a corrupt spoken 'twenty two'.
+ if '22' in allowed and re.search(r'\byigriming\s+ikkita\s+zarva',norm(original)):
+  text=re.sub(r'\byigriming\s+2 ta\s+zarva', '22 ta zarba',text,flags=re.I)
+ variants=[(r"\bo'niki\b",'12'),(r"\bto'qizda\b",'9 ta'),
+           (r"\bpeshta\b",'5 ta'),(r"\b20 kita\b",'22 ta')]
+ for pattern,value in variants:
+  if value.split()[0] not in allowed:continue
+  text=re.sub(pattern+r"(?=\s+(?:aniq\s+)?(?:zarba|zarva|achiko[vw]?|ochko|gol)\w*\b)",value,text,flags=re.I)
+ text=re.sub(r"\bachiko[vw]?\b",'ochko',text,flags=re.I)
+ return text
+
 def enrich(block,lines,cards):
  result=list(cards);context_label='';context_end=-100
  protected={'ПРОГНОЗ','УСЛОВИЯ ПРОГНОЗА','ТЕЛЕГРАМ','ПОДПИСКА','РАЗБОР МАТЧА','СМЕНА МАТЧА','ИТОГИ ВЫПУСКА'}
  for i,line in enumerate(lines):
-  text=line.text;title=classify(text);normalized=norm(digits(text));inherited=False
+  text=spoken_spelling(line.text,block.script);title=classify(text);normalized=norm(digits(text));inherited=False
   if not title and context_label and line.start-context_end<=5 and len(text.split())<=8 and len(re.findall(r'\d+',normalized))==1 and (re.fullmatch(r'\d+\s*(?:ta|tasi)?[.!]?',normalized) or re.search(r'\besa\b|[—–:]| - ',normalized)) and not re.search(r'agar|mumkin|emas|yo.q|tanlo|prognoz|soat|yil|noyabr|oktabr|sentabr|daqiqa|\btur\b',normalized):
    text=digits(text).rstrip(' .!')+' — '+context_label;title='O‘YIN STATISTIKASI';inherited=True
   if title and title!='EHTIMOL VA XAVF':

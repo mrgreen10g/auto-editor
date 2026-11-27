@@ -13,12 +13,12 @@ def features(text):
     t=re.sub(r'\btanan\b','dan',t)
     c=compact(t)
     chance='x2' if re.search(r'x(?:2|ikki)|[ei]ks?ik{1,2}i|sikki|2x',c) else '1x' if re.search(r"\b1\s*x\b|\bbir\s*(?:iks|eks)\b",t) else '12' if re.search(r"\b12(?=\s+(?:va|variant)\b|$)",t) else None
-    double=chance is not None or bool(re.search(r'yutqaz[ai]?m|ma[glq]+ubbo[l]?ma',c))
+    double=chance is not None or bool(re.search(r'yutqaz[ai]?m|ma[glq]+ubbo[l]?(?:ma|mi)',c))
     winner=bool(re.search(r'[gq]alab',c)) and not double
-    cue=bool(re.search(r'tanlo|talno|prog(?:noz|iz)|variy?a|qildik|qilardik|qilaqold',c))
+    cue=bool(re.search(r'tanlo|talno|prog(?:noz|iz)|qildik|qilardik|qilaqold',c) or re.search(r'\bvar(?:i|iy)ant\w*',t))
     phonetic_total=bool(cue and re.search(r"\bko'l\b",t) and ("ko'p" in t or re.search(r'\bkam\b',t)))
     total='total' in t or bool(re.search(r'g[ou]i?l',c) or ('umumiy' in c and ("ko'p" in t or 'son' in c)) or phonetic_total)
-    ordinal=next((n for pattern,n in ((r'\bbirinchi',0),(r'\b(?:ikkinchi|ikinchi|kinchi|ekin(?:chi|ji))',1),(r'\buch(?:i|ri)nchi',2),(r'\b(?:tortinchi|to.rt.inchi)',3),(r'\boxirgi',-1)) if re.search(pattern,t)),None)
+    ordinal=next((n for pattern,n in ((r'\bbirinchi',0),(r'\b(?:ikkinchi|ikinchi|kinchi|erkinchi|ekin(?:chi|ji))',1),(r'\buch(?:i|ri)nchi',2),(r'\b(?:tortinchi|to.rt.inchi)',3),(r'\boxirgi',-1)) if re.search(pattern,t)),None)
     if ordinal is None:
         ordinal=next((n for n,word in enumerate(['beshinchi','oltinchi','yettinchi','sakkizinchi',"to'qqizinchi", "o'ninchi"],4) if word in t),None)
     if ordinal is None:
@@ -109,7 +109,7 @@ def score(candidate,owner,reference,index,owners,recap=True):
     strength=matched*6+(4 if own and recap else 0)+(2 if ordinal is not None else 0)+(1 if f['cue'] else 0)
     if not recap and re.search(r'varia|qildik|qila qold',norm(candidate['text'])):strength+=3
     if others:strength-=9
-    if not recap and re.match(r'\s*(?:tanlo|talno)',norm(candidate['text'])):strength+=4
+    if not recap and re.match(r'\s*(?:tanlo|talno|prognoz)' ,norm(candidate['text'])):strength+=4
     strength-=.035*(candidate['end']-candidate['start'])
     review=bool(re.search(r'\b2\s*x\b',norm(candidate['text']))) or matched<len(required) or (expected['value'] is not None and f['value'] is None) or (recap and strengths[index]<.85)
     numeric=[w for w in candidate['words'] if re.search(r'\d',w['word'])]
@@ -123,7 +123,7 @@ def match_forecasts(segments,lo,hi,owners,references,recap=True,partial=False):
     # own words and times instead of inheriting the rejected first number.
     for unit in clauses(segments,lo,hi):
         for k,w in enumerate(unit):
-            if not re.search(r'\b(?:tanlo|talno)[vy]?(?:im|yim|v|y)',norm(w['word'])):continue
+            if not re.search(r'\b(?:(?:tanlo|talno)[vy]?(?:im|yim|v|y)|prognoz(?:im|imiz))',norm(w['word'])):continue
             selected=unit[k:]
             if selected[-1]['end']-selected[0]['start']>24:continue
             text=' '.join(w['word'].strip() for w in selected)

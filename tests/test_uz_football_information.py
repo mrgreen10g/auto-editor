@@ -65,6 +65,7 @@ Xayr!"""
 
  def test_recap_and_sentence_boundaries(self):
   from hockey_editor.uz_speech import recap_cue,make_lines
+  self.assertTrue(recap_cue("Demek bugu Ikhtabi Uchrashuv bo’yicha tanloymiz."))
   self.assertTrue(recap_cue("Demek, buvi ikki uchrashuv bo'yicha tanloymiz."))
   self.assertTrue(recap_cue("Demi, bugungi ikki uchrashuv bo'yicha prognozlarimiz quyidagicha."))
   self.assertFalse(recap_cue("Demak, ikki uchrashuvda jamoa g'alaba qozongan."))
@@ -80,3 +81,31 @@ Xayr!"""
   self.assertEqual(cards[2].visual['metrics'][0]['value'],'9')
   self.assertFalse(visual("Jamoa uchta golni bekor qildi.",'VAR VA HAKAM QARORI')['metrics'])
   self.assertFalse(visual("Jamoa uchta g'alaba qozona olmadi.",'JAMOA FORMASI')['metrics'])
+ def test_historical_bavariya_is_not_personal_choice(self):
+  self.assertFalse(features("Bavariya bilan uch hisobida durang o'ynagan.")['cue'])
+  self.assertTrue(features('Ehtiyotkor variant qilamiz.')['cue'])
+  self.assertTrue(features("Liupul mag'lub bo'miydi")['double'])
+ def test_asr_leading_spaces_and_merged_transition(self):
+  from hockey_editor.uz_speech import section_segments,sections
+  from hockey_editor.model import Project
+  a=Block(title='Atletiko Madrid — Viking',language='uz',sport='football')
+  b=Block(title='Bryugge — Liverpul',language='uz',sport='football')
+  p=Project(profile='uz_football',blocks=[a,b])
+  data=[segment(0,10,'Bugun Atletiko Madrid va Viking, Bryugge va Liverpul. Boshladik.'),segment(20,26,'Birinchi uchrashuv Atletiko Madrid va Viking.'),segment(40,55,"Shuning uchun mening prognozim Atletiko g'alabasi. Keyingi uchrashuv Bryugge va Liverpul."),segment(80,85,'Demak bugungi ikki uchrashuv bo‘yicha prognozlarimiz quyidagicha.'),segment(86,95,'Xayr do‘stlar keyingi videoda ko‘rishguncha.')]
+  for s in data:
+   for w in s['words']:w['word']=' '+w['word']
+  bounds,_,_=sections(p,data)
+  self.assertGreater(bounds[2],40)
+  self.assertLess(bounds[2],55)
+ def test_acoustic_number_spelling_requires_script_value(self):
+  from hockey_editor.uz_football_facts import spoken_spelling
+  self.assertEqual(spoken_spelling('Uelsda peshta zarba.', 'Uels 5 ta zarba bergan.'),'Uelsda 5 ta zarba.')
+  self.assertIn('peshta',spoken_spelling('Uelsda peshta zarba.','Uels 3 ta zarba bergan.'))
+  self.assertIn('12 ochko',spoken_spelling("O'niki achikov.",'12 ochko.'))
+  self.assertIn('3 ta',spoken_spelling('Uelsda 3 ta zarba.','Uels 5 ta zarba.'))
+ def test_explicit_forecast_not_whole_reasoning_paragraph(self):
+  b=Block(title='Bryugge — Liverpul',language='uz',sport='football')
+  heard=segment(10,30,"Liverpul to'rtta o'yinda o'n to'rtta gol urgan. Ehtiyotkor variant qilamiz, ikkinchi prognozimiz X2 Liverpul mag'lub bo'lmaydi.")
+  got=match_forecasts([heard],0,35,[b],{b.uid:"Liverpul mag'lub bo'lmaydi"},False)[0]
+  self.assertGreater(got['start'],20)
+  self.assertNotIn('gol urgan',got['text'])

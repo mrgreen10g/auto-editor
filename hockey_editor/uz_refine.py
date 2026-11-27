@@ -102,3 +102,44 @@ def refine(model,audio,segments,project,cancel,log):
     log(f'Уточнение речи: {len(pending)} фраз, запусков декодера: {calls}.')
     return result
 
+
+
+def decoder_loop(text):
+    # Not a speaker repeating a sentence: eight identical syllables with no
+    # meaningful words is a decoder loop (e.g. o'o'o'o...).
+    return bool(re.search(r"\b([a-z]{1,6})(?:[\s'‘’ʼ,-]*\1){7,}",norm(text),re.I))
+
+
+def recover_loops(model,audio,segments,project,cancel,log):
+    """Retry only corrupt decoder windows; never alter the source audio."""
+    if not any(decoder_loop(s['text']) for s in segments):return segments
+    import math,numpy as np
+    from .host_media import identity
+    from .processing_cache import read_json,write_json
+    with wave.open(str(audio),'rb') as wav:
+        rate=wav.getframerate();samples=np.frombuffer(wav.readframes(wav.getnframes()),dtype='<i2').astype(np.float32)/32768
+    prompt='; '.join(b.title for b in project.blocks)+'. Futbol, prognoz, g‘alaba, mag‘lub bo‘lmaydi, total.'
+    cache=Path(audio).parent/'decoder-recovery-v1';source=identity(audio);result=[];budget=90.
+    for s in segments:
+        if cancel.is_set():raise Cancelled('Отменено.')
+        span=s['end']-s['start']
+        if not decoder_loop(s['text']) or not 1<=span<=35 or span>budget:result.append(s);continue
+        key=hashlib.sha256(json.dumps([source,prompt,s],sort_keys=True,ensure_ascii=False).encode()).hexdigest()
+        path=cache/(key+'.json');recovered=read_json(path)
+        if recovered is None:
+            budget-=span;count=math.ceil(span/10.5);recovered=[]
+            log(f"Повторно распознаю сбойный участок {s['start']:.1f}–{s['end']:.1f} с короткими фразами.")
+            for i in range(count):
+                if cancel.is_set():raise Cancelled('Отменено.')
+                a=s['start']+span*i/count;z=s['start']+span*(i+1)/count
+                found,_=model.transcribe(samples[round(a*rate):round(z*rate)],language='uz',beam_size=5,word_timestamps=True,vad_filter=False,condition_on_previous_text=False,initial_prompt=prompt)
+                for part in found:
+                    if cancel.is_set():raise Cancelled('Отменено.')
+                    words=[dict(word=w.word,start=max(a,a+w.start),end=min(z,a+w.end),probability=w.probability) for w in part.words or [] if min(z,a+w.end)>max(a,a+w.start)]
+                    if words:recovered.append(dict(start=words[0]['start'],end=words[-1]['end'],text=' '.join(w['word'].strip() for w in words),words=words))
+            words=[w for r in recovered for w in r['words']]
+            if (not words or len(words)<max(4,span*.4) or quality(words)<.5 or
+                any(decoder_loop(r['text']) for r in recovered) or words[-1]['end']-words[0]['start']<span*.65):recovered=[s]
+            write_json(path,recovered)
+        result.extend(recovered)
+    return result
